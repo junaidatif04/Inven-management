@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ChevronRight } from 'lucide-react';
+import { Home } from 'lucide-react';
 
 interface NavigationHeaderProps {
   title: string;
@@ -54,7 +54,7 @@ export function NavigationHeader({
 
     // Add current section if provided
     if (currentSection) {
-      items.push({ name: currentSection });
+      items.push({ name: currentSection, href: '#' });
     }
 
     return items;

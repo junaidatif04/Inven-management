@@ -9,7 +9,7 @@ import {
   ShoppingCart, 
   Users, 
   TrendingUp, 
-  TrendingDown,
+
   Activity,
   Eye,
   Plus

@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { NavigationHeader } from '@/components/NavigationHeader';
 import { 
   Search, 
-  Plus, 
+
   Eye, 
   Edit, 
   Trash2,

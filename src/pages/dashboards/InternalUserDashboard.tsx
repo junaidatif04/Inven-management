@@ -43,9 +43,7 @@ const myRequests = [
 
 export default function InternalUserDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-
-  const categories = ['All', ...Array.from(new Set(productCatalog.map(p => p.category)))];
+  const [selectedCategory] = useState('All');
   
   const filteredProducts = productCatalog.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -68,18 +66,7 @@ export default function InternalUserDashboard() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Approved':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'Fulfilled':
-        return <Package className="h-4 w-4 text-blue-500" />;
-      case 'Pending':
-        return <Clock className="h-4 w-4 text-yellow-500" />;
-      default:
-        return <Clock className="h-4 w-4 text-muted-foreground" />;
-    }
-  };
+
 
   return (
     <div className="h-full flex flex-col space-y-6">

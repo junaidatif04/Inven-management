@@ -17,8 +17,7 @@ import {
   Edit, 
   AlertTriangle,
   Package,
-  TrendingUp,
-  TrendingDown
+  TrendingUp
 } from 'lucide-react';
 
 // Mock inventory data
@@ -186,9 +185,9 @@ export default function InventoryPage() {
           </div>
           
           <div className="flex space-x-2 pt-4">
-            <Button onClick={() => setIsEditMode(true)}>
+            <Button onClick={() => setIsEditMode(!isEditMode)}>
               <Edit className="mr-2 h-4 w-4" />
-              Edit Product
+              {isEditMode ? 'Cancel Edit' : 'Edit Product'}
             </Button>
             <Button variant="outline">
               <Package className="mr-2 h-4 w-4" />

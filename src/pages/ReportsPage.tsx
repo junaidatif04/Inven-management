@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { 
   BarChart, 
   Bar, 
@@ -106,7 +106,8 @@ export default function ReportsPage() {
 
   const exportReport = (format: 'csv' | 'pdf') => {
     // Mock export functionality
-    const fileName = `${selectedReport}-${format.toUpperCase()}-${format(new Date(), 'yyyy-MM-dd')}`;
+    const currentDate = new Date().toISOString().split('T')[0];
+    const fileName = `${selectedReport}-${format.toUpperCase()}-${currentDate}`;
     console.log(`Exporting ${fileName}`);
     // In a real app, this would trigger the actual export
   };

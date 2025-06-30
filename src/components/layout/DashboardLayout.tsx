@@ -46,8 +46,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    logout();
     navigate('/login');
   };
 

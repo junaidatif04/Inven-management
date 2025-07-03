@@ -4,6 +4,10 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Toaster } from '@/components/ui/sonner';
 import LoginPage from '@/pages/LoginPage';
+import RequestAccessPage from '@/pages/RequestAccessPage';
+import RequestSubmittedPage from '@/pages/RequestSubmittedPage';
+import CompleteSignupPage from '@/pages/CompleteSignupPage';
+import AccessRequestsPage from '@/pages/AccessRequestsPage';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import AdminDashboard from '@/pages/dashboards/AdminDashboard';
 import WarehouseDashboard from '@/pages/dashboards/WarehouseDashboard';
@@ -56,6 +60,7 @@ function DashboardRouter() {
         <Route path="/warehouse-management" element={<WarehouseManagementPage />} />
         <Route path="/product-management" element={<ProductManagementPage />} />
         <Route path="/catalog-requests" element={<CatalogRequestsPage />} />
+        <Route path="/access-requests" element={<AccessRequestsPage />} />
       </Routes>
     </DashboardLayout>
   );
@@ -70,6 +75,9 @@ function App() {
             <div className="min-h-screen bg-background">
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/request-access" element={<RequestAccessPage />} />
+                <Route path="/request-submitted" element={<RequestSubmittedPage />} />
+                <Route path="/complete-signup" element={<CompleteSignupPage />} />
                 <Route
                   path="/dashboard/*"
                   element={

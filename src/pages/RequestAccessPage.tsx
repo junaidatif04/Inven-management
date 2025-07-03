@@ -1,0 +1,252 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Package, Loader2, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+import { submitAccessRequest } from '@/services/accessRequestService';
+import { sendRequestConfirmationEmail } from '@/services/emailService';
+import { UserRole } from '@/services/authService';
+
+export default function RequestAccessPage() {
+  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    requestedRole: '' as UserRole | '',
+    company: '',
+    department: '',
+    reason: ''
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.name || !formData.email || !formData.requestedRole) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const requestData: any = {
+        name: formData.name,
+        email: formData.email,
+        requestedRole: formData.requestedRole as UserRole,
+      };
+
+      // Only add optional fields if they have values
+      if (formData.company && formData.company.trim()) {
+        requestData.company = formData.company.trim();
+      }
+      if (formData.department && formData.department.trim()) {
+        requestData.department = formData.department.trim();
+      }
+      if (formData.reason && formData.reason.trim()) {
+        requestData.reason = formData.reason.trim();
+      }
+
+      const requestId = await submitAccessRequest(requestData);
+
+      // Send confirmation email
+      try {
+        await sendRequestConfirmationEmail({
+          id: requestId,
+          ...requestData,
+          status: 'pending',
+          createdAt: new Date()
+        });
+        toast.success('Access request submitted successfully! Check your email for confirmation.');
+      } catch (emailError) {
+        console.error('Email sending failed:', emailError);
+        toast.success('Access request submitted successfully! (Email notification failed)');
+      }
+
+      // Show success message and redirect
+      setTimeout(() => {
+        navigate('/request-submitted');
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      toast.error('Failed to submit request. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getRoleDescription = (role: string) => {
+    switch (role) {
+      case 'warehouse_staff':
+        return 'Manage inventory, track shipments, and handle warehouse operations';
+      case 'supplier':
+        return 'Manage product catalog, view orders, and update delivery status';
+      case 'internal_user':
+        return 'Browse catalog, submit requests, and track order status';
+      default:
+        return '';
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+      <div className="w-full max-w-2xl">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <Package className="h-12 w-12 text-primary" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Request Access
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300 mt-2">
+            Submit a request to access the Inventory Management System
+          </p>
+        </div>
+
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle>Access Request Form</CardTitle>
+            <CardDescription>
+              Fill out the form below to request access. An administrator will review your request and send you setup instructions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Basic Information</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Full Name *</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="Enter your full name"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="Enter your email address"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Role Selection */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Role Request</h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="role">Requested Role *</Label>
+                  <Select 
+                    value={formData.requestedRole} 
+                    onValueChange={(value: UserRole) => setFormData({ ...formData, requestedRole: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select the role you need" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="warehouse_staff">Warehouse Staff</SelectItem>
+                      <SelectItem value="supplier">Supplier</SelectItem>
+                      <SelectItem value="internal_user">Internal User</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {formData.requestedRole && (
+                    <p className="text-sm text-muted-foreground">
+                      {getRoleDescription(formData.requestedRole)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Role-specific fields */}
+              {formData.requestedRole === 'supplier' && (
+                <div className="space-y-2">
+                  <Label htmlFor="company">Company Name</Label>
+                  <Input
+                    id="company"
+                    type="text"
+                    value={formData.company}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                    placeholder="Enter your company name"
+                  />
+                </div>
+              )}
+
+              {formData.requestedRole === 'warehouse_staff' && (
+                <div className="space-y-2">
+                  <Label htmlFor="department">Department</Label>
+                  <Input
+                    id="department"
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                    placeholder="Enter your department"
+                  />
+                </div>
+              )}
+
+              {/* Reason */}
+              <div className="space-y-2">
+                <Label htmlFor="reason">Reason for Access (Optional)</Label>
+                <Textarea
+                  id="reason"
+                  value={formData.reason}
+                  onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                  placeholder="Briefly explain why you need access to this system"
+                  rows={3}
+                />
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate('/login')}
+                  className="flex-1"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to Login
+                </Button>
+                
+                <Button 
+                  type="submit" 
+                  className="flex-1" 
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit Request'
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

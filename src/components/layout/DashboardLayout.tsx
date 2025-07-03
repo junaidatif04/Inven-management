@@ -22,7 +22,8 @@ import {
   UserCog,
   ClipboardList,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  UserCheck
 } from 'lucide-react';
 
 const navigation = [
@@ -32,6 +33,7 @@ const navigation = [
   { name: 'Suppliers', href: '/dashboard/suppliers', icon: Users, roles: ['admin', 'supplier'] },
   { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, roles: ['admin'] },
   { name: 'User Management', href: '/dashboard/user-management', icon: UserCog, roles: ['admin'] },
+  { name: 'Access Requests', href: '/dashboard/access-requests', icon: UserCheck, roles: ['admin'] },
   { name: 'Warehouse Management', href: '/dashboard/warehouse-management', icon: Warehouse, roles: ['warehouse_staff'] },
   { name: 'Product Management', href: '/dashboard/product-management', icon: Package, roles: ['supplier'] },
   { name: 'Catalog & Requests', href: '/dashboard/catalog-requests', icon: ClipboardList, roles: ['internal_user'] },
@@ -50,6 +52,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     await logout();
     navigate('/login');
   };
+
+
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
@@ -151,6 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Badge>
               </div>
             </div>
+
             <Button
               variant="ghost"
               size="sm"

@@ -67,16 +67,38 @@ export const submitAccessRequest = async (request: Omit<AccessRequest, 'id' | 's
 
 export const getPendingAccessRequests = async (): Promise<AccessRequest[]> => {
   try {
-    const q = query(
-      collection(db, 'accessRequests'),
-      where('status', '==', 'pending'),
-      orderBy('createdAt', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as AccessRequest));
+    // Try the optimized query first (requires composite index)
+    try {
+      const q = query(
+        collection(db, 'accessRequests'),
+        where('status', '==', 'pending'),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as AccessRequest));
+    } catch (indexError) {
+      // Fallback: Get all documents and filter/sort in memory
+      console.warn('Composite index not available, using fallback query:', indexError);
+      const allDocsQuery = query(collection(db, 'accessRequests'));
+      const querySnapshot = await getDocs(allDocsQuery);
+      
+      const allRequests = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as AccessRequest));
+      
+      // Filter and sort in memory
+      return allRequests
+        .filter(request => request.status === 'pending')
+        .sort((a, b) => {
+          const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+          const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+          return bTime - aTime; // desc order
+        });
+    }
   } catch (error) {
     console.error('Error getting pending requests:', error);
     throw error;

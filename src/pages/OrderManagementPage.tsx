@@ -18,59 +18,56 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Search,
-  ShoppingCart,
+import { 
+  Search, 
+  ShoppingCart, 
   Package,
   CheckCircle,
   Clock,
   RefreshCw,
-  Eye,
-  Plus
+  Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getAllOrders, updateOrderStatus, Order } from '@/services/orderService';
-import { getAllSuppliers } from '@/services/supplierService';
 
-export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+// Mock order data for now - will be replaced with real Firebase data
+const mockOrders = [
+  {
+    id: '1',
+    orderNumber: 'ORD-001',
+    supplierId: 'sup1',
+    supplierName: 'Tech Supplies Co.',
+    status: 'pending',
+    totalAmount: 1250.00,
+    orderDate: new Date(),
+    requestedBy: 'John Doe',
+    items: [
+      { id: '1', name: 'Laptop', quantity: 2, unitPrice: 500, totalPrice: 1000 },
+      { id: '2', name: 'Mouse', quantity: 5, unitPrice: 50, totalPrice: 250 }
+    ]
+  },
+  {
+    id: '2',
+    orderNumber: 'ORD-002',
+    supplierId: 'sup2',
+    supplierName: 'Office Depot',
+    status: 'approved',
+    totalAmount: 850.00,
+    orderDate: new Date(Date.now() - 86400000),
+    requestedBy: 'Jane Smith',
+    items: [
+      { id: '3', name: 'Desk Chair', quantity: 1, unitPrice: 300, totalPrice: 300 },
+      { id: '4', name: 'Desk Lamp', quantity: 2, unitPrice: 275, totalPrice: 550 }
+    ]
+  }
+];
 
-  const [loading, setLoading] = useState(true);
+export default function OrderManagementPage() {
+  const [orders, setOrders] = useState(mockOrders);
+  const [filteredOrders, setFilteredOrders] = useState(mockOrders);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-
-  const loadRealData = async () => {
-    try {
-      setLoading(true);
-
-      // Load real orders and suppliers
-      const [ordersData, suppliersData] = await Promise.all([
-        getAllOrders(),
-        getAllSuppliers()
-      ]);
-
-      // Map supplier names to orders
-      const ordersWithSupplierNames = ordersData.map(order => ({
-        ...order,
-        supplierName: suppliersData.find(s => s.id === order.supplierId)?.name || 'Unknown Supplier'
-      }));
-
-      setOrders(ordersWithSupplierNames);
-      setLastUpdated(new Date());
-
-    } catch (error) {
-      console.error('Error loading orders:', error);
-      toast.error('Failed to load orders data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadRealData();
-  }, []);
 
   useEffect(() => {
     filterOrders();
@@ -98,25 +95,24 @@ export default function OrdersPage() {
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
-      // Update in database
-      await updateOrderStatus(orderId, newStatus as Order['status']);
-
-      // Update local state
-      setOrders(prev => prev.map(order =>
-        order.id === orderId ? { ...order, status: newStatus as Order['status'] } : order
+      setOrders(prev => prev.map(order => 
+        order.id === orderId ? { ...order, status: newStatus } : order
       ));
-
       toast.success('Order status updated successfully');
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('Error updating order status:', error);
       toast.error('Failed to update order status');
     }
   };
 
-  const refreshData = async () => {
-    await loadRealData();
-    toast.success('Orders data refreshed');
+  const refreshData = () => {
+    setLoading(true);
+    // Simulate API call
+    setTimeout(() => {
+      setLastUpdated(new Date());
+      setLoading(false);
+      toast.success('Orders data refreshed');
+    }, 1000);
   };
 
 
@@ -129,9 +125,8 @@ export default function OrdersPage() {
     }).format(amount);
   };
 
-  const formatDate = (date: any) => {
-    const dateObj = date?.toDate ? date.toDate() : new Date(date);
-    return dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
 
   // Calculate stats
@@ -157,10 +152,6 @@ export default function OrdersPage() {
           <Button variant="outline" onClick={refreshData} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button onClick={() => toast.info('Order placement feature coming soon!')}>
-            <Plus className="mr-2 h-4 w-4" />
-            Place New Order
           </Button>
         </div>
       </div>
@@ -269,7 +260,7 @@ export default function OrdersPage() {
                   <TableHead>Requested By</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Total Amount</TableHead>
-                  <TableHead>Created Date</TableHead>
+                  <TableHead>Order Date</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -297,7 +288,7 @@ export default function OrdersPage() {
                       </Select>
                     </TableCell>
                     <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
-                    <TableCell>{formatDate(order.createdAt)}</TableCell>
+                    <TableCell>{formatDate(order.orderDate)}</TableCell>
                     <TableCell>
                       <Button variant="outline" size="sm">
                         <Eye className="h-4 w-4 mr-1" />

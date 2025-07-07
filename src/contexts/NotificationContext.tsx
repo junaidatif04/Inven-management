@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getAllInventoryItems } from '@/services/inventoryService';
+import { getAllOrders } from '@/services/orderService';
+import { getPendingAccessRequests } from '@/services/accessRequestService';
 
 export interface Notification {
   id: string;
@@ -16,43 +19,111 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   unreadCount: number;
+  pendingAccessRequests: number;
+  refreshNotifications: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-// Mock notifications for demonstration
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    title: 'Low Stock Alert',
-    message: 'Laptop Dell XPS 13 is running low (5 units remaining)',
-    type: 'warning',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-    read: false,
-    actionUrl: '/dashboard/inventory',
-  },
-  {
-    id: '2',
-    title: 'Order Approved',
-    message: 'Purchase order #PO-2024-001 has been approved',
-    type: 'success',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    read: false,
-    actionUrl: '/dashboard/orders',
-  },
-  {
-    id: '3',
-    title: 'New Supplier Request',
-    message: 'TechCorp Industries has submitted a new product catalog',
-    type: 'info',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4), // 4 hours ago
-    read: true,
-    actionUrl: '/dashboard/suppliers',
-  },
-];
+// Generate real notifications based on system data
+const generateRealNotifications = async (): Promise<Notification[]> => {
+  const notifications: Notification[] = [];
+
+  try {
+    // Get real inventory data for low stock alerts
+    const inventoryItems = await getAllInventoryItems();
+    const lowStockItems = inventoryItems.filter(item => item.quantity <= item.minStockLevel);
+
+    lowStockItems.slice(0, 3).forEach((item, index) => {
+      notifications.push({
+        id: `low-stock-${item.id}`,
+        title: 'Low Stock Alert',
+        message: `${item.name} is running low (${item.quantity} units remaining)`,
+        type: 'warning',
+        timestamp: new Date(Date.now() - 1000 * 60 * (30 + index * 10)),
+        read: false,
+        actionUrl: '/dashboard/inventory',
+      });
+    });
+
+    // Get real order data for recent orders
+    const orders = await getAllOrders();
+    const recentOrders = orders
+      .filter(order => {
+        const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+        return Date.now() - orderDate.getTime() < 24 * 60 * 60 * 1000; // Last 24 hours
+      })
+      .slice(0, 2);
+
+    recentOrders.forEach((order) => {
+      const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+      notifications.push({
+        id: `order-${order.id}`,
+        title: `Order ${order.status === 'approved' ? 'Approved' : 'Updated'}`,
+        message: `Order ${order.orderNumber} has been ${order.status}`,
+        type: order.status === 'approved' ? 'success' : 'info',
+        timestamp: orderDate,
+        read: false,
+        actionUrl: '/dashboard/orders',
+      });
+    });
+
+    // Get access requests for notifications
+    const accessRequests = await getPendingAccessRequests();
+    accessRequests.slice(0, 2).forEach((request) => {
+      const requestDate = request.createdAt?.toDate ? request.createdAt.toDate() : new Date(request.createdAt);
+      notifications.push({
+        id: `access-${request.id}`,
+        title: 'New Access Request',
+        message: `${request.name} has requested ${request.requestedRole} access`,
+        type: 'info',
+        timestamp: requestDate,
+        read: false,
+        actionUrl: '/dashboard/access-requests',
+      });
+    });
+
+  } catch (error) {
+    console.error('Error generating notifications:', error);
+    // Fallback notification
+    notifications.push({
+      id: 'system-notice',
+      title: 'System Notice',
+      message: 'Real-time notifications are loading...',
+      type: 'info',
+      timestamp: new Date(),
+      read: false,
+    });
+  }
+
+  return notifications.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+};
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [pendingAccessRequests, setPendingAccessRequests] = useState<number>(0);
+
+  const loadRealNotifications = async () => {
+    try {
+      const realNotifications = await generateRealNotifications();
+      setNotifications(realNotifications);
+
+      // Update pending access requests count
+      const accessRequests = await getPendingAccessRequests();
+      setPendingAccessRequests(accessRequests.length);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadRealNotifications();
+
+    // Refresh notifications every 5 minutes
+    const interval = setInterval(loadRealNotifications, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const addNotification = (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
     const newNotification: Notification = {
@@ -86,6 +157,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     markAsRead,
     markAllAsRead,
     unreadCount,
+    pendingAccessRequests,
+    refreshNotifications: loadRealNotifications,
   };
 
   return (

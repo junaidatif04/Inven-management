@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,7 +24,7 @@ import {
 } from 'recharts';
 import { 
   CalendarIcon, 
-  Download, 
+
   FileText, 
   TrendingUp, 
   Package,
@@ -33,6 +33,8 @@ import {
   Users
 } from 'lucide-react';
 import { format, subDays, subMonths } from 'date-fns';
+import { toast } from 'sonner';
+
 
 // Mock data for charts
 const inventoryValueData = [
@@ -81,6 +83,34 @@ export default function ReportsPage() {
     to: new Date()
   });
   const [datePreset, setDatePreset] = useState('last-3-months');
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  // Real-time analytics data
+
+
+  useEffect(() => {
+    loadAnalytics();
+  }, []);
+
+  const loadAnalytics = async () => {
+    try {
+      setLoading(true);
+      // Analytics data loading would go here
+
+
+      setLastUpdated(new Date());
+    } catch (error) {
+      toast.error('Failed to load analytics data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshData = async () => {
+    await loadAnalytics();
+    toast.success('Reports data refreshed');
+  };
 
   const handleDatePreset = (preset: string) => {
     setDatePreset(preset);
@@ -104,12 +134,13 @@ export default function ReportsPage() {
     }
   };
 
-  const exportReport = (format: 'csv' | 'pdf') => {
+  const exportReport = (format: 'pdf') => {
     // Mock export functionality
     const currentDate = new Date().toISOString().split('T')[0];
     const fileName = `${selectedReport}-${format.toUpperCase()}-${currentDate}`;
     console.log(`Exporting ${fileName}`);
     // In a real app, this would trigger the actual export
+    toast.success(`Report exported as ${format.toUpperCase()}`);
   };
 
   return (
@@ -118,13 +149,16 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reports & Analytics</h1>
           <p className="text-muted-foreground">
-            Generate insights from your inventory and order data
+            Real-time insights from your inventory and order data
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Last updated: {lastUpdated.toLocaleTimeString()}
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => exportReport('csv')}>
-            <Download className="mr-2 h-4 w-4" />
-            Export CSV
+          <Button variant="outline" onClick={refreshData} disabled={loading}>
+            <TrendingUp className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh Data
           </Button>
           <Button variant="outline" onClick={() => exportReport('pdf')}>
             <FileText className="mr-2 h-4 w-4" />

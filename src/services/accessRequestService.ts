@@ -1,16 +1,34 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  doc, 
-  updateDoc, 
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
   serverTimestamp,
   query,
   where,
-  orderBy
+  orderBy,
+
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { UserRole } from './authService';
+
+// Function to create system notification for access request status changes
+const createAccessNotification = async (requestData: any, status: 'approved' | 'rejected') => {
+  try {
+    await addDoc(collection(db, 'notifications'), {
+      title: `Access Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
+      message: `Your request for ${requestData.requestedRole} access has been ${status}`,
+      type: status === 'approved' ? 'success' : 'error',
+      userId: requestData.email,
+      read: false,
+      createdAt: serverTimestamp(),
+      actionUrl: status === 'approved' ? '/signup' : null
+    });
+  } catch (error) {
+    console.error('Error creating notification:', error);
+  }
+};
 
 export interface AccessRequest {
   id?: string;
@@ -83,10 +101,18 @@ export const getAllAccessRequests = async (): Promise<AccessRequest[]> => {
 };
 
 export const approveAccessRequest = async (
-  requestId: string, 
+  requestId: string,
   adminUserId: string
 ): Promise<string> => {
   try {
+    // Get the request data first for notification
+    const requestDoc = await getDocs(query(
+      collection(db, 'accessRequests'),
+      where('__name__', '==', requestId)
+    ));
+
+    const requestData = requestDoc.docs[0]?.data();
+
     // Generate one-time signup token
     const signupToken = generateSignupToken();
     const tokenExpiry = new Date();
@@ -100,6 +126,11 @@ export const approveAccessRequest = async (
       tokenExpiry
     });
 
+    // Create notification for the user
+    if (requestData) {
+      await createAccessNotification(requestData, 'approved');
+    }
+
     return signupToken;
   } catch (error) {
     console.error('Error approving access request:', error);
@@ -108,17 +139,30 @@ export const approveAccessRequest = async (
 };
 
 export const rejectAccessRequest = async (
-  requestId: string, 
+  requestId: string,
   adminUserId: string,
   reason?: string
 ): Promise<void> => {
   try {
+    // Get the request data first for notification
+    const requestDoc = await getDocs(query(
+      collection(db, 'accessRequests'),
+      where('__name__', '==', requestId)
+    ));
+
+    const requestData = requestDoc.docs[0]?.data();
+
     await updateDoc(doc(db, 'accessRequests', requestId), {
       status: 'rejected',
       approvedBy: adminUserId,
       updatedAt: serverTimestamp(),
       rejectionReason: reason
     });
+
+    // Create notification for the user
+    if (requestData) {
+      await createAccessNotification(requestData, 'rejected');
+    }
   } catch (error) {
     console.error('Error rejecting access request:', error);
     throw error;

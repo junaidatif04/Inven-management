@@ -41,7 +41,7 @@ const navigation = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
-  const { unreadCount } = useNotifications();
+  const { unreadCount, pendingAccessRequests } = useNotifications();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -117,7 +117,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <item.icon className="h-5 w-5 flex-shrink-0" />
-                {!isCollapsed && <span>{item.name}</span>}
+                {!isCollapsed && (
+                  <div className="flex items-center justify-between flex-1">
+                    <span>{item.name}</span>
+                    {item.name === 'Access Requests' && pendingAccessRequests > 0 && (
+                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {pendingAccessRequests}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {isCollapsed && item.name === 'Access Requests' && pendingAccessRequests > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                    {pendingAccessRequests > 9 ? '9+' : pendingAccessRequests}
+                  </span>
+                )}
               </Link>
             );
 

@@ -3,6 +3,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Toaster } from '@/components/ui/sonner';
+import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import RequestAccessPage from '@/pages/RequestAccessPage';
 import RequestSubmittedPage from '@/pages/RequestSubmittedPage';
@@ -74,6 +75,7 @@ function App() {
           <Router>
             <div className="min-h-screen bg-background">
               <Routes>
+                <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/request-access" element={<RequestAccessPage />} />
                 <Route path="/request-submitted" element={<RequestSubmittedPage />} />
@@ -86,7 +88,6 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
-                <Route path="/" element={<Navigate to="/dashboard" />} />
               </Routes>
               <Toaster />
             </div>

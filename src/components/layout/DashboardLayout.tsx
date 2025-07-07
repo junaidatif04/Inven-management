@@ -96,9 +96,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const SidebarContent = ({ isCollapsed = false }: { isCollapsed?: boolean }) => (
     <div className="flex flex-col h-full">
       {/* Logo Header */}
-      <div className={`flex items-center p-6 border-b ${isCollapsed ? 'justify-center' : 'space-x-2'}`}>
-        <Package className="h-8 w-8 text-primary flex-shrink-0" />
-        {!isCollapsed && <span className="text-xl font-bold">InventoryPro</span>}
+      <div className={`flex items-center p-6 border-b border-slate-200/60 dark:border-slate-700/60 ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
+        <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-elegant">
+          <Package className="h-6 w-6 text-white flex-shrink-0" />
+        </div>
+        {!isCollapsed && (
+          <div>
+            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">InventoryPro</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Management System</p>
+          </div>
+        )}
       </div>
       
       <nav className="flex-1 space-y-1 p-4">
@@ -109,10 +116,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.name}
                 to={item.href}
-                className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-elegant'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -121,14 +128,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <div className="flex items-center justify-between flex-1">
                     <span>{item.name}</span>
                     {item.name === 'Access Requests' && pendingAccessRequests > 0 && (
-                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-sm">
                         {pendingAccessRequests}
                       </span>
                     )}
                   </div>
                 )}
                 {isCollapsed && item.name === 'Access Requests' && pendingAccessRequests > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center shadow-sm border border-white dark:border-slate-900">
                     {pendingAccessRequests > 9 ? '9+' : pendingAccessRequests}
                   </span>
                 )}
@@ -153,17 +160,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </TooltipProvider>
       </nav>
 
-      <div className="p-4 border-t">
+      <div className="p-4 border-t border-slate-200/60 dark:border-slate-700/60">
         {!isCollapsed ? (
           <>
             <div className="flex items-center space-x-3 mb-4">
-              <Avatar>
+              <Avatar className="ring-2 ring-slate-200 dark:ring-slate-700">
                 <AvatarFallback>
                   {user?.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.name}</p>
+                <p className="text-sm font-medium truncate text-slate-800 dark:text-slate-200">{user?.name}</p>
                 <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-xs">
                   {getRoleDisplayName(user?.role || '')}
                 </Badge>
@@ -174,7 +181,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               variant="ghost"
               size="sm"
               onClick={handleLogout}
-              className="w-full justify-start text-white hover:text-white hover:bg-muted/80 transition-colors"
+              className="w-full justify-start text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200"
             >
               <LogOut className="h-4 w-4 mr-2" />
               Logout
@@ -186,7 +193,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="flex justify-center">
-                    <Avatar className="h-8 w-8">
+                    <Avatar className="h-8 w-8 ring-2 ring-slate-200 dark:ring-slate-700">
                       <AvatarFallback className="text-xs">
                         {user?.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                       </AvatarFallback>
@@ -207,7 +214,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     variant="ghost"
                     size="sm"
                     onClick={handleLogout}
-                    className="w-full justify-center text-white hover:text-white hover:bg-muted/80 transition-colors"
+                    className="w-full justify-center text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200"
                   >
                     <LogOut className="h-4 w-4" />
                   </Button>
@@ -224,30 +231,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 overflow-hidden">
       {/* Desktop Sidebar */}
       <div className={`hidden md:flex md:flex-col transition-all duration-300 relative ${isSidebarCollapsed ? 'md:w-16' : 'md:w-64'}`}>
-        <div className="flex flex-col h-full border-r bg-muted/10">
+        <div className="flex flex-col h-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60 shadow-elegant">
           <SidebarContent isCollapsed={isSidebarCollapsed} />
         </div>
         
         {/* Simple Sidebar Toggle Arrow */}
         <button
           onClick={toggleSidebar}
-          className="absolute -right-3 top-8 group z-20 p-1 hover:bg-muted/50 rounded transition-colors duration-200"
+          className="absolute -right-3 top-8 group z-20 p-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-full shadow-elegant border border-slate-200 dark:border-slate-700 transition-all duration-200 hover:shadow-elegant-lg"
           aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isSidebarCollapsed ? (
-            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors duration-200" />
+            <ChevronRight className="h-3.5 w-3.5 text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-slate-200 transition-colors duration-200" />
           ) : (
-            <ChevronLeft className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors duration-200" />
+            <ChevronLeft className="h-3.5 w-3.5 text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-slate-200 transition-colors duration-200" />
           )}
         </button>
       </div>
 
       {/* Mobile Sidebar */}
       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-        <SheetContent side="left" className="p-0 w-64">
+        <SheetContent side="left" className="p-0 w-64 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl">
           <SidebarContent />
         </SheetContent>
       </Sheet>
@@ -255,18 +262,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="bg-background border-b px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-700/60 px-6 py-4 flex items-center justify-between flex-shrink-0 shadow-sm">
           <div className="flex items-center space-x-4">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
+                <Button variant="ghost" size="icon" className="md:hidden hover:bg-slate-100 dark:hover:bg-slate-800">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
             </Sheet>
             
             <div className="hidden md:block">
-              <h1 className="text-xl font-semibold">
+              <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-200">
                 {navigation.find(item => item.href === location.pathname)?.name || 'Dashboard'}
               </h1>
             </div>
@@ -276,14 +283,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Clean Notification Bell Button */}
             <button
               onClick={() => setIsNotificationPanelOpen(true)}
-              className="relative p-2 text-white hover:text-white hover:bg-muted/50 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="relative p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
               aria-label="Open notifications"
             >
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
                 <Badge
                   variant="destructive"
-                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center"
+                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-red-500 text-white border-2 border-white dark:border-slate-900"
                 >
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </Badge>
@@ -291,13 +298,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
 
             <div className="flex items-center space-x-2">
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-9 w-9 ring-2 ring-slate-200 dark:ring-slate-700">
                 <AvatarFallback className="text-xs">
                   {user?.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden sm:block">
-                <p className="text-sm font-medium">{user?.name}</p>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{user?.name}</p>
                 <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-xs">
                   {getRoleDisplayName(user?.role || '')}
                 </Badge>
@@ -309,7 +316,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Main Content Area - Full Height with Consistent Padding */}
         <main className="flex-1 overflow-hidden">
           <div className="h-full overflow-auto">
-            <div className="h-full p-6">
+            <div className="h-full p-6 animate-fade-in">
               <div className="h-full w-full max-w-none">
                 {children}
               </div>

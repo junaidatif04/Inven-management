@@ -224,16 +224,16 @@ export default function AdminDashboard() {
     <div className="h-full flex flex-col space-y-6">
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-200 dark:to-slate-400 bg-clip-text text-transparent">Admin Dashboard</h1>
+          <p className="text-slate-600 dark:text-slate-400 font-medium">
             Real-time overview of your inventory management system
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
             Last updated: {lastUpdated.toLocaleTimeString()}
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={refreshData} disabled={loading}>
+          <Button variant="outline" onClick={refreshData} disabled={loading} className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -244,15 +244,17 @@ export default function AdminDashboard() {
         <div className="space-y-6 pb-6">
           {/* KPI Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
+            <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Total Inventory Value
                 </CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+                  <DollarSign className="h-4 w-4 text-white" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
                   {formatCurrency(stats.totalInventoryValue)}
                 </div>
                 <div className="flex items-center space-x-1 text-xs text-muted-foreground">
@@ -260,57 +262,63 @@ export default function AdminDashboard() {
                   <span className={(stats?.monthlyOrderGrowth || 0) >= 0 ? 'text-green-500' : 'text-red-500'}>
                     {(stats?.monthlyOrderGrowth || 0) >= 0 ? '+' : ''}{(stats?.monthlyOrderGrowth || 0).toFixed(1)}%
                   </span>
-                  <span>from last month</span>
+                  <span className="text-slate-500 dark:text-slate-400">from last month</span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Low Stock Alerts
                 </CardTitle>
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                <div className="p-2 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-white" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">
+                <div className="text-2xl font-bold text-orange-600 dark:text-orange-500">
                   {stats.lowStockAlerts}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Items need restocking
                 </p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Pending Orders
                 </CardTitle>
-                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                  <ShoppingCart className="h-4 w-4 text-white" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
                   {stats.pendingOrders}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Awaiting approval
                 </p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Active Users
                 </CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+                <div className="p-2 bg-gradient-to-br from-purple-500 to-violet-600 rounded-lg">
+                  <Users className="h-4 w-4 text-white" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
                   {stats.totalUsers}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {stats.activeSuppliers} suppliers
                 </p>
               </CardContent>
@@ -319,13 +327,15 @@ export default function AdminDashboard() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Low Stock Alerts */}
-            <Card>
+            <Card className="glass-card shadow-elegant border-0">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                  <span>Low Stock Alerts</span>
+                <CardTitle className="flex items-center space-x-3">
+                  <div className="p-2 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg">
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-slate-800 dark:text-slate-200">Low Stock Alerts</span>
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-slate-600 dark:text-slate-400">
                   Items that need immediate attention
                 </CardDescription>
               </CardHeader>
@@ -333,21 +343,21 @@ export default function AdminDashboard() {
                 <ScrollArea className="h-[300px]">
                   <div className="space-y-4">
                     {lowStockItemsData.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div key={index} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="space-y-1">
-                          <p className="font-medium text-sm">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">{item.category}</p>
+                          <p className="font-medium text-sm text-slate-800 dark:text-slate-200">{item.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{item.category}</p>
                           <div className="flex items-center space-x-2">
                             <Progress 
                               value={(item.currentStock / item.threshold) * 100} 
                               className="w-20 h-2"
                             />
-                            <span className="text-xs">
+                            <span className="text-xs text-slate-600 dark:text-slate-400">
                               {item.currentStock}/{item.threshold}
                             </span>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600">
                           <Eye className="h-3 w-3 mr-1" />
                           View
                         </Button>
@@ -359,13 +369,15 @@ export default function AdminDashboard() {
             </Card>
 
             {/* Recent Orders */}
-            <Card>
+            <Card className="glass-card shadow-elegant border-0">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <ShoppingCart className="h-5 w-5" />
-                  <span>Recent Orders</span>
+                <CardTitle className="flex items-center space-x-3">
+                  <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                    <ShoppingCart className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-slate-800 dark:text-slate-200">Recent Orders</span>
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-slate-600 dark:text-slate-400">
                   Latest orders in the system
                 </CardDescription>
               </CardHeader>
@@ -373,25 +385,25 @@ export default function AdminDashboard() {
                 <ScrollArea className="h-[300px]">
                   <div className="space-y-4">
                     {recentOrders.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
+                      <div className="text-center py-8 text-slate-500 dark:text-slate-400">
                         <ShoppingCart className="h-8 w-8 mx-auto mb-2 opacity-50" />
                         <p>No recent orders</p>
                       </div>
                     ) : (
                       recentOrders.map((order) => (
-                        <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div key={order.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                           <div className="space-y-1">
                             <div className="flex items-center space-x-2">
-                              <p className="font-medium text-sm">{order.orderNumber}</p>
+                              <p className="font-medium text-sm text-slate-800 dark:text-slate-200">{order.orderNumber}</p>
                               {getStatusBadge(order.status)}
                             </div>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                               {order.supplierName}
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                               {formatCurrency(order.totalAmount)} • {order.items.length} items
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                               {order.orderDate?.toDate ?
                                 order.orderDate.toDate().toLocaleDateString() :
                                 new Date(order.orderDate).toLocaleDateString()
@@ -399,7 +411,7 @@ export default function AdminDashboard() {
                             </p>
                           </div>
                           <div className="flex space-x-1">
-                            <Button size="sm" variant="outline">
+                            <Button size="sm" variant="outline" className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600">
                               <Eye className="h-3 w-3 mr-1" />
                               View
                             </Button>
@@ -415,33 +427,35 @@ export default function AdminDashboard() {
 
           {/* User Management & System Logs */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
+            <Card className="glass-card shadow-elegant border-0">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Users className="h-5 w-5" />
-                  <span>User Management</span>
+                <CardTitle className="flex items-center space-x-3">
+                  <div className="p-2 bg-gradient-to-br from-purple-500 to-violet-600 rounded-lg">
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-slate-800 dark:text-slate-200">User Management</span>
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-slate-600 dark:text-slate-400">
                   Manage system users and permissions
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 border rounded-lg">
-                    <div className="text-2xl font-bold">{stats.totalUsers}</div>
-                    <p className="text-sm text-muted-foreground">Total Users</p>
+                  <div className="text-center p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                    <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{stats.totalUsers}</div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Total Users</p>
                   </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <div className="text-2xl font-bold">{stats.activeSuppliers}</div>
-                    <p className="text-sm text-muted-foreground">Suppliers</p>
+                  <div className="text-center p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                    <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{stats.activeSuppliers}</div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Suppliers</p>
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <Button className="flex-1">
+                  <Button className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-sm">
                     <Plus className="mr-2 h-4 w-4" />
                     Add User
                   </Button>
-                  <Button variant="outline" className="flex-1">
+                  <Button variant="outline" className="flex-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700">
                     <Eye className="mr-2 h-4 w-4" />
                     View All
                   </Button>
@@ -449,13 +463,15 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-card shadow-elegant border-0">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Activity className="h-5 w-5" />
-                  <span>System Logs</span>
+                <CardTitle className="flex items-center space-x-3">
+                  <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg">
+                    <Activity className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-slate-800 dark:text-slate-200">System Logs</span>
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-slate-600 dark:text-slate-400">
                   Recent system activity
                 </CardDescription>
               </CardHeader>
@@ -463,16 +479,16 @@ export default function AdminDashboard() {
                 <ScrollArea className="h-[200px]">
                   <div className="space-y-2">
                     {systemLogs.map((log, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 text-sm border-b">
+                      <div key={index} className="flex items-center justify-between p-3 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg mb-2">
                         <div className="space-y-1">
-                          <p className="font-medium">{log.action}</p>
-                          <p className="text-xs text-muted-foreground">{log.user}</p>
+                          <p className="font-medium text-slate-800 dark:text-slate-200">{log.action}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{log.user}</p>
                         </div>
                         <div className="text-right space-y-1">
                           <Badge variant={log.status === 'Success' ? 'default' : 'destructive'}>
                             {log.status}
                           </Badge>
-                          <p className="text-xs text-muted-foreground">{log.timestamp}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{log.timestamp}</p>
                         </div>
                       </div>
                     ))}

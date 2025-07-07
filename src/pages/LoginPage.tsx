@@ -77,22 +77,33 @@ export default function LoginPage() {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900 p-4 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-indigo-600/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-indigo-400/20 to-purple-600/20 rounded-full blur-3xl"></div>
+      </div>
+      
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center space-x-2">
-            <Package className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold">InventoryPro</h1>
+            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-elegant">
+              <Package className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">InventoryPro</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Management System</p>
+            </div>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-slate-600 dark:text-slate-400 font-medium">
             Inventory & Supply Chain Management System
           </p>
         </div>
 
-        <Card className="w-full">
+        <Card className="w-full glass-card shadow-elegant-lg border-0 relative z-10">
           <CardHeader className="text-center">
-            <CardTitle>Welcome</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-slate-800 dark:text-slate-200">Welcome Back</CardTitle>
+            <CardDescription className="text-slate-600 dark:text-slate-400">
               Sign in to access the inventory management system
             </CardDescription>
           </CardHeader>
@@ -106,7 +117,7 @@ export default function LoginPage() {
               <TabsContent value="google" className="space-y-4">
 
                 <div className="text-center space-y-4">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
                     Sign in with your Google account for quick access
                   </p>
 
@@ -114,7 +125,7 @@ export default function LoginPage() {
                     onClick={handleGoogleSignIn}
                     className="w-full h-12 text-base"
                     disabled={isLoading || isSigningIn}
-                    variant="outline"
+                    className="w-full h-12 text-base bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium shadow-sm hover:shadow-md transition-all duration-200"
                   >
                     {isSigningIn ? (
                       <>
@@ -146,7 +157,7 @@ export default function LoginPage() {
                     )}
                   </Button>
 
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     New users will be automatically registered with "Internal User" role
                   </p>
                 </div>
@@ -162,6 +173,7 @@ export default function LoginPage() {
                       value={emailCredentials.email}
                       onChange={(e) => setEmailCredentials({ ...emailCredentials, email: e.target.value })}
                       placeholder="Enter your email address"
+                      className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
                       required
                       disabled={isLoading || isSigningIn}
                     />
@@ -175,6 +187,7 @@ export default function LoginPage() {
                       value={emailCredentials.password}
                       onChange={(e) => setEmailCredentials({ ...emailCredentials, password: e.target.value })}
                       placeholder="Enter your password"
+                      className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
                       required
                       disabled={isLoading || isSigningIn}
                     />
@@ -182,7 +195,7 @@ export default function LoginPage() {
 
                   <Button
                     type="submit"
-                    className="w-full h-12"
+                    className="w-full h-12 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium shadow-elegant hover:shadow-elegant-lg transition-all duration-200"
                     disabled={isLoading || isSigningIn}
                   >
                     {isSigningIn ? (
@@ -198,7 +211,7 @@ export default function LoginPage() {
                     )}
                   </Button>
 
-                  <p className="text-xs text-muted-foreground text-center">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
                     Use the email and password from your approved account setup
                   </p>
                 </form>
@@ -209,15 +222,15 @@ export default function LoginPage() {
             <div className="border-t pt-6">
               <div className="text-center space-y-4">
                 <div>
-                  <h3 className="text-sm font-medium text-foreground">
+                  <h3 className="text-sm font-medium text-slate-800 dark:text-slate-200">
                     Don't have access yet?
                   </h3>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
                     Request access for Warehouse Staff, Supplier, or Internal User roles
                   </p>
                 </div>
 
-                <Button asChild variant="outline" className="w-full">
+                <Button asChild variant="outline" className="w-full h-11 border-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
                   <Link to="/request-access">
                     <UserPlus className="mr-2 h-4 w-4" />
                     Request Access

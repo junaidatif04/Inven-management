@@ -258,10 +258,10 @@ export default function InventoryPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Inventory Management</h1>
-          <p className="text-muted-foreground">Manage your inventory items and stock levels</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-200 dark:to-slate-400 bg-clip-text text-transparent">Inventory Management</h1>
+          <p className="text-slate-600 dark:text-slate-400 font-medium">Manage your inventory items and stock levels</p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
+        <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-elegant">
           <Plus className="h-4 w-4 mr-2" />
           Add Item
         </Button>
@@ -269,47 +269,55 @@ export default function InventoryPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">Total Items</CardTitle>
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+              <Package className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{items.length}</div>
+            <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{items.length}</div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">In Stock</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">In Stock</CardTitle>
+            <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+              <TrendingUp className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-500">
               {items.filter(item => item.status === 'in_stock').length}
             </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+            <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">Low Stock</CardTitle>
+            <div className="p-2 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg">
+              <AlertTriangle className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
+            <div className="text-2xl font-bold text-orange-600 dark:text-orange-500">
               {items.filter(item => item.status === 'low_stock').length}
             </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-500" />
+            <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">Out of Stock</CardTitle>
+            <div className="p-2 bg-gradient-to-br from-red-500 to-rose-600 rounded-lg">
+              <TrendingDown className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
+            <div className="text-2xl font-bold text-red-600 dark:text-red-500">
               {items.filter(item => item.status === 'out_of_stock').length}
             </div>
           </CardContent>
@@ -317,25 +325,25 @@ export default function InventoryPage() {
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="glass-card shadow-elegant border-0">
         <CardHeader>
-          <CardTitle>Filters</CardTitle>
+          <CardTitle className="text-slate-800 dark:text-slate-200">Filters</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                 <Input
                   placeholder="Search items..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
+                  className="pl-10 h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
                 />
               </div>
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48 h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
@@ -351,35 +359,36 @@ export default function InventoryPage() {
       </Card>
 
       {/* Inventory Table */}
-      <Card>
+      <Card className="glass-card shadow-elegant border-0">
         <CardHeader>
-          <CardTitle>Inventory Items</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-slate-800 dark:text-slate-200">Inventory Items</CardTitle>
+          <CardDescription className="text-slate-600 dark:text-slate-400">
             Manage your inventory items, stock levels, and pricing
           </CardDescription>
         </CardHeader>
         <CardContent>
           {filteredItems.length === 0 ? (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No items found</h3>
-              <p className="text-muted-foreground mb-4">
+              <h3 className="text-lg font-semibold mb-2 text-slate-800 dark:text-slate-200">No items found</h3>
+              <p className="text-slate-600 dark:text-slate-400 mb-6">
                 {items.length === 0
                   ? "Get started by adding your first inventory item."
                   : "Try adjusting your search or filter criteria."
                 }
               </p>
               {items.length === 0 && (
-                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-elegant">
                   <Plus className="h-4 w-4 mr-2" />
                   Add First Item
                 </Button>
               )}
             </div>
           ) : (
-            <Table>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-slate-50 dark:bg-slate-700/50">
                   <TableHead>Name</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Category</TableHead>
@@ -392,31 +401,32 @@ export default function InventoryPage() {
               </TableHeader>
               <TableBody>
                 {filteredItems.map((item) => (
-                  <TableRow key={item.id}>
+                  <TableRow key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                     <TableCell>
                       <div>
-                        <div className="font-medium">{item.name}</div>
-                        <div className="text-sm text-muted-foreground">{item.description}</div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400">{item.description}</div>
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono">{item.sku}</TableCell>
+                    <TableCell className="font-mono text-slate-700 dark:text-slate-300">{item.sku}</TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>
                       <div className="text-center">
-                        <div className="font-medium">{item.quantity}</div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="font-medium text-slate-800 dark:text-slate-200">{item.quantity}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
                           Min: {item.minStockLevel}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(item.status)}</TableCell>
-                    <TableCell>${item.unitPrice.toFixed(2)}</TableCell>
+                    <TableCell className="font-medium">${item.unitPrice.toFixed(2)}</TableCell>
                     <TableCell>{item.supplier}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
                           size="sm"
+                          className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
                           onClick={() => openStockDialog(item)}
                         >
                           <RotateCcw className="h-4 w-4" />
@@ -424,6 +434,7 @@ export default function InventoryPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
                           onClick={() => openEditDialog(item)}
                         >
                           <Edit className="h-4 w-4" />
@@ -431,6 +442,7 @@ export default function InventoryPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-800 hover:text-red-600 dark:hover:text-red-400"
                           onClick={() => {
                             setSelectedItem(item);
                             setIsDeleteDialogOpen(true);
@@ -443,7 +455,8 @@ export default function InventoryPage() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -243,41 +243,43 @@ export default function AdminDashboard() {
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="space-y-6 pb-6">
           {/* KPI Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Total Inventory Value
                 </CardTitle>
-                <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
-                  <DollarSign className="h-4 w-4 text-white" />
+                <div className="p-3 bg-gradient-to-br from-green-500 via-emerald-500 to-teal-600 rounded-xl shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-110">
+                  <DollarSign className="h-5 w-5 text-white" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                <div className="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-2">
                   {formatCurrency(stats.totalInventoryValue)}
                 </div>
-                <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-                  <TrendingUp className={`h-3 w-3 ${(stats?.monthlyOrderGrowth || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`} />
-                  <span className={(stats?.monthlyOrderGrowth || 0) >= 0 ? 'text-green-500' : 'text-red-500'}>
-                    {(stats?.monthlyOrderGrowth || 0) >= 0 ? '+' : ''}{(stats?.monthlyOrderGrowth || 0).toFixed(1)}%
-                  </span>
+                <div className="flex items-center space-x-2 text-xs">
+                  <div className="flex items-center space-x-1">
+                    <TrendingUp className={`h-3 w-3 ${(stats?.monthlyOrderGrowth || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+                    <span className={`font-medium ${(stats?.monthlyOrderGrowth || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {(stats?.monthlyOrderGrowth || 0) >= 0 ? '+' : ''}{(stats?.monthlyOrderGrowth || 0).toFixed(1)}%
+                    </span>
+                  </div>
                   <span className="text-slate-500 dark:text-slate-400">from last month</span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+            <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Low Stock Alerts
                 </CardTitle>
-                <div className="p-2 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg">
-                  <AlertTriangle className="h-4 w-4 text-white" />
+                <div className="p-3 bg-gradient-to-br from-yellow-500 via-orange-500 to-red-600 rounded-xl shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-110">
+                  <AlertTriangle className="h-5 w-5 text-white" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600 dark:text-orange-500">
+                <div className="text-3xl font-bold text-orange-600 dark:text-orange-500 mb-2">
                   {stats.lowStockAlerts}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">

@@ -123,9 +123,8 @@ export default function LoginPage() {
 
                   <Button
                     onClick={handleGoogleSignIn}
-                    className="w-full h-12 text-base"
-                    disabled={isLoading || isSigningIn}
                     className="w-full h-12 text-base bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium shadow-sm hover:shadow-md transition-all duration-200"
+                    disabled={isLoading || isSigningIn}
                   >
                     {isSigningIn ? (
                       <>

@@ -69,24 +69,19 @@ const generateRealNotifications = async (): Promise<Notification[]> => {
     });
 
     // Get access requests for notifications
-    try {
-      const accessRequests = await getPendingAccessRequests();
-      accessRequests.slice(0, 2).forEach((request) => {
-        const requestDate = request.createdAt?.toDate ? request.createdAt.toDate() : new Date(request.createdAt);
-        notifications.push({
-          id: `access-${request.id}`,
-          title: 'New Access Request',
-          message: `${request.name} has requested ${request.requestedRole} access`,
-          type: 'info',
-          timestamp: requestDate,
-          read: false,
-          actionUrl: '/dashboard/access-requests',
-        });
+    const accessRequests = await getPendingAccessRequests();
+    accessRequests.slice(0, 2).forEach((request) => {
+      const requestDate = request.createdAt?.toDate ? request.createdAt.toDate() : new Date(request.createdAt);
+      notifications.push({
+        id: `access-${request.id}`,
+        title: 'New Access Request',
+        message: `${request.name} has requested ${request.requestedRole} access`,
+        type: 'info',
+        timestamp: requestDate,
+        read: false,
+        actionUrl: '/dashboard/access-requests',
       });
-    } catch (accessError) {
-      console.warn('Could not load access request notifications:', accessError);
-      // Continue without access request notifications
-    }
+    });
 
   } catch (error) {
     console.error('Error generating notifications:', error);

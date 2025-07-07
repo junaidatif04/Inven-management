@@ -1,0 +1,14 @@
+# Netlify redirects for React Router
+# This ensures all routes are handled by the React app
+
+# Handle all routes by serving index.html
+/*    /index.html   200
+
+# API redirects (if needed in the future)
+/api/*  /api/:splat  200
+
+# Handle specific routes that might need special handling
+/complete-signup  /index.html  200
+/request-access   /index.html  200
+/login           /index.html  200
+/dashboard/*     /index.html  200

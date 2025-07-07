@@ -44,15 +44,20 @@ export default function CompleteSignupPage() {
 
   const loadRequestData = async () => {
     try {
+      console.log('Loading request data for token:', token);
       const requestData = await getAccessRequestByToken(token!);
+      console.log('Request data received:', requestData);
+
       if (!requestData) {
+        console.log('No request data found for token');
         setError('Invalid, expired, or already used signup token');
       } else {
+        console.log('Setting request data:', requestData);
         setRequest(requestData);
       }
     } catch (error) {
       console.error('Error loading request data:', error);
-      setError('Failed to load signup information');
+      setError('Failed to load signup information. Please check the console for details.');
     } finally {
       setLoading(false);
     }
@@ -188,9 +193,14 @@ export default function CompleteSignupPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="text-center">
+        <div className="text-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
           <p>Loading signup information...</p>
+          {token && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Processing token: {token.substring(0, 10)}...
+            </p>
+          )}
         </div>
       </div>
     );

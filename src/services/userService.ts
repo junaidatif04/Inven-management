@@ -230,6 +230,14 @@ export const getUserStats = async () => {
 // Function to migrate any users with 'user' role to 'internal_user'
 export const migrateUserRoles = async (): Promise<number> => {
   try {
+    // Verify authentication before proceeding
+    if (!auth.currentUser) {
+      throw new Error('User must be authenticated to migrate user roles');
+    }
+    
+    // Verify the user has a valid token
+    await auth.currentUser.getIdToken();
+    
     // Get all users
     const q = query(collection(db, 'users'), where('role', '==', 'user'));
     const querySnapshot = await getDocs(q);

@@ -1,5 +1,4 @@
 import { createProduct, CreateProduct } from '../services/productService';
-import { createSupplier, CreateSupplier } from '../services/supplierService';
 
 // Sample products to populate the database
 const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'createdBy'>[] = [
@@ -93,60 +92,4 @@ export const createSampleProducts = async (userId: string, userName: string) => 
   }
 };
 
-// Sample suppliers to populate the database
-const sampleSuppliers: CreateSupplier[] = [
-  {
-    name: 'TechCorp Solutions',
-    email: 'contact@techcorp.com',
-    phone: '+1-555-0123',
-    address: '123 Technology Drive, Silicon Valley, CA 94025',
-    contactPerson: 'John Smith'
-  },
-  {
-    name: 'Office Furniture Plus',
-    email: 'sales@officefurnitureplus.com',
-    phone: '+1-555-0456',
-    address: '456 Business Blvd, Chicago, IL 60601',
-    contactPerson: 'Sarah Johnson'
-  },
-  {
-    name: 'Global Supplies Inc',
-    email: 'orders@globalsupplies.com',
-    phone: '+1-555-0789',
-    address: '789 Commerce Street, New York, NY 10001',
-    contactPerson: 'Michael Brown'
-  },
-  {
-    name: 'Electronics Warehouse',
-    email: 'info@electronicswarehouse.com',
-    phone: '+1-555-0321',
-    address: '321 Electronics Ave, Austin, TX 73301',
-    contactPerson: 'Emily Davis'
-  },
-  {
-    name: 'Premium Office Solutions',
-    email: 'support@premiumoffice.com',
-    phone: '+1-555-0654',
-    address: '654 Corporate Plaza, Seattle, WA 98101',
-    contactPerson: 'David Wilson'
-  }
-];
-
-export const createSampleSuppliers = async () => {
-  try {
-    console.log('Creating sample suppliers...');
-    
-    for (const supplier of sampleSuppliers) {
-      await createSupplier(supplier);
-      console.log(`Created supplier: ${supplier.name}`);
-    }
-    
-    console.log('Sample suppliers created successfully!');
-    return true;
-  } catch (error) {
-    console.error('Error creating sample suppliers:', error);
-    throw error;
-  }
-};
-
-export { sampleProducts, sampleSuppliers };
+export { sampleProducts };

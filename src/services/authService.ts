@@ -17,21 +17,11 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from '@/lib/firebase';
+import { autoRegisterSupplier } from './supplierService';
+import { User } from '@/types/auth';
 
 export type UserRole = 'admin' | 'warehouse_staff' | 'supplier' | 'internal_user';
-
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: UserRole;
-  avatar?: string;
-  profilePicture?: string;
-  displayName?: string;
-  isEmailVerified?: boolean;
-  createdAt?: any;
-  lastLoginAt?: any;
-}
+export type { User };
 
 
 
@@ -52,7 +42,13 @@ export const signInWithGoogle = (): Promise<User> => {
               ...userData,
               lastLoginAt: serverTimestamp()
             }, { merge: true })
-              .then(() => userData);
+              .then(() => {
+                // Auto-register supplier if applicable
+                autoRegisterSupplier(userData).catch(error => 
+                  console.error('Failed to auto-register supplier:', error)
+                );
+                return userData;
+              });
           } else {
             // Check if email is already registered with a different account
             return checkEmailExists(firebaseUser.email!)
@@ -78,7 +74,13 @@ export const signInWithGoogle = (): Promise<User> => {
                     };
 
                     return setDoc(doc(db, 'users', firebaseUser.uid), userData)
-                      .then(() => userData);
+                      .then(() => {
+                        // Auto-register supplier if applicable
+                        autoRegisterSupplier(userData).catch(error => 
+                          console.error('Failed to auto-register supplier:', error)
+                        );
+                        return userData;
+                      });
                   });
               });
           }
@@ -312,7 +314,13 @@ export const signInWithEmailAndPasswordAuth = (
           return setDoc(doc(db, 'users', firebaseUser.uid), {
             lastLoginAt: serverTimestamp()
           }, { merge: true })
-            .then(() => userData);
+            .then(() => {
+              // Auto-register supplier if applicable
+              autoRegisterSupplier(userData).catch(error => 
+                console.error('Failed to auto-register supplier:', error)
+              );
+              return userData;
+            });
         });
     })
     .catch(error => {

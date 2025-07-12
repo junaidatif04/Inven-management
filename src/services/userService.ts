@@ -184,6 +184,29 @@ export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
   }
 };
 
+export const getUserByEmail = async (email: string): Promise<User | null> => {
+  try {
+    const q = query(
+      collection(db, 'users'),
+      where('email', '==', email)
+    );
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return null;
+    }
+    
+    const userDoc = querySnapshot.docs[0];
+    return {
+      id: userDoc.id,
+      ...userDoc.data()
+    } as User;
+  } catch (error) {
+    console.error('Error fetching user by email:', error);
+    throw error;
+  }
+};
+
 export const getUserStats = async () => {
   try {
     const users = await getAllUsers();

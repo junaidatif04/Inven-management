@@ -10,6 +10,7 @@ import {
   UserRole
 } from '@/services/authService';
 import { toast } from 'sonner';
+import { initializeApp } from '@/services/appInitService';
 
 interface AuthContextType {
   user: User | null;
@@ -36,6 +37,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Initialize app data on startup
+    initializeApp();
+    
     // Listen for authentication state changes
     const unsubscribe = onAuthStateChange((user) => {
       setUser(user);

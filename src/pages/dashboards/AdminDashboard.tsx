@@ -25,7 +25,7 @@ import { getAllOrders } from '@/services/orderService';
 import { getAllUsers } from '@/services/userService';
 import { getAllSuppliers } from '@/services/supplierService';
 import { Supplier } from '@/types/inventory';
-import { createSampleSuppliers } from '@/utils/sampleData';
+
 
 
 
@@ -84,28 +84,8 @@ export default function AdminDashboard() {
       const orders = await getAllOrders();
       const users = await getAllUsers();
       
-      // Handle suppliers with fallback to sample data creation
-      let suppliers: Supplier[] = [];
-      try {
-        suppliers = await getAllSuppliers();
-        // If no suppliers exist, create sample suppliers
-        if (suppliers.length === 0) {
-          console.log('No suppliers found, creating sample suppliers...');
-          await createSampleSuppliers();
-          suppliers = await getAllSuppliers();
-          toast.success('Sample suppliers created successfully!');
-        }
-      } catch (error) {
-        console.log('Error fetching suppliers, creating sample suppliers...', error);
-        try {
-          await createSampleSuppliers();
-          suppliers = await getAllSuppliers();
-          toast.success('Sample suppliers created successfully!');
-        } catch (sampleError) {
-          console.error('Failed to create sample suppliers:', sampleError);
-          toast.error('Failed to load suppliers data');
-        }
-      }
+      // Load suppliers
+      const suppliers: Supplier[] = await getAllSuppliers();
 
       // Calculate real inventory value
       const totalInventoryValue = inventoryItems.reduce((sum, item) =>

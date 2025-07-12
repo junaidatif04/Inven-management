@@ -442,6 +442,13 @@ export const subscribeToProducts = (callback: (products: Product[]) => void): ((
 };
 
 export const subscribeToProductsBySupplier = (supplierId: string, callback: (products: Product[]) => void): (() => void) => {
+  // Return empty unsubscribe function if supplierId is invalid
+  if (!supplierId || typeof supplierId !== 'string') {
+    console.warn('Invalid supplierId provided to subscribeToProductsBySupplier:', supplierId);
+    callback([]);
+    return () => {};
+  }
+
   const q = query(
     collection(db, PRODUCTS_COLLECTION),
     where('supplierId', '==', supplierId),
@@ -456,6 +463,7 @@ export const subscribeToProductsBySupplier = (supplierId: string, callback: (pro
     callback(products);
   }, (error) => {
     console.error('Error in products by supplier subscription:', error);
+    callback([]);
   });
 };
 
@@ -474,6 +482,13 @@ export const subscribeToPurchaseOrders = (callback: (orders: PurchaseOrder[]) =>
 };
 
 export const subscribeToPurchaseOrdersBySupplier = (supplierId: string, callback: (orders: PurchaseOrder[]) => void): (() => void) => {
+  // Return empty unsubscribe function if supplierId is invalid
+  if (!supplierId || typeof supplierId !== 'string') {
+    console.warn('Invalid supplierId provided to subscribeToPurchaseOrdersBySupplier:', supplierId);
+    callback([]);
+    return () => {};
+  }
+
   const q = query(
     collection(db, PURCHASE_ORDERS_COLLECTION),
     where('supplierId', '==', supplierId),
@@ -488,5 +503,6 @@ export const subscribeToPurchaseOrdersBySupplier = (supplierId: string, callback
     callback(orders);
   }, (error) => {
     console.error('Error in purchase orders by supplier subscription:', error);
+    callback([]);
   });
 };

@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Toaster } from '@/components/ui/sonner';
 import { migrateUserRoles } from '@/services/userService';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import SignUpPage from '@/pages/SignUpPage';
@@ -107,7 +108,9 @@ function App() {
                   path="/dashboard/*"
                   element={
                     <ProtectedRoute>
-                      <DashboardRouter />
+                      <ErrorBoundary>
+                        <DashboardRouter />
+                      </ErrorBoundary>
                     </ProtectedRoute>
                   }
                 />

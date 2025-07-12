@@ -53,11 +53,15 @@ import {
   adjustStock
 } from '@/services/inventoryService';
 import { uploadImage, deleteImage } from '@/services/imageUploadService';
+import { getAllUsers } from '@/services/userService';
+import { User } from '@/services/authService';
+
 
 export default function InventoryPage() {
   const { user } = useAuth();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
+  const [suppliers, setSuppliers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -98,6 +102,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     loadInventoryItems();
+    loadSuppliers();
   }, []);
 
   useEffect(() => {
@@ -113,6 +118,34 @@ export default function InventoryPage() {
       toast.error('Failed to load inventory items');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSuppliers = async () => {
+    try {
+      console.log('Loading suppliers for inventory...');
+      const users = await getAllUsers();
+      console.log('All users:', users);
+      console.log('Total users count:', users.length);
+      
+      // Log all user roles for debugging
+      const roleCount = users.reduce((acc, user) => {
+        acc[user.role] = (acc[user.role] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('User roles breakdown:', roleCount);
+      
+      const supplierUsers = users.filter(user => user.role === 'supplier');
+      console.log('Filtered supplier users:', supplierUsers);
+      console.log('Supplier users count:', supplierUsers.length);
+      
+      if (supplierUsers.length === 0) {
+        console.log('No supplier users found. Available users:', users.map(u => ({ name: u.name, email: u.email, role: u.role })));
+      }
+      
+      setSuppliers(supplierUsers);
+    } catch (error) {
+      console.error('Failed to load suppliers:', error);
     }
   };
 
@@ -332,9 +365,9 @@ export default function InventoryPage() {
           <p className="text-slate-600 dark:text-slate-400 font-medium">Manage your inventory items and stock levels</p>
         </div>
         <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-elegant">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Item
-        </Button>
+           <Plus className="h-4 w-4 mr-2" />
+           Add Item
+         </Button>
       </div>
 
       {/* Stats Cards */}
@@ -579,12 +612,27 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="supplier">Supplier</Label>
-              <Input
-                id="supplier"
+              <Select
                 value={formData.supplier}
-                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                placeholder="Enter supplier name"
-              />
+                onValueChange={(value) => setFormData({ ...formData, supplier: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={suppliers.length === 0 ? "No suppliers available" : "Select a supplier"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.length === 0 ? (
+                    <SelectItem value="no-suppliers" disabled>
+                      No suppliers available
+                    </SelectItem>
+                  ) : (
+                    suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.name}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="quantity">Initial Quantity</Label>
@@ -682,7 +730,10 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateItem}>
+            <Button 
+              onClick={handleCreateItem}
+              disabled={suppliers.length === 0 || !formData.supplier}
+            >
               Create Item
             </Button>
           </DialogFooter>
@@ -737,12 +788,27 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-supplier">Supplier</Label>
-              <Input
-                id="edit-supplier"
+              <Select
                 value={formData.supplier}
-                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                placeholder="Enter supplier name"
-              />
+                onValueChange={(value) => setFormData({ ...formData, supplier: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={suppliers.length === 0 ? "No suppliers available" : "Select a supplier"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.length === 0 ? (
+                    <SelectItem value="no-suppliers" disabled>
+                      No suppliers available
+                    </SelectItem>
+                  ) : (
+                    suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.name}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-unitPrice">Unit Price ($)</Label>

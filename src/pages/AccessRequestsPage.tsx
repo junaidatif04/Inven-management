@@ -38,7 +38,8 @@ import {
 } from '@/services/accessRequestService';
 import {
   sendApprovalEmail,
-  sendRejectionEmail
+  sendRejectionEmail,
+  sendRoleUpdateEmail
 } from '@/services/emailService';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -74,13 +75,24 @@ export default function AccessRequestsPage() {
     try {
       const signupToken = await approveAccessRequest(selectedRequest.id!, user.id);
 
-      // Send approval email with signup link
+      // Send approval email - different email for existing vs new users
       try {
-        await sendApprovalEmail(selectedRequest, signupToken, user.name || user.email);
-        toast.success('Request approved! Approval email sent to user.');
+        if (signupToken) {
+          // New user - send signup link
+          await sendApprovalEmail(selectedRequest, signupToken, user.name || user.email);
+          toast.success('Request approved! Signup email sent to user.');
+        } else {
+          // Existing user - send role update notification
+          await sendRoleUpdateEmail(selectedRequest, user.name || user.email);
+          toast.success('Request approved! Role updated and notification sent to user.');
+        }
       } catch (emailError) {
         console.error('Email sending failed:', emailError);
-        toast.success('Request approved! (Email notification failed)');
+        if (signupToken) {
+          toast.success('Request approved! (Signup email failed)');
+        } else {
+          toast.success('Request approved! Role updated. (Notification email failed)');
+        }
       }
 
       await loadRequests();

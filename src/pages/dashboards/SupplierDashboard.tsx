@@ -66,20 +66,36 @@ export default function SupplierDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!user?.id) return;
-
-    const unsubscribeProducts = subscribeToProductsBySupplier(user.id, (productsData) => {
-      setProducts(productsData);
+    if (!user?.id || typeof user.id !== 'string') {
+      console.warn('Invalid user ID in SupplierDashboard:', user?.id);
       setLoading(false);
-    });
+      return;
+    }
 
-    const unsubscribePOs = subscribeToPurchaseOrdersBySupplier(user.id, (posData) => {
-      setPurchaseOrders(posData);
-    });
+    let unsubscribeProducts: (() => void) | null = null;
+    let unsubscribePOs: (() => void) | null = null;
+
+    try {
+      unsubscribeProducts = subscribeToProductsBySupplier(user.id, (productsData) => {
+        setProducts(productsData);
+        setLoading(false);
+      });
+
+      unsubscribePOs = subscribeToPurchaseOrdersBySupplier(user.id, (posData) => {
+        setPurchaseOrders(posData);
+      });
+    } catch (error) {
+      console.error('Error setting up subscriptions in SupplierDashboard:', error);
+      setLoading(false);
+    }
 
     return () => {
-      unsubscribeProducts();
-      unsubscribePOs();
+      try {
+        if (unsubscribeProducts) unsubscribeProducts();
+        if (unsubscribePOs) unsubscribePOs();
+      } catch (error) {
+        console.error('Error cleaning up subscriptions:', error);
+      }
     };
   }, [user?.id]);
 

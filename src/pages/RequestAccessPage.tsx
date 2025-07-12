@@ -24,7 +24,14 @@ export default function RequestAccessPage() {
     reason: '',
     experience: '',
     referral: '',
-    expectedUsage: ''
+    expectedUsage: '',
+    // Supplier-specific fields
+    phone: '',
+    address: '',
+    contactPerson: '',
+    businessType: '',
+    website: '',
+    taxId: ''
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,6 +69,25 @@ export default function RequestAccessPage() {
       }
       if (formData.expectedUsage && formData.expectedUsage.trim()) {
         requestData.expectedUsage = formData.expectedUsage.trim();
+      }
+      // Supplier-specific fields
+      if (formData.phone && formData.phone.trim()) {
+        requestData.phone = formData.phone.trim();
+      }
+      if (formData.address && formData.address.trim()) {
+        requestData.address = formData.address.trim();
+      }
+      if (formData.contactPerson && formData.contactPerson.trim()) {
+        requestData.contactPerson = formData.contactPerson.trim();
+      }
+      if (formData.businessType && formData.businessType.trim()) {
+        requestData.businessType = formData.businessType.trim();
+      }
+      if (formData.website && formData.website.trim()) {
+        requestData.website = formData.website.trim();
+      }
+      if (formData.taxId && formData.taxId.trim()) {
+        requestData.taxId = formData.taxId.trim();
       }
 
       const requestId = await submitAccessRequest(requestData);
@@ -180,7 +206,7 @@ export default function RequestAccessPage() {
                   <Label htmlFor="role">Requested Role *</Label>
                   <Select 
                     value={formData.requestedRole} 
-                    onValueChange={(value: UserRole) => setFormData({ ...formData, requestedRole: value })}
+                    onValueChange={(value) => setFormData({ ...formData, requestedRole: value as UserRole })}
                   >
                     <SelectTrigger className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                       <SelectValue placeholder="Select the role you need" />
@@ -201,16 +227,107 @@ export default function RequestAccessPage() {
 
               {/* Role-specific fields */}
               {formData.requestedRole === 'supplier' && (
-                <div className="space-y-2">
-                  <Label htmlFor="company">Company Name</Label>
-                  <Input
-                    id="company"
-                    type="text"
-                    value={formData.company}
-                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                    placeholder="Enter your company name"
-                    className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
-                  />
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Supplier Information</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="company">Company Name *</Label>
+                      <Input
+                        id="company"
+                        type="text"
+                        value={formData.company}
+                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                        placeholder="Enter your company name"
+                        className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="contactPerson">Contact Person</Label>
+                      <Input
+                        id="contactPerson"
+                        type="text"
+                        value={formData.contactPerson}
+                        onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                        placeholder="Primary contact person"
+                        className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="Enter phone number"
+                        className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="businessType">Business Type</Label>
+                      <Select 
+                        value={formData.businessType} 
+                        onValueChange={(value) => setFormData({ ...formData, businessType: value })}
+                      >
+                        <SelectTrigger className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                          <SelectValue placeholder="Select business type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="manufacturer">Manufacturer</SelectItem>
+                          <SelectItem value="distributor">Distributor</SelectItem>
+                          <SelectItem value="wholesaler">Wholesaler</SelectItem>
+                          <SelectItem value="retailer">Retailer</SelectItem>
+                          <SelectItem value="service_provider">Service Provider</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Business Address</Label>
+                    <Textarea
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      placeholder="Enter your business address"
+                      className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                      rows={2}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="website">Website (Optional)</Label>
+                      <Input
+                        id="website"
+                        type="url"
+                        value={formData.website}
+                        onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                        placeholder="https://www.yourcompany.com"
+                        className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="taxId">Tax ID / Registration Number</Label>
+                      <Input
+                        id="taxId"
+                        type="text"
+                        value={formData.taxId}
+                        onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
+                        placeholder="Enter tax ID or registration number"
+                        className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 

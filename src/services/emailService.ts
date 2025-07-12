@@ -235,6 +235,56 @@ Inventory Management Team
   }
 };
 
+// Send role update email for existing users
+export const sendRoleUpdateEmail = async (
+  request: AccessRequest,
+  approvedBy?: string
+): Promise<void> => {
+  try {
+    const emailContent = `
+Dear ${request.name},
+
+Great news! Your request for ${getRoleDisplayName(request.requestedRole)} access has been approved.
+
+Your role has been successfully updated in the system. You can now access the new features and permissions associated with your ${getRoleDisplayName(request.requestedRole)} role.
+
+What's Next:
+1. Sign in to the Inventory Management System
+2. Explore your new role features and permissions
+3. Check out the updated dashboard
+4. Contact support if you need any assistance
+
+Your updated role: ${getRoleDisplayName(request.requestedRole)}
+Approved by: ${approvedBy || 'Administrator'}
+
+Role-Specific Resources:
+${getRoleResources(request.requestedRole)}
+
+If you have any questions or need assistance with your new role, please contact our support team at support@company.com.
+
+Best regards,
+Inventory Management Team
+    `;
+
+    const emailData: EmailTemplate = {
+      to_email: request.email,
+      to_name: request.name,
+      from_name: 'Inventory Management System',
+      subject: 'Role Updated - Access Approved',
+      message: emailContent,
+      requested_role: getRoleDisplayName(request.requestedRole),
+      approved_by: approvedBy || 'Administrator'
+    };
+
+    // Try to send via web service
+    await sendEmailViaWebService(emailData);
+
+  } catch (error) {
+    console.error('Error sending role update email:', error);
+    // Don't throw - let the app continue working
+  }
+};
+
 // Send welcome email after successful signup
 export const sendWelcomeEmail = async (
   user: { name: string; email: string; role: string }

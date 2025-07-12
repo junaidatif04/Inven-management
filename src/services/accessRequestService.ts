@@ -12,18 +12,32 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { UserRole } from './authService';
+import { getUserByEmail, updateUserRole } from './userService';
 
 // Function to create system notification for access request status changes
-const createAccessNotification = async (requestData: any, status: 'approved' | 'rejected') => {
+const createAccessNotification = async (requestData: any, status: 'approved' | 'rejected', isExistingUser: boolean = false) => {
   try {
+    let message = `Your request for ${requestData.requestedRole} access has been ${status}`;
+    let actionUrl = null;
+    
+    if (status === 'approved') {
+      if (isExistingUser) {
+        message += '. Your role has been updated and you can now access the new features.';
+        actionUrl = '/dashboard';
+      } else {
+        message += '. Please complete your account setup.';
+        actionUrl = '/signup';
+      }
+    }
+    
     await addDoc(collection(db, 'notifications'), {
       title: `Access Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
-      message: `Your request for ${requestData.requestedRole} access has been ${status}`,
+      message,
       type: status === 'approved' ? 'success' : 'error',
       userId: requestData.email,
       read: false,
       createdAt: serverTimestamp(),
-      actionUrl: status === 'approved' ? '/signup' : null
+      actionUrl
     });
   } catch (error) {
     console.error('Error creating notification:', error);
@@ -41,6 +55,13 @@ export interface AccessRequest {
   experience?: string; // Experience level with similar systems
   referral?: string; // How they heard about the system
   expectedUsage?: string; // How often they expect to use the system
+  // Supplier-specific fields
+  phone?: string; // Contact phone number
+  address?: string; // Business address
+  contactPerson?: string; // Primary contact person
+  businessType?: string; // Type of business (manufacturer, distributor, etc.)
+  website?: string; // Company website
+  taxId?: string; // Tax ID or registration number
   status: 'pending' | 'approved' | 'rejected';
   createdAt: any;
   updatedAt?: any;
@@ -115,24 +136,41 @@ export const approveAccessRequest = async (
     ));
 
     const requestData = requestDoc.docs[0]?.data();
+    
+    if (!requestData) {
+      throw new Error('Access request not found');
+    }
 
-    // Generate one-time signup token
-    const signupToken = generateSignupToken();
-    const tokenExpiry = new Date();
-    tokenExpiry.setDate(tokenExpiry.getDate() + 7); // Token expires in 7 days
+    // Check if user already exists
+    const existingUser = await getUserByEmail(requestData.email);
+    
+    let signupToken = '';
+    
+    if (existingUser) {
+      // User already exists, update their role directly
+      await updateUserRole(existingUser.id, requestData.requestedRole);
+      console.log(`Updated existing user ${existingUser.email} role to ${requestData.requestedRole}`);
+    } else {
+      // User doesn't exist, generate signup token for new user
+      signupToken = generateSignupToken();
+      const tokenExpiry = new Date();
+      tokenExpiry.setDate(tokenExpiry.getDate() + 7); // Token expires in 7 days
+      
+      await updateDoc(doc(db, 'accessRequests', requestId), {
+        signupToken,
+        tokenExpiry
+      });
+    }
 
+    // Update request status
     await updateDoc(doc(db, 'accessRequests', requestId), {
       status: 'approved',
       approvedBy: adminUserId,
-      updatedAt: serverTimestamp(),
-      signupToken,
-      tokenExpiry
+      updatedAt: serverTimestamp()
     });
 
     // Create notification for the user
-    if (requestData) {
-      await createAccessNotification(requestData, 'approved');
-    }
+    await createAccessNotification(requestData, 'approved', !!existingUser);
 
     return signupToken;
   } catch (error) {

@@ -79,11 +79,19 @@ export default function OrdersPage() {
     try {
       setLoading(true);
 
+      // Set a timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        console.warn('Orders loading timeout - falling back to direct fetch');
+        fallbackToDirectFetch();
+      }, 10000); // 10 second timeout
+
       // Load suppliers for mapping
       const suppliersData = await getAllSuppliers();
 
       // Subscribe to real-time orders
       const unsubscribe = subscribeToOrders((ordersData) => {
+        clearTimeout(timeoutId);
+        
         // Map supplier names to orders
         const ordersWithSupplierNames = ordersData.map(order => ({
           ...order,
@@ -96,11 +104,38 @@ export default function OrdersPage() {
       });
 
       // Return cleanup function
-      return unsubscribe;
+      return () => {
+        clearTimeout(timeoutId);
+        unsubscribe();
+      };
 
     } catch (error) {
       console.error('Error loading orders:', error);
       toast.error('Failed to load orders data');
+      fallbackToDirectFetch();
+    }
+  };
+
+  const fallbackToDirectFetch = async () => {
+    try {
+      console.log('Using fallback direct fetch for orders');
+      const [ordersData, suppliersData] = await Promise.all([
+        getAllOrders(),
+        getAllSuppliers()
+      ]);
+      
+      const ordersWithSupplierNames = ordersData.map(order => ({
+        ...order,
+        supplierName: suppliersData.find(s => s.id === order.supplierId)?.name || 'Unknown Supplier'
+      }));
+      
+      setOrders(ordersWithSupplierNames);
+      setLastUpdated(new Date());
+      setLoading(false);
+      toast.success('Orders loaded successfully');
+    } catch (error) {
+      console.error('Error in fallback fetch:', error);
+      toast.error('Failed to load orders');
       setLoading(false);
     }
   };
@@ -405,7 +440,7 @@ export default function OrdersPage() {
                       </Select>
                     </TableCell>
                     <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
-                    <TableCell>{formatDate(order.createdAt)}</TableCell>
+                    <TableCell>{formatDate(order.orderDate || order.createdAt)}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

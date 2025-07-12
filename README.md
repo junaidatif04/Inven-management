@@ -10,6 +10,8 @@ A modern inventory management system built with React, TypeScript, Firebase, and
 - 🏪 Supplier management
 - 📋 Order processing and tracking
 - 🎯 Role-based access control
+- 👥 Complete user management with admin deletion capabilities
+- ☁️ Cloud Functions for secure server-side operations
 - 📱 Responsive design
 - 🔔 Real-time notifications
 
@@ -17,8 +19,8 @@ A modern inventory management system built with React, TypeScript, Firebase, and
 
 - **Frontend**: React 18, TypeScript, Vite
 - **Styling**: Tailwind CSS, shadcn/ui
-- **Backend**: Firebase (Auth, Firestore, Storage)
-- **Deployment**: Netlify
+- **Backend**: Firebase (Auth, Firestore, Storage, Functions)
+- **Deployment**: Netlify (Frontend), Firebase (Functions)
 
 ## Getting Started
 
@@ -46,7 +48,19 @@ cp .env.example .env
 ```
 Edit `.env` with your Firebase configuration values.
 
-4. Start the development server:
+4. Install Firebase CLI (if not already installed):
+```bash
+npm install -g firebase-tools
+```
+
+5. Install Cloud Functions dependencies:
+```bash
+cd functions
+npm install
+cd ..
+```
+
+6. Start the development server:
 ```bash
 npm run dev
 ```
@@ -60,6 +74,20 @@ npm run dev
 5. Copy your Firebase config to `.env`
 
 Refer to `FIREBASE_SETUP.md` for detailed instructions.
+
+### Cloud Functions Setup
+
+1. Deploy Cloud Functions to Firebase:
+```bash
+firebase deploy --only functions
+```
+
+2. For local development with emulators:
+```bash
+firebase emulators:start
+```
+
+**Admin User Management**: The system includes Cloud Functions that allow admin users to completely delete other users from both Firestore and Firebase Authentication. This ensures proper user management and data consistency.
 
 ## Deployment
 
@@ -94,10 +122,16 @@ VITE_FIREBASE_MEASUREMENT_ID
 
 ## Scripts
 
+### Frontend
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint
+
+### Cloud Functions
+- `cd functions && npm run build` - Build Cloud Functions
+- `firebase deploy --only functions` - Deploy functions to Firebase
+- `firebase emulators:start` - Start Firebase emulators for local development
 
 ## Project Structure
 

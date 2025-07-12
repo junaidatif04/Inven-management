@@ -16,17 +16,18 @@ import {
 import { db } from '@/lib/firebase';
 
 export interface OrderItem {
-  id: string;
-  name: string;
+  productId: string;
+  productName: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  supplier: string;
 }
 
 export interface Order {
   id: string;
   orderNumber: string;
-  supplierId: string;
+  supplierId?: string;
   supplierName: string;
   items: OrderItem[];
   status: 'pending' | 'approved' | 'shipped' | 'delivered' | 'cancelled';
@@ -35,19 +36,29 @@ export interface Order {
   expectedDelivery?: any;
   actualDelivery?: any;
   requestedBy: string;
+  userId: string;
   approvedBy?: string;
   notes?: string;
+  priority?: 'low' | 'medium' | 'high';
+  deliveryLocation?: string;
   createdAt: any;
   updatedAt: any;
 }
 
 export interface CreateOrder {
-  supplierId: string;
+  supplierId?: string;
   supplierName: string;
-  items: Omit<OrderItem, 'id'>[];
+  items: OrderItem[];
   expectedDelivery?: Date;
   notes?: string;
   requestedBy: string;
+  userId: string;
+  priority?: 'low' | 'medium' | 'high';
+  deliveryLocation?: string;
+  orderNumber: string;
+  totalAmount: number;
+  status: 'pending' | 'approved' | 'shipped' | 'delivered' | 'cancelled';
+  orderDate: Date;
 }
 
 export interface UpdateOrder extends Partial<CreateOrder> {
@@ -90,15 +101,8 @@ export const getOrder = async (id: string): Promise<Order | null> => {
 
 export const createOrder = async (order: CreateOrder): Promise<string> => {
   try {
-    const orderNumber = `ORD-${Date.now()}`;
-    const totalAmount = order.items.reduce((sum, item) => sum + item.totalPrice, 0);
-    
     const docRef = await addDoc(collection(db, 'orders'), {
       ...order,
-      orderNumber,
-      totalAmount,
-      status: 'pending',
-      orderDate: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -268,4 +272,45 @@ export const getOrdersByDateRange = async (startDate: Date, endDate: Date): Prom
     console.error('Error fetching orders by date range:', error);
     throw error;
   }
+};
+
+// Get orders by user ID
+export const getOrdersByUser = async (userId: string): Promise<Order[]> => {
+  try {
+    const q = query(
+      collection(db, 'orders'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Order[];
+  } catch (error) {
+    console.error('Error fetching orders by user:', error);
+    throw error;
+  }
+};
+
+// Subscribe to orders by user ID
+export const subscribeToOrdersByUser = (userId: string, callback: (orders: Order[]) => void) => {
+  const q = query(
+    collection(db, 'orders'),
+    where('userId', '==', userId),
+    orderBy('createdAt', 'desc')
+  );
+  return onSnapshot(q,
+    (querySnapshot) => {
+      const orders = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
+      callback(orders);
+    },
+    (error) => {
+      console.error('Error in user orders subscription:', error);
+      callback([]);
+    }
+  );
 };

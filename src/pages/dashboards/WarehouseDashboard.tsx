@@ -127,7 +127,7 @@ export default function WarehouseDashboard() {
   };
 
   const handleNewShipment = () => {
-    navigate('/warehouse-management');
+    navigate('/dashboard/warehouse-management');
   };
 
   const getStatusBadgeVariant = (status: string) => {

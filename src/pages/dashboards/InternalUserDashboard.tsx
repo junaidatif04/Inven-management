@@ -1,14 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+
 
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -18,18 +16,13 @@ import {
   Clock,
   CheckCircle,
   Search,
-  Plus,
-  Eye,
-  Filter
+  Eye
 } from 'lucide-react';
 import {
-  CatalogRequest,
-  CatalogRequestItem,
-  createCatalogRequest,
-  getCatalogRequestsByUser,
-  getCatalogRequestStats,
-  subscribeToCatalogRequests
-} from '@/services/catalogRequestService';
+  Order,
+  getOrdersByUser,
+  subscribeToOrdersByUser
+} from '@/services/orderService';
 import { getAllProducts, Product } from '@/services/productService';
 import { getAllInventoryItems } from '../../services/inventoryService';
 
@@ -39,28 +32,22 @@ import { getAllInventoryItems } from '../../services/inventoryService';
 
 export default function InternalUserDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory] = useState('All');
   const [products, setProducts] = useState<Product[]>([]);
-  const [requests, setRequests] = useState<CatalogRequest[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
     approved: 0,
-    fulfilled: 0,
-    rejected: 0,
-    totalAmount: 0,
-    averageAmount: 0
+    shipped: 0,
+    delivered: 0,
+    cancelled: 0,
+    totalAmount: 0
   });
   const [loading, setLoading] = useState(true);
-  const [cart, setCart] = useState<CatalogRequestItem[]>([]);
-  const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
-  const [requestForm, setRequestForm] = useState({
-    location: '',
-    justification: '',
-    priority: 'Medium' as 'Low' | 'Medium' | 'High' | 'Urgent'
-  });
-  const [submitting, setSubmitting] = useState(false);
+
 
 
   useEffect(() => {
@@ -109,13 +96,21 @@ export default function InternalUserDashboard() {
           setProducts([]);
         }
         
-        // Load user requests
-        const requestsData = await getCatalogRequestsByUser(user.id);
-        setRequests(requestsData);
+        // Load user orders
+        const ordersData = await getOrdersByUser(user.id);
+        setOrders(ordersData);
         
-        // Load stats
-        const statsData = await getCatalogRequestStats(user.id);
-        setStats(statsData);
+        // Calculate stats from orders
+        const orderStats = {
+          total: ordersData.length,
+          pending: ordersData.filter(o => o.status === 'pending').length,
+          approved: ordersData.filter(o => o.status === 'approved').length,
+          shipped: ordersData.filter(o => o.status === 'shipped').length,
+          delivered: ordersData.filter(o => o.status === 'delivered').length,
+          cancelled: ordersData.filter(o => o.status === 'cancelled').length,
+          totalAmount: ordersData.reduce((sum, o) => sum + o.totalAmount, 0)
+        };
+        setStats(orderStats);
         
       } catch (error) {
         console.error('Error loading dashboard data:', error);
@@ -127,10 +122,21 @@ export default function InternalUserDashboard() {
 
     loadData();
 
-    // Subscribe to real-time updates for user's requests only
-    const unsubscribe = subscribeToCatalogRequests((updatedRequests) => {
-      setRequests(updatedRequests);
-    }, user?.id);
+    // Subscribe to real-time updates for user's orders only
+    const unsubscribe = subscribeToOrdersByUser(user?.id || '', (updatedOrders) => {
+      setOrders(updatedOrders);
+      // Recalculate stats
+      const orderStats = {
+        total: updatedOrders.length,
+        pending: updatedOrders.filter(o => o.status === 'pending').length,
+        approved: updatedOrders.filter(o => o.status === 'approved').length,
+        shipped: updatedOrders.filter(o => o.status === 'shipped').length,
+        delivered: updatedOrders.filter(o => o.status === 'delivered').length,
+        cancelled: updatedOrders.filter(o => o.status === 'cancelled').length,
+        totalAmount: updatedOrders.reduce((sum, o) => sum + o.totalAmount, 0)
+      };
+      setStats(orderStats);
+    });
 
     return () => unsubscribe();
   }, [user]);
@@ -149,13 +155,15 @@ export default function InternalUserDashboard() {
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
+      case 'delivered':
+        return 'default';
+      case 'shipped':
+        return 'default';
       case 'approved':
-        return 'default';
-      case 'fulfilled':
-        return 'default';
+        return 'secondary';
       case 'pending':
         return 'secondary';
-      case 'rejected':
+      case 'cancelled':
         return 'destructive';
       default:
         return 'outline';
@@ -165,116 +173,21 @@ export default function InternalUserDashboard() {
   const getProgressPercentage = (status: string) => {
     switch (status) {
       case 'pending':
-        return 25;
+        return 20;
       case 'approved':
-        return 75;
-      case 'fulfilled':
+        return 50;
+      case 'shipped':
+        return 80;
+      case 'delivered':
         return 100;
-      case 'rejected':
+      case 'cancelled':
         return 0;
       default:
         return 0;
     }
   };
 
-  const addToCart = (product: Product) => {
-    const existingItem = cart.find(item => item.productId === product.id);
-    if (existingItem) {
-      setCart(cart.map(item => 
-        item.productId === product.id 
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
-    } else {
-      const newItem: CatalogRequestItem = {
-        productId: product.id!,
-        productName: product.name,
-        quantity: 1,
-        price: product.price,
-        category: product.category,
-        supplier: product.supplierName
-      };
-      setCart([...cart, newItem]);
-    }
-    toast.success(`${product.name} added to cart`);
-  };
 
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter(item => item.productId !== productId));
-    toast.success('Item removed from cart');
-  };
-
-  const updateCartQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    setCart(cart.map(item => 
-      item.productId === productId 
-        ? { ...item, quantity }
-        : item
-    ));
-  };
-
-  const getTotalAmount = () => {
-    return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  };
-
-
-
-  const submitRequest = async () => {
-    if (!user) {
-      toast.error('User not authenticated');
-      return;
-    }
-
-    if (cart.length === 0) {
-      toast.error('Please add items to cart first');
-      return;
-    }
-
-    if (!requestForm.location || !requestForm.justification) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      
-      const requestData = {
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        items: cart,
-        location: requestForm.location,
-        justification: requestForm.justification,
-        priority: requestForm.priority
-      };
-
-      await createCatalogRequest(requestData);
-      
-      toast.success('Request submitted successfully!');
-      setCart([]);
-      setRequestForm({
-        location: '',
-        justification: '',
-        priority: 'Medium'
-      });
-      setIsRequestDialogOpen(false);
-      
-      // Refresh data
-      const updatedRequests = await getCatalogRequestsByUser(user.id);
-      setRequests(updatedRequests);
-      const updatedStats = await getCatalogRequestStats(user.id);
-      setStats(updatedStats);
-      
-    } catch (error) {
-      console.error('Error submitting request:', error);
-      toast.error('Failed to submit request');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -295,91 +208,20 @@ export default function InternalUserDashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Dashboard</h1>
           <p className="text-muted-foreground">
-            Browse products and track your requests
+            Browse products and track your orders
           </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Request
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>Create New Request</DialogTitle>
-              <DialogDescription>
-                Select items from the catalog to create a new request
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex space-x-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search products..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-                <Button variant="outline">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Filters
-                </Button>
-              </div>
-              <ScrollArea className="h-[400px]">
-                {filteredProducts.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    {filteredProducts.map((product) => (
-                      <div key={product.id} className="border rounded-lg p-4 space-y-3">
-                        <div className="w-full h-32 bg-muted rounded overflow-hidden">
-                          {product.imageUrl ? (
-                            <img 
-                              src={product.imageUrl} 
-                              alt={product.name} 
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                              <div className="text-center">
-                                <Package className="h-8 w-8 mx-auto mb-1" />
-                                <p className="text-xs">No image</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <h3 className="font-medium text-sm">{product.name}</h3>
-                          <p className="text-xs text-muted-foreground">{product.category}</p>
-                          <p className="text-sm font-bold">${product.price}</p>
-                        </div>
-                        <Button 
-                           size="sm" 
-                           className="w-full" 
-                           disabled={product.stock === 0}
-                           onClick={() => addToCart(product)}
-                         >
-                           {product.stock > 0 ? 'Add to Request' : 'Out of Stock'}
-                         </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                    <Package className="h-16 w-16 text-muted-foreground" />
-                    <div className="space-y-2">
-                       <h3 className="font-medium text-xl">No Products Available</h3>
-                       <p className="text-sm text-muted-foreground max-w-md">
-                         {searchTerm ? 'There are no products matching your search. Try adjusting your search terms.' : 'There are no products in the inventory yet. Please contact your administrator to add products to the catalog.'}
-                       </p>
-                    </div>
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex space-x-2">
+          <Button onClick={() => navigate('/dashboard/product-catalog')}>
+            <Package className="mr-2 h-4 w-4" />
+            Browse Catalog
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/dashboard/my-orders')}>
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            My Orders
+          </Button>
+        </div>
+
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto">
@@ -388,33 +230,33 @@ export default function InternalUserDashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Requests</CardTitle>
+                <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
                 <ShoppingCart className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{(stats.pending + stats.approved) || 0}</div>
+                <div className="text-2xl font-bold">{(stats.pending + stats.approved + stats.shipped) || 0}</div>
                 <p className="text-xs text-muted-foreground">In progress</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
+                <CardTitle className="text-sm font-medium">Approved</CardTitle>
                 <Clock className="h-4 w-4 text-yellow-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">{stats.pending || 0}</div>
-                <p className="text-xs text-muted-foreground">Awaiting review</p>
+                <div className="text-2xl font-bold text-yellow-600">{stats.approved || 0}</div>
+                <p className="text-xs text-muted-foreground">Approved orders</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Completed Orders</CardTitle>
+                <CardTitle className="text-sm font-medium">Delivered Orders</CardTitle>
                 <CheckCircle className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.fulfilled || 0}</div>
+                <div className="text-2xl font-bold">{stats.delivered || 0}</div>
                 <p className="text-xs text-muted-foreground">This year</p>
               </CardContent>
             </Card>
@@ -479,9 +321,6 @@ export default function InternalUserDashboard() {
                               <Badge variant={product.stock > 0 ? 'default' : 'secondary'}>
                                 {product.stock > 0 ? 'In Stock' : 'Out of Stock'}
                               </Badge>
-                              <Button size="sm" variant="outline">
-                                <Eye className="h-3 w-3" />
-                              </Button>
                             </div>
                           </div>
                         ))}
@@ -499,63 +338,77 @@ export default function InternalUserDashboard() {
                     )}
                   </ScrollArea>
                   
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" onClick={() => navigate('/dashboard/product-catalog')}>
                     View Full Catalog
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Request Status Tracker */}
+            {/* Order Status Tracker */}
             <Card>
               <CardHeader>
-                <CardTitle>My Requests</CardTitle>
+                <CardTitle>Recent Orders</CardTitle>
                 <CardDescription>
-                  Track the status of your requests
+                  Track the status of your recent orders
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[400px]">
                   <div className="space-y-4">
-                    {requests.map((request) => (
-                      <div key={request.id} className="p-4 border rounded-lg space-y-3">
+                    {orders.slice(0, 5).map((order) => (
+                      <div key={order.id} className="p-4 border rounded-lg space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            <p className="font-medium text-sm">{request.id}</p>
-                            <Badge variant={getStatusBadgeVariant(request.status)}>
-                              {request.status}
+                            <p className="font-medium text-sm">{order.orderNumber}</p>
+                            <Badge variant={getStatusBadgeVariant(order.status)}>
+                              {order.status}
                             </Badge>
                           </div>
-                          <p className="text-sm font-medium">${request.totalAmount || 0}</p>
+                          <p className="text-sm font-medium">${order.totalAmount.toFixed(2)}</p>
                         </div>
                         
                         <div className="space-y-1">
-                          {request.items.map((item, index) => (
+                          {order.items.slice(0, 3).map((item, index) => (
                             <p key={index} className="text-xs text-muted-foreground">
                               {item.productName} × {item.quantity}
                             </p>
                           ))}
+                          {order.items.length > 3 && (
+                            <p className="text-xs text-muted-foreground">
+                              +{order.items.length - 3} more items
+                            </p>
+                          )}
                         </div>
                         
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">Progress</span>
-                            <span className="font-medium">{getProgressPercentage(request.status)}%</span>
+                            <span className="font-medium">{getProgressPercentage(order.status)}%</span>
                           </div>
-                          <Progress value={getProgressPercentage(request.status)} className="h-2" />
+                          <Progress value={getProgressPercentage(order.status)} className="h-2" />
                         </div>
                         
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">
-                            Requested: {request.createdAt ? new Date(request.createdAt.toDate()).toLocaleDateString() : 'N/A'}
+                            Ordered: {order.orderDate ? new Date(order.orderDate.toDate()).toLocaleDateString() : 'N/A'}
                           </span>
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" onClick={() => navigate('/dashboard/my-orders')}>
                             <Eye className="h-3 w-3 mr-1" />
                             View Details
                           </Button>
                         </div>
                       </div>
                     ))}
+                    {orders.length === 0 && (
+                      <div className="flex flex-col items-center justify-center h-32 text-center space-y-2">
+                        <ShoppingCart className="h-8 w-8 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">No orders yet</p>
+                        <Button size="sm" onClick={() => navigate('/dashboard/product-catalog')}>
+                          Start Shopping
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </ScrollArea>
               </CardContent>
@@ -564,139 +417,7 @@ export default function InternalUserDashboard() {
         </div>
       </div>
 
-      {/* Cart and Request Dialog */}
-      {cart.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="rounded-full h-14 w-14 shadow-lg">
-                <div className="flex flex-col items-center">
-                  <ShoppingCart className="h-5 w-5" />
-                  <span className="text-xs">{cart.length}</span>
-                </div>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create New Request</DialogTitle>
-                <DialogDescription>
-                  Review your items and provide request details
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-6">
-                {/* Cart Items */}
-                <div>
-                  <h3 className="font-medium mb-3">Items in Cart</h3>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {cart.map((item) => (
-                      <div key={item.productId} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex-1">
-                          <p className="font-medium">{item.productName}</p>
-                          <p className="text-sm text-muted-foreground">{item.category}</p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateCartQuantity(item.productId, item.quantity - 1)}
-                          >
-                            -
-                          </Button>
-                          <span className="w-8 text-center">{item.quantity}</span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateCartQuantity(item.productId, item.quantity + 1)}
-                          >
-                            +
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => removeFromCart(item.productId)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                        <div className="text-right ml-4">
-                          <p className="font-medium">${(item.price * item.quantity).toFixed(2)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t">
-                    <div className="flex justify-between items-center font-bold">
-                      <span>Total:</span>
-                      <span>${getTotalAmount().toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Request Form */}
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="location">Location *</Label>
-                    <Input
-                      id="location"
-                      placeholder="e.g., Building A, Floor 3, Room 301"
-                      value={requestForm.location}
-                      onChange={(e) => setRequestForm({ ...requestForm, location: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="justification">Justification *</Label>
-                    <Textarea
-                      id="justification"
-                      placeholder="Please explain why you need these items..."
-                      value={requestForm.justification}
-                      onChange={(e) => setRequestForm({ ...requestForm, justification: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="priority">Priority</Label>
-                    <Select
-                      value={requestForm.priority}
-                      onValueChange={(value: 'Low' | 'Medium' | 'High' | 'Urgent') => 
-                        setRequestForm({ ...requestForm, priority: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Low">Low</SelectItem>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="High">High</SelectItem>
-                        <SelectItem value="Urgent">Urgent</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsRequestDialogOpen(false)}
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={submitRequest}
-                    disabled={submitting || !requestForm.location || !requestForm.justification}
-                  >
-                    {submitting ? 'Submitting...' : 'Submit Request'}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      )}
     </div>
   );
 }

@@ -58,11 +58,13 @@ export default function OrderDialog({ open, onOpenChange, order, mode, onSuccess
     requestedBy: user?.email || '',
   });
   
-  const [orderItems, setOrderItems] = useState<Omit<OrderItem, 'id'>[]>([]);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [newItem, setNewItem] = useState({
-    name: '',
+    productId: '',
+    productName: '',
     quantity: 1,
     unitPrice: 0,
+    supplier: ''
   });
 
   useEffect(() => {
@@ -70,18 +72,13 @@ export default function OrderDialog({ open, onOpenChange, order, mode, onSuccess
       loadData();
       if (order && (mode === 'edit' || mode === 'view')) {
         setFormData({
-          supplierId: order.supplierId,
+          supplierId: order.supplierId || '',
           supplierName: order.supplierName,
           expectedDelivery: order.expectedDelivery ? new Date(order.expectedDelivery.toDate()).toISOString().split('T')[0] : '',
           notes: order.notes || '',
           requestedBy: order.requestedBy,
         });
-        setOrderItems(order.items.map(item => ({
-          name: item.name,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice
-        })));
+        setOrderItems(order.items);
       } else {
         resetForm();
       }
@@ -111,7 +108,7 @@ export default function OrderDialog({ open, onOpenChange, order, mode, onSuccess
       requestedBy: user?.email || '',
     });
     setOrderItems([]);
-    setNewItem({ name: '', quantity: 1, unitPrice: 0 });
+    setNewItem({ productId: '', productName: '', quantity: 1, unitPrice: 0, supplier: '' });
   };
 
   const handleSupplierChange = (supplierId: string) => {
@@ -124,14 +121,22 @@ export default function OrderDialog({ open, onOpenChange, order, mode, onSuccess
   };
 
   const addItem = () => {
-    if (!newItem.name || newItem.quantity <= 0 || newItem.unitPrice <= 0) {
+    if (!newItem.productName || newItem.quantity <= 0 || newItem.unitPrice <= 0) {
       toast.error('Please fill all item fields with valid values');
       return;
     }
 
     const totalPrice = newItem.quantity * newItem.unitPrice;
-    setOrderItems(prev => [...prev, { ...newItem, totalPrice }]);
-    setNewItem({ name: '', quantity: 1, unitPrice: 0 });
+    const orderItem: OrderItem = {
+      productId: newItem.productId || `temp-${Date.now()}`,
+      productName: newItem.productName,
+      quantity: newItem.quantity,
+      unitPrice: newItem.unitPrice,
+      totalPrice,
+      supplier: newItem.supplier
+    };
+    setOrderItems(prev => [...prev, orderItem]);
+    setNewItem({ productId: '', productName: '', quantity: 1, unitPrice: 0, supplier: '' });
   };
 
   const removeItem = (index: number) => {
@@ -162,12 +167,19 @@ export default function OrderDialog({ open, onOpenChange, order, mode, onSuccess
     try {
       if (mode === 'create') {
         const orderData: CreateOrder = {
+          orderNumber: `ORD-${Date.now()}`,
           supplierId: formData.supplierId,
           supplierName: formData.supplierName,
           items: orderItems,
-          expectedDelivery: formData.expectedDelivery ? new Date(formData.expectedDelivery) : undefined,
-          notes: formData.notes,
+          totalAmount: totalAmount,
+          status: 'pending',
+          priority: 'medium',
           requestedBy: formData.requestedBy,
+          userId: user?.id || '',
+          deliveryLocation: 'Warehouse',
+          orderDate: new Date(),
+          expectedDelivery: formData.expectedDelivery ? new Date(formData.expectedDelivery) : undefined,
+          notes: formData.notes
         };
         await createOrder(orderData);
         toast.success('Order created successfully');
@@ -285,8 +297,17 @@ export default function OrderDialog({ open, onOpenChange, order, mode, onSuccess
                   <div>
                     <Label className="text-xs">Item Name</Label>
                     <Select
-                      value={newItem.name}
-                      onValueChange={(value) => setNewItem(prev => ({ ...prev, name: value }))}
+                      value={newItem.productName}
+                      onValueChange={(value) => {
+                        const selectedItem = inventoryItems.find(item => item.name === value);
+                        setNewItem(prev => ({ 
+                          ...prev, 
+                          productName: value,
+                          productId: selectedItem?.id || '',
+                          supplier: selectedItem?.supplier || '',
+                          unitPrice: selectedItem?.unitPrice || 0
+                        }));
+                      }}
                     >
                       <SelectTrigger className="h-8">
                         <SelectValue placeholder="Select item" />
@@ -350,7 +371,7 @@ export default function OrderDialog({ open, onOpenChange, order, mode, onSuccess
                   <TableBody>
                     {orderItems.map((item, index) => (
                       <TableRow key={index}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="font-medium">{item.productName}</TableCell>
                         <TableCell>
                           {mode === 'view' ? (
                             item.quantity

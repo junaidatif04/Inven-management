@@ -23,8 +23,7 @@ import {
   Eye,
   CheckCircle,
   Trash2,
-  Save,
-  XCircle
+  Save
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -32,14 +31,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { adjustStock, getStockMovements, getAllInventoryItems } from '@/services/inventoryService';
 import { StockMovement } from '@/types/inventory';
 import { Shipment, CreateShipment, UpdateShipment, getAllShipments, createShipment, updateShipment, updateShipmentStatus, deleteShipment, subscribeToShipments } from '@/services/shipmentService';
-import { CatalogRequest, getAllCatalogRequests, updateCatalogRequestStatus, subscribeToCatalogRequests } from '@/services/catalogRequestService';
+
 
 
 
 const sections = [
   { id: 'stock-entries', name: 'Stock Entries' },
-  { id: 'shipments', name: 'Shipments' },
-  { id: 'catalog-requests', name: 'Catalog Requests' }
+  { id: 'shipments', name: 'Shipments' }
 ];
 
 export default function WarehouseManagementPage() {
@@ -49,9 +47,7 @@ export default function WarehouseManagementPage() {
   const [stockEntries, setStockEntries] = useState<StockMovement[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
-  const [catalogRequests, setCatalogRequests] = useState<CatalogRequest[]>([]);
-  const [selectedRequest, setSelectedRequest] = useState<CatalogRequest | null>(null);
-  const [showRequestDetails, setShowRequestDetails] = useState(false);
+
   
   const [stockForm, setStockForm] = useState({
     productId: '',
@@ -97,28 +93,21 @@ export default function WarehouseManagementPage() {
       setShipments(updatedShipments);
     });
     
-    const unsubscribeCatalogRequests = subscribeToCatalogRequests((updatedRequests) => {
-      setCatalogRequests(updatedRequests);
-    });
-    
     return () => {
       unsubscribeShipments();
-      unsubscribeCatalogRequests();
     };
   }, []);
 
   const loadData = async () => {
     try {
-      const [stockMovements, shipmentsData, inventory, catalogRequestsData] = await Promise.all([
+      const [stockMovements, shipmentsData, inventory] = await Promise.all([
         getStockMovements(),
         getAllShipments(),
-        getAllInventoryItems(),
-        getAllCatalogRequests()
+        getAllInventoryItems()
       ]);
       setStockEntries(stockMovements);
       setShipments(shipmentsData);
       setInventoryItems(inventory);
-      setCatalogRequests(catalogRequestsData);
     } catch (error) {
       toast.error('Failed to load warehouse data');
     }
@@ -287,45 +276,7 @@ export default function WarehouseManagementPage() {
     }
   };
 
-  const handleApproveRequest = async (requestId: string) => {
-    if (!user) return;
-    
-    try {
-      await updateCatalogRequestStatus(
-        requestId,
-        'approved',
-        user.displayName || user.email || 'Warehouse Staff'
-      );
-      toast.success('Catalog request approved successfully');
-      setShowRequestDetails(false);
-    } catch (error) {
-      console.error('Error approving request:', error);
-      toast.error('Failed to approve catalog request');
-    }
-  };
 
-  const handleRejectRequest = async (requestId: string, reason: string) => {
-    if (!user) return;
-    
-    try {
-      await updateCatalogRequestStatus(
-        requestId,
-        'rejected',
-        user.displayName || user.email || 'Warehouse Staff',
-        reason
-      );
-      toast.success('Catalog request rejected');
-      setShowRequestDetails(false);
-    } catch (error) {
-      console.error('Error rejecting request:', error);
-      toast.error('Failed to reject catalog request');
-    }
-  };
-
-  const handleViewRequest = (request: CatalogRequest) => {
-    setSelectedRequest(request);
-    setShowRequestDetails(true);
-  };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -748,217 +699,9 @@ export default function WarehouseManagementPage() {
     </div>
   );
 
-  const getCatalogRequestStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'approved':
-      case 'fulfilled':
-        return 'default';
-      case 'pending':
-        return 'secondary';
-      case 'rejected':
-        return 'destructive';
-      default:
-        return 'outline';
-    }
-  };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'Urgent': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      case 'High': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-      case 'Medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      case 'Low': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-    }
-  };
 
-  const renderCatalogRequests = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Catalog Requests</h2>
-          <p className="text-sm text-muted-foreground">
-            Review and approve catalog requests from internal users
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Badge variant="outline" className="px-3 py-1">
-            Pending: {catalogRequests.filter(r => r.status === 'pending').length}
-          </Badge>
-        </div>
-      </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <ScrollArea className="h-[500px]">
-            <div className="space-y-4 p-6">
-              {catalogRequests.length === 0 ? (
-                <div className="text-center py-8">
-                  <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No catalog requests found</p>
-                </div>
-              ) : (
-                catalogRequests.map((request) => (
-                  <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center space-x-4">
-                      <Package className="h-8 w-8 text-muted-foreground" />
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <p className="font-medium">{request.requestNumber}</p>
-                          <Badge variant={getCatalogRequestStatusBadgeVariant(request.status)}>
-                            {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                          </Badge>
-                          <Badge className={getPriorityColor(request.priority)} variant="outline">
-                            {request.priority}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {request.userName} • {request.items.length} items • ${request.totalAmount.toFixed(2)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDateTime(request.requestDate)} • {request.location}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => handleViewRequest(request)}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      {request.status === 'pending' && (
-                        <>
-                          <Button 
-                            size="sm" 
-                            onClick={() => handleApproveRequest(request.id!)}
-                          >
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Approve
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="destructive"
-                            onClick={() => {
-                              const reason = prompt('Please provide a reason for rejection:');
-                              if (reason) {
-                                handleRejectRequest(request.id!, reason);
-                              }
-                            }}
-                          >
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
-
-      {/* Request Details Dialog */}
-      <Dialog open={showRequestDetails} onOpenChange={setShowRequestDetails}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Catalog Request Details</DialogTitle>
-            <DialogDescription>
-              Review the details of this catalog request
-            </DialogDescription>
-          </DialogHeader>
-          {selectedRequest && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium">Request Number</Label>
-                  <p className="text-sm">{selectedRequest.requestNumber}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Status</Label>
-                  <Badge variant={getCatalogRequestStatusBadgeVariant(selectedRequest.status)} className="ml-2">
-                    {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}
-                  </Badge>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Requested By</Label>
-                  <p className="text-sm">{selectedRequest.userName}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Priority</Label>
-                  <Badge className={getPriorityColor(selectedRequest.priority)} variant="outline">
-                    {selectedRequest.priority}
-                  </Badge>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Location</Label>
-                  <p className="text-sm">{selectedRequest.location}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Total Amount</Label>
-                  <p className="text-sm font-bold">${selectedRequest.totalAmount.toFixed(2)}</p>
-                </div>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium">Justification</Label>
-                <p className="text-sm mt-1 p-3 bg-muted rounded">{selectedRequest.justification}</p>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium">Requested Items</Label>
-                <ScrollArea className="h-[200px] mt-2">
-                  <div className="space-y-2">
-                    {selectedRequest.items.map((item, index) => (
-                      <div key={index} className="flex justify-between items-center p-3 border rounded">
-                        <div>
-                          <p className="font-medium">{item.productName}</p>
-                          <p className="text-sm text-muted-foreground">{item.category} • {item.supplier}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">Qty: {item.quantity}</p>
-                          <p className="text-sm text-muted-foreground">${(item.price * item.quantity).toFixed(2)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-              
-              {selectedRequest.status === 'pending' && (
-                <div className="flex space-x-2 pt-4">
-                  <Button 
-                    className="flex-1"
-                    onClick={() => handleApproveRequest(selectedRequest.id!)}
-                  >
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Approve Request
-                  </Button>
-                  <Button 
-                    variant="destructive"
-                    className="flex-1"
-                    onClick={() => {
-                      const reason = prompt('Please provide a reason for rejection:');
-                      if (reason) {
-                        handleRejectRequest(selectedRequest.id!, reason);
-                      }
-                    }}
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Reject Request
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
 
   return (
     <div className="h-full flex flex-col space-y-6">
@@ -975,7 +718,6 @@ export default function WarehouseManagementPage() {
         <div className="pb-6">
           {activeSection === 'stock-entries' && renderStockEntries()}
           {activeSection === 'shipments' && renderShipments()}
-          {activeSection === 'catalog-requests' && renderCatalogRequests()}
         </div>
       </div>
 

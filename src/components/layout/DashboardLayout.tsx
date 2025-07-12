@@ -20,7 +20,6 @@ import {
   LogOut,
   Warehouse,
   UserCog,
-  ClipboardList,
   ChevronLeft,
   ChevronRight,
   UserCheck,
@@ -30,14 +29,15 @@ import {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'warehouse_staff', 'supplier', 'internal_user'] },
   { name: 'Inventory', href: '/dashboard/inventory', icon: Package2, roles: ['admin', 'warehouse_staff'] },
-  { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCart, roles: ['admin', 'warehouse_staff', 'internal_user'] },
+  { name: 'Order Management', href: '/dashboard/orders', icon: ShoppingCart, roles: ['admin', 'warehouse_staff'] },
+  { name: 'My Orders', href: '/dashboard/my-orders', icon: ShoppingCart, roles: ['internal_user'] },
+  { name: 'Product Catalog', href: '/dashboard/product-catalog', icon: Package, roles: ['internal_user'] },
   { name: 'Suppliers', href: '/dashboard/suppliers', icon: Users, roles: ['admin', 'supplier'] },
   { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, roles: ['admin'] },
   { name: 'User Management', href: '/dashboard/user-management', icon: UserCog, roles: ['admin'] },
   { name: 'Access Requests', href: '/dashboard/access-requests', icon: UserCheck, roles: ['admin'] },
   { name: 'Warehouse Management', href: '/dashboard/warehouse-management', icon: Warehouse, roles: ['warehouse_staff'] },
   { name: 'Product Management', href: '/dashboard/product-management', icon: Package, roles: ['supplier'] },
-  { name: 'Catalog & Requests', href: '/dashboard/catalog-requests', icon: ClipboardList, roles: ['internal_user'] },
   { name: 'My Profile', href: '/dashboard/profile', icon: UserCircle, roles: ['admin', 'warehouse_staff', 'supplier', 'internal_user'] },
 ];
 

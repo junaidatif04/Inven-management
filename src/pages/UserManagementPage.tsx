@@ -44,7 +44,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   getAllUsers,
   updateUser,
-  deleteUserFromFirestore,
+  adminDeleteUser,
   updateUserRole,
   getUserStats,
   UpdateUser
@@ -158,16 +158,22 @@ export default function UserManagementPage() {
         return;
       }
       
-      // Only delete from Firestore as admin cannot delete other users from Firebase Authentication
-      // without Firebase Admin SDK (which requires server-side implementation)
-      await deleteUserFromFirestore(selectedUser.id);
-      toast.success('User deleted from the system. Note: The user may still exist in Firebase Authentication.');
+      // Use the admin delete function that completely removes the user from both Firestore and Firebase Authentication
+      const result = await adminDeleteUser(selectedUser.id);
+      
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error('Failed to delete user completely');
+      }
+      
       setIsDeleteDialogOpen(false);
       setSelectedUser(null);
       loadUsers();
       loadStats();
     } catch (error) {
-      toast.error('Failed to delete user');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete user';
+      toast.error(errorMessage);
     }
   };
 
@@ -484,19 +490,16 @@ export default function UserManagementPage() {
           <DialogHeader>
             <DialogTitle>Delete User</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{selectedUser?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{selectedUser?.name}"? This action will completely remove the user from both the system database and Firebase Authentication and cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <div className="p-4 my-2 bg-amber-50 border border-amber-200 rounded-md">
+          <div className="p-4 my-2 bg-red-50 border border-red-200 rounded-md">
             <div className="flex items-start">
-              <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 mt-0.5" />
+              <AlertTriangle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
               <div>
-                <h4 className="font-medium text-amber-800">Important Note</h4>
-                <p className="text-sm text-amber-700 mt-1">
-                  This will only remove the user from the system database. The user account will still exist in Firebase Authentication.
-                </p>
-                <p className="text-sm text-amber-700 mt-1">
-                  To completely delete a user account, the user must use the Delete Account option in their profile page.
+                <h4 className="font-medium text-red-800">Warning</h4>
+                <p className="text-sm text-red-700 mt-1">
+                  This will permanently delete the user account from both the system database and Firebase Authentication. The user will no longer be able to log in.
                 </p>
               </div>
             </div>
@@ -506,7 +509,7 @@ export default function UserManagementPage() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleDeleteUser}>
-              Delete User
+              Delete User Permanently
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -26,7 +26,8 @@ import UserManagementPage from '@/pages/UserManagementPage';
 import UserProfilePage from '@/pages/UserProfilePage';
 import WarehouseManagementPage from '@/pages/WarehouseManagementPage';
 import ProductManagementPage from '@/pages/ProductManagementPage';
-import CatalogRequestsPage from '@/pages/CatalogRequestsPage';
+import ProductCatalogPage from '@/pages/ProductCatalogPage';
+import MyOrdersPage from '@/pages/MyOrdersPage';
 import { useAuth } from '@/contexts/AuthContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -66,7 +67,8 @@ function DashboardRouter() {
         <Route path="/profile" element={<UserProfilePage />} />
         <Route path="/warehouse-management" element={<WarehouseManagementPage />} />
         <Route path="/product-management" element={<ProductManagementPage />} />
-        <Route path="/catalog-requests" element={<CatalogRequestsPage />} />
+        <Route path="/product-catalog" element={<ProductCatalogPage />} />
+        <Route path="/my-orders" element={<MyOrdersPage />} />
         <Route path="/access-requests" element={<AccessRequestsPage />} />
       </Routes>
     </DashboardLayout>

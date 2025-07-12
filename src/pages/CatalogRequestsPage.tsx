@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Progress } from '@/components/ui/progress';
+
 import { Textarea } from '@/components/ui/textarea';
 import { NavigationHeader } from '@/components/NavigationHeader';
 import { useAuth } from '@/contexts/AuthContext';

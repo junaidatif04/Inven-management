@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Package, Mail, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { sendVerificationEmail } from '@/services/emailVerificationService';
+import { sendVerificationEmail, verifyCode } from '@/services/emailVerificationService';
 
 export default function SignUpPage() {
   const navigate = useNavigate();
@@ -83,7 +83,7 @@ export default function SignUpPage() {
     
     try {
       // First verify the code
-      const { verifyCode } = await import('@/services/emailVerificationService');
+      // verifyCode is now imported statically at the top
       const isCodeValid = await verifyCode(formData.email, verificationCode);
       
       if (!isCodeValid) {

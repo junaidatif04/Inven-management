@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from '@/lib/firebase';
 import { autoRegisterSupplier } from './supplierService';
+import { isEmailVerified } from './emailVerificationService';
 import { User } from '@/types/auth';
 
 export type UserRole = 'admin' | 'warehouse_staff' | 'supplier' | 'internal_user';
@@ -261,7 +262,7 @@ export const signUpWithEmailAndPassword = async (
     }
 
     // Verify that the email has been verified before creating the account
-    const emailVerified = await import('@/services/emailVerificationService').then(module => module.isEmailVerified(email));
+    const emailVerified = await isEmailVerified(email);
     if (!emailVerified && !isVerified) {
       throw new Error('Email verification required. Please verify your email first.');
     }

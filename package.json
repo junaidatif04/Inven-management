@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "firebase:deploy": "firebase deploy",
+    "firebase:deploy:rules": "firebase deploy --only firestore:rules",
+    "firebase:deploy:indexes": "firebase deploy --only firestore:indexes",
+    "firebase:emulators": "firebase emulators:start",
+    "firebase:init": "firebase init"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",

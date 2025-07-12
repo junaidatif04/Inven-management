@@ -21,7 +21,10 @@ export default function RequestAccessPage() {
     requestedRole: '' as UserRole | '',
     company: '',
     department: '',
-    reason: ''
+    reason: '',
+    experience: '',
+    referral: '',
+    expectedUsage: ''
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,6 +53,15 @@ export default function RequestAccessPage() {
       }
       if (formData.reason && formData.reason.trim()) {
         requestData.reason = formData.reason.trim();
+      }
+      if (formData.experience && formData.experience.trim()) {
+        requestData.experience = formData.experience.trim();
+      }
+      if (formData.referral && formData.referral.trim()) {
+        requestData.referral = formData.referral.trim();
+      }
+      if (formData.expectedUsage && formData.expectedUsage.trim()) {
+        requestData.expectedUsage = formData.expectedUsage.trim();
       }
 
       const requestId = await submitAccessRequest(requestData);
@@ -227,6 +239,59 @@ export default function RequestAccessPage() {
                   className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
                   rows={3}
                 />
+              </div>
+
+              {/* Additional Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Additional Information</h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="experience">Experience Level</Label>
+                  <Select 
+                    value={formData.experience} 
+                    onValueChange={(value) => setFormData({ ...formData, experience: value })}
+                  >
+                    <SelectTrigger className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                      <SelectValue placeholder="Select your experience level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="beginner">Beginner</SelectItem>
+                      <SelectItem value="intermediate">Intermediate</SelectItem>
+                      <SelectItem value="advanced">Advanced</SelectItem>
+                      <SelectItem value="expert">Expert</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="referral">How did you hear about us?</Label>
+                  <Input
+                    id="referral"
+                    type="text"
+                    value={formData.referral}
+                    onChange={(e) => setFormData({ ...formData, referral: e.target.value })}
+                    placeholder="Colleague, website, social media, etc."
+                    className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="expectedUsage">Expected Usage Frequency</Label>
+                  <Select 
+                    value={formData.expectedUsage} 
+                    onValueChange={(value) => setFormData({ ...formData, expectedUsage: value })}
+                  >
+                    <SelectTrigger className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                      <SelectValue placeholder="Select expected usage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="occasionally">Occasionally</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* Submit Button */}

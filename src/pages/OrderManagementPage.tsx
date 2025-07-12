@@ -29,49 +29,44 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Mock order data for now - will be replaced with real Firebase data
-const mockOrders = [
-  {
-    id: '1',
-    orderNumber: 'ORD-001',
-    supplierId: 'sup1',
-    supplierName: 'Tech Supplies Co.',
-    status: 'pending',
-    totalAmount: 1250.00,
-    orderDate: new Date(),
-    requestedBy: 'John Doe',
-    items: [
-      { id: '1', name: 'Laptop', quantity: 2, unitPrice: 500, totalPrice: 1000 },
-      { id: '2', name: 'Mouse', quantity: 5, unitPrice: 50, totalPrice: 250 }
-    ]
-  },
-  {
-    id: '2',
-    orderNumber: 'ORD-002',
-    supplierId: 'sup2',
-    supplierName: 'Office Depot',
-    status: 'approved',
-    totalAmount: 850.00,
-    orderDate: new Date(Date.now() - 86400000),
-    requestedBy: 'Jane Smith',
-    items: [
-      { id: '3', name: 'Desk Chair', quantity: 1, unitPrice: 300, totalPrice: 300 },
-      { id: '4', name: 'Desk Lamp', quantity: 2, unitPrice: 275, totalPrice: 550 }
-    ]
-  }
-];
+import { Order, getAllOrders, updateOrderStatus, subscribeToOrders } from '@/services/orderService';
 
 export default function OrderManagementPage() {
-  const [orders, setOrders] = useState(mockOrders);
-  const [filteredOrders, setFilteredOrders] = useState(mockOrders);
-  const [loading, setLoading] = useState(false);
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   useEffect(() => {
+    loadOrders();
+    
+    // Set up real-time subscription
+    const unsubscribe = subscribeToOrders((updatedOrders) => {
+      setOrders(updatedOrders);
+      setLastUpdated(new Date());
+    });
+    
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     filterOrders();
   }, [orders, searchTerm, filterStatus]);
+
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllOrders();
+      setOrders(data);
+    } catch (error) {
+      toast.error('Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filterOrders = () => {
     let filtered = orders;
@@ -95,24 +90,23 @@ export default function OrderManagementPage() {
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
-      setOrders(prev => prev.map(order => 
-        order.id === orderId ? { ...order, status: newStatus } : order
-      ));
+      await updateOrderStatus(orderId, newStatus as Order['status']);
       toast.success('Order status updated successfully');
-      setLastUpdated(new Date());
     } catch (error) {
       toast.error('Failed to update order status');
     }
   };
 
-  const refreshData = () => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLastUpdated(new Date());
-      setLoading(false);
+  const refreshData = async () => {
+    try {
+      setLoading(true);
+      await loadOrders();
       toast.success('Orders data refreshed');
-    }, 1000);
+    } catch (error) {
+      toast.error('Failed to refresh orders');
+    } finally {
+      setLoading(false);
+    }
   };
 
 
@@ -125,8 +119,10 @@ export default function OrderManagementPage() {
     }).format(amount);
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+  const formatDate = (date: any) => {
+    if (!date) return 'N/A';
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    return dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
   };
 
   // Calculate stats

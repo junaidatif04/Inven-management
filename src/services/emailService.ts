@@ -23,7 +23,7 @@ export interface EmailTemplate {
 }
 
 // Email sending with EmailJS as primary service
-const sendEmailViaWebService = async (emailData: EmailTemplate): Promise<void> => {
+export const sendEmailViaWebService = async (emailData: EmailTemplate): Promise<void> => {
   // Try EmailJS first (your configured service)
   try {
     await emailjs.send(
@@ -88,6 +88,9 @@ Your request details:
 ${request.company ? `- Company: ${request.company}` : ''}
 ${request.department ? `- Department: ${request.department}` : ''}
 ${request.reason ? `- Reason: ${request.reason}` : ''}
+${request.experience ? `- Experience Level: ${request.experience}` : ''}
+${request.referral ? `- Referral Source: ${request.referral}` : ''}
+${request.expectedUsage ? `- Expected Usage: ${request.expectedUsage}` : ''}
 
 What happens next:
 1. An administrator will review your request within 1-2 business days
@@ -318,6 +321,7 @@ const getRoleResources = (role: string): string => {
 - Administrator Guide
 - User Management Manual
 - System Configuration Guide`;
+
     default:
       return '- General User Guide';
   }

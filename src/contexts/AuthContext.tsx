@@ -43,77 +43,91 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const loginWithGoogle = async (): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      const user = await signInWithGoogle();
-      if (user) {
-        setUser(user);
-        toast.success(`Welcome, ${user.name}!`);
-        return true;
-      }
-      return false;
-    } catch (error: any) {
-      console.error('Login error:', error);
-
-      if (error.message === 'UNAUTHORIZED_ACCESS') {
-        toast.error('Access denied. Please submit an access request first.');
-      } else {
-        toast.error(error.message || 'Failed to sign in with Google');
-      }
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loginWithEmail = async (email: string, password: string): Promise<boolean> => {
+  const loginWithGoogle = (): Promise<boolean> => {
     setIsLoading(true);
-    try {
-      const user = await signInWithEmailAndPasswordAuth(email, password);
-      if (user) {
-        setUser(user);
-        toast.success(`Welcome, ${user.name}!`);
-        return true;
-      }
-      return false;
-    } catch (error: any) {
-      console.error('Email login error:', error);
-      toast.error(error.message || 'Failed to sign in with email');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
+    return signInWithGoogle()
+      .then(user => {
+        if (user) {
+          setUser(user);
+          toast.success(`Welcome, ${user.name}!`);
+          return true;
+        }
+        return false;
+      })
+      .catch((error: any) => {
+        console.error('Login error:', error);
+
+        if (error.message === 'ALREADY_SIGNED_UP') {
+          toast.error('This email is already registered. Please sign in instead of signing up.');
+        } else if (error.message === 'UNAUTHORIZED_ACCESS') {
+          toast.error('Access denied. Please submit an access request first.');
+        } else {
+          toast.error(error.message || 'Failed to sign in with Google');
+        }
+        return false;
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
-  const signUpWithEmail = async (email: string, password: string, name: string, role: UserRole): Promise<boolean> => {
+  const loginWithEmail = (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-    try {
-      const user = await signUpWithEmailAndPassword(email, password, name, role);
-      if (user) {
-        setUser(user);
-        toast.success(`Account created successfully! Welcome, ${user.name}!`);
-        return true;
-      }
-      return false;
-    } catch (error: any) {
-      console.error('Email signup error:', error);
-      toast.error(error.message || 'Failed to create account');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
+    return signInWithEmailAndPasswordAuth(email, password)
+      .then(user => {
+        if (user) {
+          setUser(user);
+          toast.success(`Welcome, ${user.name}!`);
+          return true;
+        }
+        return false;
+      })
+      .catch((error: any) => {
+        console.error('Email login error:', error);
+        toast.error(error.message || 'Failed to sign in with email');
+        return false;
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
-  const logout = async (): Promise<void> => {
-    try {
-      await signOut();
-      setUser(null);
-      toast.success('Signed out successfully');
-    } catch (error: any) {
-      console.error('Logout error:', error);
-      toast.error('Failed to sign out');
-    }
+  const signUpWithEmail = (email: string, password: string, name: string, role: UserRole): Promise<boolean> => {
+    setIsLoading(true);
+    return signUpWithEmailAndPassword(email, password, name, role)
+      .then(user => {
+        if (user) {
+          setUser(user);
+          toast.success(`Account created successfully! Welcome, ${user.name}!`);
+          return true;
+        }
+        return false;
+      })
+      .catch((error: any) => {
+        console.error('Email signup error:', error);
+        
+        if (error.message === 'ALREADY_SIGNED_UP') {
+          toast.error('This email is already registered. Please sign in instead of signing up.');
+        } else {
+          toast.error(error.message || 'Failed to create account');
+        }
+        return false;
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
+
+  const logout = (): Promise<void> => {
+    return signOut()
+      .then(() => {
+        setUser(null);
+        toast.success('Signed out successfully');
+      })
+      .catch((error: any) => {
+        console.error('Logout error:', error);
+        toast.error('Failed to sign out');
+      });
   };
 
   const value = {

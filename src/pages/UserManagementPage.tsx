@@ -35,7 +35,8 @@ import {
   Shield,
   UserCog,
   Clock,
-  Mail
+  Mail,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { User, UserRole } from '@/services/authService';
@@ -43,7 +44,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   getAllUsers,
   updateUser,
-  deleteUser,
+  deleteUserFromFirestore,
   updateUserRole,
   getUserStats,
   UpdateUser
@@ -153,12 +154,14 @@ export default function UserManagementPage() {
       
       // Prevent deleting current user
       if (selectedUser.id === currentUser?.id) {
-        toast.error('You cannot delete your own account');
+        toast.error('You cannot delete your own account. Please use the Delete Account option in your profile page.');
         return;
       }
       
-      await deleteUser(selectedUser.id);
-      toast.success('User deleted successfully');
+      // Only delete from Firestore as admin cannot delete other users from Firebase Authentication
+      // without Firebase Admin SDK (which requires server-side implementation)
+      await deleteUserFromFirestore(selectedUser.id);
+      toast.success('User deleted from the system. Note: The user may still exist in Firebase Authentication.');
       setIsDeleteDialogOpen(false);
       setSelectedUser(null);
       loadUsers();
@@ -238,7 +241,7 @@ export default function UserManagementPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -288,6 +291,8 @@ export default function UserManagementPage() {
             <div className="text-2xl font-bold text-gray-600">{stats.internal_user}</div>
           </CardContent>
         </Card>
+        
+
       </div>
 
       {/* Filters */}
@@ -482,6 +487,20 @@ export default function UserManagementPage() {
               Are you sure you want to delete "{selectedUser?.name}"? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
+          <div className="p-4 my-2 bg-amber-50 border border-amber-200 rounded-md">
+            <div className="flex items-start">
+              <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-amber-800">Important Note</h4>
+                <p className="text-sm text-amber-700 mt-1">
+                  This will only remove the user from the system database. The user account will still exist in Firebase Authentication.
+                </p>
+                <p className="text-sm text-amber-700 mt-1">
+                  To completely delete a user account, the user must use the Delete Account option in their profile page.
+                </p>
+              </div>
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
               Cancel

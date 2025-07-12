@@ -1,13 +1,17 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Toaster } from '@/components/ui/sonner';
+import { migrateUserRoles } from '@/services/userService';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
+import SignUpPage from '@/pages/SignUpPage';
 import RequestAccessPage from '@/pages/RequestAccessPage';
 import RequestSubmittedPage from '@/pages/RequestSubmittedPage';
 import CompleteSignupPage from '@/pages/CompleteSignupPage';
+import EmailVerificationPage from '@/pages/EmailVerificationPage';
 import AccessRequestsPage from '@/pages/AccessRequestsPage';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import AdminDashboard from '@/pages/dashboards/AdminDashboard';
@@ -19,6 +23,7 @@ import OrdersPage from '@/pages/OrdersPage';
 import SuppliersPage from '@/pages/SuppliersPage';
 import ReportsPage from '@/pages/ReportsPage';
 import UserManagementPage from '@/pages/UserManagementPage';
+import UserProfilePage from '@/pages/UserProfilePage';
 import WarehouseManagementPage from '@/pages/WarehouseManagementPage';
 import ProductManagementPage from '@/pages/ProductManagementPage';
 import CatalogRequestsPage from '@/pages/CatalogRequestsPage';
@@ -58,6 +63,7 @@ function DashboardRouter() {
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/user-management" element={<UserManagementPage />} />
+        <Route path="/profile" element={<UserProfilePage />} />
         <Route path="/warehouse-management" element={<WarehouseManagementPage />} />
         <Route path="/product-management" element={<ProductManagementPage />} />
         <Route path="/catalog-requests" element={<CatalogRequestsPage />} />
@@ -68,6 +74,19 @@ function DashboardRouter() {
 }
 
 function App() {
+  useEffect(() => {
+    // Migrate any users with 'user' role to 'internal_user' when the app starts
+    migrateUserRoles()
+      .then(count => {
+        if (count > 0) {
+          console.log(`Successfully migrated ${count} users from 'user' role to 'internal_user'`);
+        }
+      })
+      .catch(error => {
+        console.error('Error during user role migration:', error);
+      });
+  }, []);
+
   return (
     <ThemeProvider defaultTheme="light" storageKey="inventory-ui-theme">
       <AuthProvider>
@@ -77,9 +96,11 @@ function App() {
               <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignUpPage />} />
                 <Route path="/request-access" element={<RequestAccessPage />} />
                 <Route path="/request-submitted" element={<RequestSubmittedPage />} />
                 <Route path="/complete-signup" element={<CompleteSignupPage />} />
+                <Route path="/verify-email" element={<EmailVerificationPage />} />
                 <Route
                   path="/dashboard/*"
                   element={

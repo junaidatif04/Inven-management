@@ -38,6 +38,9 @@ export interface AccessRequest {
   company?: string; // For suppliers
   department?: string; // For warehouse staff
   reason?: string; // Why they need access
+  experience?: string; // Experience level with similar systems
+  referral?: string; // How they heard about the system
+  expectedUsage?: string; // How often they expect to use the system
   status: 'pending' | 'approved' | 'rejected';
   createdAt: any;
   updatedAt?: any;

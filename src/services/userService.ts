@@ -8,9 +8,11 @@ import {
   query, 
   orderBy, 
   serverTimestamp,
-  where
+  where,
+  writeBatch
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { deleteUser as deleteAuthUser } from 'firebase/auth';
+import { db, auth } from '@/lib/firebase';
 import { User, UserRole } from '@/services/authService';
 
 export interface UpdateUser {
@@ -64,9 +66,34 @@ export const updateUser = async (user: UpdateUser): Promise<void> => {
   }
 };
 
-export const deleteUser = async (id: string): Promise<void> => {
+// Delete user from Firestore only
+export const deleteUserFromFirestore = async (id: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, 'users', id));
+  } catch (error) {
+    console.error('Error deleting user from Firestore:', error);
+    throw error;
+  }
+};
+
+// Delete user from both Firestore and Firebase Authentication
+// This function should be used when the current user is the one being deleted
+// or when an admin is deleting a user and has access to Firebase Admin SDK
+export const deleteUser = async (id: string): Promise<void> => {
+  try {
+    // First delete from Firestore
+    await deleteUserFromFirestore(id);
+    
+    // Check if the current user is the one being deleted
+    const currentUser = auth.currentUser;
+    if (currentUser && currentUser.uid === id) {
+      // Delete the user from Firebase Authentication
+      await deleteAuthUser(currentUser);
+    } else {
+      console.warn('Cannot delete user from Authentication - not the current user');
+      // Note: To delete other users from Authentication, you would need Firebase Admin SDK
+      // which requires server-side implementation (Cloud Functions)
+    }
   } catch (error) {
     console.error('Error deleting user:', error);
     throw error;
@@ -121,6 +148,7 @@ export const getUserStats = async () => {
   try {
     const users = await getAllUsers();
     
+    // Only count roles defined in the UserRole type
     const stats = {
       total: users.length,
       admin: users.filter(u => u.role === 'admin').length,
@@ -132,6 +160,38 @@ export const getUserStats = async () => {
     return stats;
   } catch (error) {
     console.error('Error getting user stats:', error);
+    throw error;
+  }
+};
+
+// Function to migrate any users with 'user' role to 'internal_user'
+export const migrateUserRoles = async (): Promise<number> => {
+  try {
+    // Get all users
+    const q = query(collection(db, 'users'), where('role', '==', 'user'));
+    const querySnapshot = await getDocs(q);
+    
+    let migratedCount = 0;
+    
+    // Update each user with 'user' role to 'internal_user'
+    const batch = writeBatch(db);
+    
+    querySnapshot.forEach((doc) => {
+      batch.update(doc.ref, { 
+        role: 'internal_user',
+        updatedAt: serverTimestamp()
+      });
+      migratedCount++;
+    });
+    
+    if (migratedCount > 0) {
+      await batch.commit();
+      console.log(`Migrated ${migratedCount} users from 'user' role to 'internal_user'`);
+    }
+    
+    return migratedCount;
+  } catch (error) {
+    console.error('Error migrating user roles:', error);
     throw error;
   }
 };

@@ -1,0 +1,211 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to get user role
+    function getUserRole(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && getUserRole(request.auth.uid) == 'admin';
+    }
+    
+    // Helper function to check if user has warehouse access
+    function hasWarehouseAccess() {
+      return isAuthenticated() && getUserRole(request.auth.uid) in ['admin', 'warehouse_staff'];
+    }
+    
+    // Helper function to check if user can create orders
+    function canCreateOrders() {
+      return isAuthenticated() && getUserRole(request.auth.uid) in ['admin', 'warehouse_staff', 'internal_user'];
+    }
+    
+    // Users collection - role-based access control
+    match /users/{userId} {
+      // Users can read and update their own profile
+      allow read, update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Admins can read all users
+      allow read: if isAdmin();
+      
+      // Allow reading user documents for email existence check during signup
+      // This is needed to prevent duplicate email registrations
+      allow read: if request.auth != null;
+      
+      // Admins can update user roles and data (except their own role)
+      allow update: if isAdmin() && (
+        request.auth.uid != userId || 
+        !('role' in request.resource.data) ||
+        request.resource.data.role == resource.data.role
+      );
+      
+      // Allow user creation during signup
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Admins can delete users (except themselves)
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+    
+    // Access requests collection
+    match /accessRequests/{requestId} {
+      // Anyone can create access requests
+      allow create: if true;
+      
+      // Users can read their own requests
+      allow read: if isAuthenticated() && (
+        resource.data.email == request.auth.token.email ||
+        isAdmin()
+      );
+      
+      // Only admins can update/delete access requests
+      allow update, delete: if isAdmin();
+    }
+    
+    // Inventory collection - warehouse and admin access
+    match /inventory/{itemId} {
+      // All authenticated users can read inventory
+      allow read: if isAuthenticated();
+      
+      // Only warehouse staff and admins can modify inventory
+      allow create, update, delete: if hasWarehouseAccess();
+    }
+    
+    // Orders collection - role-based access
+    match /orders/{orderId} {
+      // All authenticated users can read orders
+      allow read: if isAuthenticated();
+      
+      // Internal users, warehouse staff, and admins can create orders
+      allow create: if canCreateOrders();
+      
+      // Only warehouse staff and admins can update/delete orders
+      allow update, delete: if hasWarehouseAccess();
+    }
+    
+    // Suppliers collection - warehouse and admin access
+    match /suppliers/{supplierId} {
+      // All authenticated users can read suppliers
+      allow read: if isAuthenticated();
+      
+      // Only warehouse staff and admins can modify suppliers
+      allow create, update, delete: if hasWarehouseAccess();
+    }
+    
+    // Products collection - warehouse and admin access
+    match /products/{productId} {
+      // All authenticated users can read products
+      allow read: if isAuthenticated();
+      
+      // Only warehouse staff and admins can modify products
+      allow create, update, delete: if hasWarehouseAccess();
+    }
+    
+    // Warehouses collection - admin only
+    match /warehouses/{warehouseId} {
+      // All authenticated users can read warehouses
+      allow read: if isAuthenticated();
+      
+      // Only admins can modify warehouses
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Reports collection - admin only
+    match /reports/{reportId} {
+      // Only admins can access reports
+      allow read, write: if isAdmin();
+    }
+    
+    // Analytics collection - admin only
+    match /analytics/{analyticsId} {
+      // Only admins can access analytics
+      allow read, write: if isAdmin();
+    }
+    
+    // Notifications collection - user-specific access
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Admins can read all notifications
+      allow read: if isAdmin();
+      
+      // System can create notifications (for server-side operations)
+      allow create: if isAuthenticated();
+      
+      // Users can update their own notifications (mark as read)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Admins can delete notifications
+      allow delete: if isAdmin();
+    }
+    
+    // Catalog requests collection - supplier and admin access
+    match /catalogRequests/{requestId} {
+      // Suppliers can read their own requests, admins can read all
+      allow read: if isAuthenticated() && (
+        (getUserRole(request.auth.uid) == 'supplier' && resource.data.supplierId == request.auth.uid) ||
+        isAdmin()
+      );
+      
+      // Suppliers can create catalog requests
+      allow create: if isAuthenticated() && getUserRole(request.auth.uid) == 'supplier';
+      
+      // Suppliers can update their own requests, admins can update all
+      allow update: if isAuthenticated() && (
+        (getUserRole(request.auth.uid) == 'supplier' && resource.data.supplierId == request.auth.uid) ||
+        isAdmin()
+      );
+      
+      // Only admins can delete catalog requests
+      allow delete: if isAdmin();
+    }
+    
+    // Audit logs collection - admin read-only
+    match /auditLogs/{logId} {
+      // Only admins can read audit logs
+      allow read: if isAdmin();
+      
+      // System can create audit logs (for server-side operations)
+      allow create: if isAuthenticated();
+    }
+    
+    // Email verifications collection - public access for signup process
+    match /emailVerifications/{email} {
+      // Anyone can create verification codes (for signup)
+      allow create: if true;
+      
+      // Anyone can read verification data (needed for code verification)
+      allow read: if true;
+      
+      // Anyone can update verification status (mark as verified)
+      allow update: if true;
+      
+      // Allow deletion after verification is complete (cleanup)
+      allow delete: if true;
+    }
+    
+    // Email existence check collection - for preventing duplicate signups
+    match /emailChecks/{email} {
+      // Allow authenticated users to check email existence during signup
+      allow read: if request.auth != null;
+      
+      // System can create email check records
+      allow create: if request.auth != null;
+      
+      // Allow cleanup of email check records
+      allow delete: if request.auth != null;
+    }
+    
+    // Default deny rule for any other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

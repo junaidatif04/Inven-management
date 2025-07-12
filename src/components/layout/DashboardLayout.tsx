@@ -23,7 +23,8 @@ import {
   ClipboardList,
   ChevronLeft,
   ChevronRight,
-  UserCheck
+  UserCheck,
+  UserCircle
 } from 'lucide-react';
 
 const navigation = [
@@ -37,6 +38,7 @@ const navigation = [
   { name: 'Warehouse Management', href: '/dashboard/warehouse-management', icon: Warehouse, roles: ['warehouse_staff'] },
   { name: 'Product Management', href: '/dashboard/product-management', icon: Package, roles: ['supplier'] },
   { name: 'Catalog & Requests', href: '/dashboard/catalog-requests', icon: ClipboardList, roles: ['internal_user'] },
+  { name: 'My Profile', href: '/dashboard/profile', icon: UserCircle, roles: ['admin', 'warehouse_staff', 'supplier', 'internal_user'] },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -314,6 +316,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-xs">
                   {getRoleDisplayName(user?.role || '')}
                 </Badge>
+                <Link to="/dashboard/profile" className="text-xs text-blue-500 hover:text-blue-700 block mt-1">View Profile</Link>
               </div>
             </div>
           </div>

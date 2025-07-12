@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,48 +24,29 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { 
+  Product, 
+  PurchaseOrder, 
+  CreateProduct, 
+  UpdateProduct,
+  UpdatePurchaseOrder,
+  getAllProducts,
+  getProductsBySupplier,
+  createProduct,
+  updateProduct,
 
-// Mock data
-const supplierProducts = [
-  { id: 'SP-001', name: 'Laptop Dell XPS 13', category: 'Electronics', price: 1299, stock: 25, status: 'Active', lastUpdated: '2024-01-15' },
-  { id: 'SP-002', name: 'Wireless Mouse', category: 'Accessories', price: 49, stock: 150, status: 'Active', lastUpdated: '2024-01-14' },
-  { id: 'SP-003', name: 'USB-C Hub', category: 'Accessories', price: 79, stock: 0, status: 'Out of Stock', lastUpdated: '2024-01-13' },
-  { id: 'SP-004', name: 'Monitor 27" 4K', category: 'Electronics', price: 399, stock: 12, status: 'Low Stock', lastUpdated: '2024-01-12' },
-  { id: 'SP-005', name: 'Keyboard Mechanical', category: 'Accessories', price: 129, stock: 45, status: 'Active', lastUpdated: '2024-01-11' },
-];
 
-const purchaseOrders = [
-  {
-    id: 'PO-001',
-    items: [{ name: 'Laptop Dell XPS 13', quantity: 10, price: 1299 }],
-    total: 12990,
-    requestedDate: '2024-01-15',
-    deadline: '2024-01-25',
-    status: 'Pending',
-    customer: 'TechCorp Industries',
-    notes: 'Urgent order for new project'
-  },
-  {
-    id: 'PO-002',
-    items: [{ name: 'Wireless Mouse', quantity: 50, price: 49 }],
-    total: 2450,
-    requestedDate: '2024-01-14',
-    deadline: '2024-01-20',
-    status: 'Confirmed',
-    customer: 'Office Solutions Ltd',
-    notes: 'Regular monthly order'
-  },
-  {
-    id: 'PO-003',
-    items: [{ name: 'USB-C Hub', quantity: 25, price: 79 }],
-    total: 1975,
-    requestedDate: '2024-01-13',
-    deadline: '2024-01-22',
-    status: 'Pending',
-    customer: 'StartupXYZ',
-    notes: 'New customer order'
-  },
-];
+  getAllPurchaseOrders,
+  getPurchaseOrdersBySupplier,
+  updatePurchaseOrder,
+  subscribeToProducts,
+  subscribeToProductsBySupplier,
+  subscribeToPurchaseOrders,
+  subscribeToPurchaseOrdersBySupplier
+} from '@/services/productService';
+
+
 
 const sections = [
   { id: 'products', name: 'Product Catalog' },
@@ -73,10 +54,14 @@ const sections = [
 ];
 
 export default function ProductManagementPage() {
+  const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('products');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [selectedPO, setSelectedPO] = useState<any>(null);
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [deliveryDate, setDeliveryDate] = useState<Date>();
   const [response, setResponse] = useState('');
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
@@ -87,60 +72,170 @@ export default function ProductManagementPage() {
     stock: '',
     description: ''
   });
+  const [editProductForm, setEditProductForm] = useState<UpdateProduct>({});
 
-  const filteredProducts = supplierProducts.filter(product =>
+
+  useEffect(() => {
+    loadData();
+    
+    // Set up real-time subscriptions based on user role
+    let unsubscribeProducts: (() => void) | undefined;
+    let unsubscribePOs: (() => void) | undefined;
+    
+    if (user?.role === 'supplier') {
+      unsubscribeProducts = subscribeToProductsBySupplier(user.id, (updatedProducts) => {
+        setProducts(updatedProducts);
+      });
+      unsubscribePOs = subscribeToPurchaseOrdersBySupplier(user.id, (updatedOrders) => {
+        setPurchaseOrders(updatedOrders);
+      });
+    } else {
+      unsubscribeProducts = subscribeToProducts((updatedProducts) => {
+        setProducts(updatedProducts);
+      });
+      unsubscribePOs = subscribeToPurchaseOrders((updatedOrders) => {
+        setPurchaseOrders(updatedOrders);
+      });
+    }
+    
+    return () => {
+      unsubscribeProducts?.();
+      unsubscribePOs?.();
+    };
+  }, [user]);
+
+  const loadData = async () => {
+    if (!user) return;
+    
+    try {
+
+      let productsData: Product[];
+      let ordersData: PurchaseOrder[];
+      
+      if (user.role === 'supplier') {
+        [productsData, ordersData] = await Promise.all([
+          getProductsBySupplier(user.id),
+          getPurchaseOrdersBySupplier(user.id)
+        ]);
+      } else {
+        [productsData, ordersData] = await Promise.all([
+          getAllProducts(),
+          getAllPurchaseOrders()
+        ]);
+      }
+      
+      setProducts(productsData);
+      setPurchaseOrders(ordersData);
+    } catch (error) {
+      toast.error('Failed to load data');
+    } finally {
+
+    }
+  };
+
+  const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'Active':
+      case 'active':
         return 'default';
-      case 'Low Stock':
+      case 'low_stock':
         return 'secondary';
-      case 'Out of Stock':
+      case 'out_of_stock':
+      case 'discontinued':
         return 'destructive';
-      case 'Pending':
+      case 'pending':
         return 'secondary';
-      case 'Confirmed':
+      case 'confirmed':
         return 'default';
-      case 'Completed':
+      case 'completed':
         return 'outline';
+      case 'cancelled':
+        return 'destructive';
       default:
         return 'outline';
     }
   };
 
-  const handlePOResponse = (poId: string) => {
+
+
+  const handlePOResponse = async (poId: string) => {
     if (!deliveryDate) {
       toast.error('Please select a delivery date');
       return;
     }
-    toast.success(`Response submitted for ${poId}`);
-    setSelectedPO(null);
-    setDeliveryDate(undefined);
-    setResponse('');
-    setQuantities({});
+    
+    try {
+      const updates: UpdatePurchaseOrder = {
+        status: 'confirmed',
+        response,
+        deliveryDate
+      };
+      
+      await updatePurchaseOrder(poId, updates);
+      toast.success(`Response submitted for ${poId}`);
+      setSelectedPO(null);
+      setDeliveryDate(undefined);
+      setResponse('');
+      setQuantities({});
+    } catch (error) {
+      toast.error('Failed to submit response');
+    }
   };
 
-  const handleCreateProduct = () => {
-    if (!newProductForm.name || !newProductForm.category || !newProductForm.price) {
+  const handleCreateProduct = async () => {
+    if (!newProductForm.name || !newProductForm.category || !newProductForm.price || !user) {
       toast.error('Please fill in all required fields');
       return;
     }
-    toast.success('Product created successfully');
-    setNewProductForm({
-      name: '',
-      category: '',
-      price: '',
-      stock: '',
-      description: ''
-    });
+    
+    try {
+      const productData: CreateProduct = {
+        name: newProductForm.name,
+        category: newProductForm.category,
+        price: parseFloat(newProductForm.price),
+        stock: parseInt(newProductForm.stock) || 0,
+        description: newProductForm.description,
+        supplierId: user.id,
+        supplierName: user.displayName || user.email || 'Unknown',
+        createdBy: user.id
+      };
+      
+      await createProduct(productData);
+      toast.success('Product created successfully');
+      setNewProductForm({
+        name: '',
+        category: '',
+        price: '',
+        stock: '',
+        description: ''
+      });
+    } catch (error) {
+      toast.error('Failed to create product');
+    }
   };
 
-  const handleUpdateProduct = (productId: string) => {
-    toast.success(`Product ${productId} updated successfully`);
+  const handleUpdateProduct = async (productId: string) => {
+    try {
+      await updateProduct(productId, editProductForm);
+      toast.success('Product updated successfully');
+
+      setEditProductForm({});
+      setSelectedProduct(null);
+    } catch (error) {
+      toast.error('Failed to update product');
+    }
+  };
+
+
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString();
   };
 
   const getCurrentSectionName = () => {
@@ -272,7 +367,7 @@ export default function ProductManagementPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Updated:</span>
-                    <span className="text-sm">{product.lastUpdated}</span>
+                    <span className="text-sm">{formatDate(product.updatedAt)}</span>
                   </div>
                 </div>
 
@@ -322,7 +417,7 @@ export default function ProductManagementPage() {
                           </div>
                           <div>
                             <Label className="text-sm font-medium">Last Updated</Label>
-                            <p className="text-sm">{selectedProduct.lastUpdated}</p>
+                            <p className="text-sm">{formatDate(selectedProduct.updatedAt)}</p>
                           </div>
                           <div className="flex space-x-2 pt-4">
                             <Button 
@@ -389,11 +484,11 @@ export default function ProductManagementPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Requested</Label>
-                    <p>{po.requestedDate}</p>
+                    <p>{formatDate(po.createdAt)}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Deadline</Label>
-                    <p>{po.deadline}</p>
+                    <p>{formatDate(po.requestedDate)}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Items</Label>
@@ -405,7 +500,7 @@ export default function ProductManagementPage() {
                   <Label className="text-sm font-medium">Items:</Label>
                   {po.items.map((item, index) => (
                     <div key={index} className="flex justify-between items-center p-2 bg-muted/50 rounded">
-                      <span className="text-sm">{item.name}</span>
+                      <span className="text-sm">{item.productName}</span>
                       <span className="text-sm font-medium">
                         {item.quantity} × ${item.price} = ${(item.quantity * item.price).toLocaleString()}
                       </span>
@@ -437,8 +532,8 @@ export default function ProductManagementPage() {
                         <DialogHeader>
                           <DialogTitle>Purchase Order Response</DialogTitle>
                           <DialogDescription>
-                            Respond to {selectedPO.id} from {selectedPO.customer}
-                          </DialogDescription>
+                          Respond to {selectedPO.id} from {selectedPO.customer}
+                        </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
                           <div className="space-y-2">
@@ -513,7 +608,7 @@ export default function ProductManagementPage() {
                     )}
                   </Dialog>
                   
-                  {po.status === 'Pending' && (
+                  {po.status === 'pending' && (
                     <Button 
                       size="sm"
                       onClick={() => setSelectedPO(po)}

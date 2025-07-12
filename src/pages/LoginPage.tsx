@@ -22,25 +22,27 @@ export default function LoginPage() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const handleGoogleSignIn = async () => {
-    try {
-      setIsSigningIn(true);
-      const success = await loginWithGoogle();
-      if (success) {
-        addNotification({
-          title: 'Welcome!',
-          message: 'Successfully signed in',
-          type: 'success',
-        });
-      }
-    } catch (error) {
-      console.error('Google sign-in error:', error);
-    } finally {
-      setIsSigningIn(false);
-    }
+  const handleGoogleSignIn = () => {
+    setIsSigningIn(true);
+    loginWithGoogle()
+      .then(success => {
+        if (success) {
+          addNotification({
+            title: 'Welcome!',
+            message: 'Successfully signed in',
+            type: 'success',
+          });
+        }
+      })
+      .catch(error => {
+        console.error('Google sign-in error:', error);
+      })
+      .finally(() => {
+        setIsSigningIn(false);
+      });
   };
 
-  const handleEmailSignIn = async (e: React.FormEvent) => {
+  const handleEmailSignIn = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!emailCredentials.email || !emailCredentials.password) {
@@ -52,26 +54,28 @@ export default function LoginPage() {
       return;
     }
 
-    try {
-      setIsSigningIn(true);
-      const success = await loginWithEmail(emailCredentials.email, emailCredentials.password);
-      if (success) {
+    setIsSigningIn(true);
+    loginWithEmail(emailCredentials.email, emailCredentials.password)
+      .then(success => {
+        if (success) {
+          addNotification({
+            title: 'Welcome!',
+            message: 'Successfully signed in',
+            type: 'success',
+          });
+        }
+      })
+      .catch(error => {
+        console.error('Email sign-in error:', error);
         addNotification({
-          title: 'Welcome!',
-          message: 'Successfully signed in',
-          type: 'success',
+          title: 'Sign-in Failed',
+          message: 'Invalid email or password. Please try again.',
+          type: 'error',
         });
-      }
-    } catch (error) {
-      console.error('Email sign-in error:', error);
-      addNotification({
-        title: 'Sign-in Failed',
-        message: 'Invalid email or password. Please try again.',
-        type: 'error',
+      })
+      .finally(() => {
+        setIsSigningIn(false);
       });
-    } finally {
-      setIsSigningIn(false);
-    }
   };
 
 
@@ -217,22 +221,22 @@ export default function LoginPage() {
               </TabsContent>
             </Tabs>
 
-            {/* Request Access Section */}
+            {/* Sign Up Section */}
             <div className="border-t pt-6">
               <div className="text-center space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                    Don't have access yet?
+                    Don't have an account yet?
                   </h3>
                   <p className="text-xs text-slate-600 dark:text-slate-400">
-                    Request access for Warehouse Staff, Supplier, or Internal User roles
+                    Create a new account to access the system
                   </p>
                 </div>
 
                 <Button asChild variant="outline" className="w-full h-11 border-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
-                  <Link to="/request-access">
+                  <Link to="/signup">
                     <UserPlus className="mr-2 h-4 w-4" />
-                    Request Access
+                    Sign Up
                   </Link>
                 </Button>
               </div>

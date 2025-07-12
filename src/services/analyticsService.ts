@@ -63,7 +63,7 @@ const mockSupplierData = [
 const mockUserData = [
   { id: '1', name: 'John Admin', role: 'admin' },
   { id: '2', name: 'Jane Manager', role: 'manager' },
-  { id: '3', name: 'Bob User', role: 'user' },
+  { id: '3', name: 'Bob User', role: 'internal_user' },
   { id: '4', name: 'Alice Staff', role: 'staff' },
 ];
 

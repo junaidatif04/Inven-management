@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,67 +13,26 @@ import { Textarea } from '@/components/ui/textarea';
 import { NavigationHeader } from '@/components/NavigationHeader';
 import { 
   Plus, 
-
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
   Package, 
   Truck, 
   CalendarIcon,
   Edit,
   Eye,
-  CheckCircle
+  CheckCircle,
+  Trash2,
+  Save
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { adjustStock, getStockMovements, getAllInventoryItems } from '@/services/inventoryService';
+import { StockMovement } from '@/types/inventory';
+import { Shipment, CreateShipment, UpdateShipment, getAllShipments, createShipment, updateShipment, updateShipmentStatus, deleteShipment, subscribeToShipments } from '@/services/shipmentService';
 
-// Mock data
-const stockEntries = [
-  { id: 'SE-001', productId: 'PROD-001', productName: 'Laptop Dell XPS 13', type: 'Stock In', quantity: 50, date: '2024-01-15', user: 'Jane Warehouse', notes: 'New shipment from supplier' },
-  { id: 'SE-002', productId: 'PROD-002', productName: 'Wireless Mouse', type: 'Stock Out', quantity: 25, date: '2024-01-15', user: 'Jane Warehouse', notes: 'Fulfilled order REQ-001' },
-  { id: 'SE-003', productId: 'PROD-003', productName: 'Office Chair', type: 'Stock In', quantity: 15, date: '2024-01-14', user: 'Mike Staff', notes: 'Restocking low inventory' },
-  { id: 'SE-004', productId: 'PROD-004', productName: 'Monitor 27" 4K', type: 'Adjustment', quantity: -2, date: '2024-01-14', user: 'Jane Warehouse', notes: 'Damaged items removed' },
-];
 
-const shipments = [
-  { 
-    id: 'SH-001', 
-    type: 'Incoming', 
-    supplier: 'TechCorp Industries', 
-    items: 15, 
-    status: 'In Transit', 
-    eta: '2024-01-16',
-    trackingNumber: 'TC123456789',
-    value: 25000
-  },
-  { 
-    id: 'SH-002', 
-    type: 'Incoming', 
-    supplier: 'Office Supplies Co', 
-    items: 8, 
-    status: 'Arriving Today', 
-    eta: '2024-01-15',
-    trackingNumber: 'OS987654321',
-    value: 1200
-  },
-  { 
-    id: 'SH-003', 
-    type: 'Outgoing', 
-    destination: 'IT Department', 
-    items: 5, 
-    status: 'Ready to Ship', 
-    requestedBy: 'Alice Johnson',
-    trackingNumber: 'OUT123456',
-    value: 6500
-  },
-  { 
-    id: 'SH-004', 
-    type: 'Outgoing', 
-    destination: 'Marketing', 
-    items: 2, 
-    status: 'Processing', 
-    requestedBy: 'Bob Smith',
-    trackingNumber: 'OUT789012',
-    value: 800
-  },
-];
 
 const sections = [
   { id: 'stock-entries', name: 'Stock Entries' },
@@ -81,84 +40,273 @@ const sections = [
 ];
 
 export default function WarehouseManagementPage() {
+  const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('stock-entries');
+
+  const [stockEntries, setStockEntries] = useState<StockMovement[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  
   const [stockForm, setStockForm] = useState({
     productId: '',
-    type: 'Stock In',
+    type: 'in' as 'in' | 'out' | 'adjustment',
     quantity: '',
+    reason: '',
     notes: ''
   });
   const [shipmentForm, setShipmentForm] = useState({
-    type: 'Incoming',
+    type: 'incoming' as 'incoming' | 'outgoing',
     supplier: '',
     destination: '',
     items: '',
     eta: undefined as Date | undefined,
     trackingNumber: '',
+    value: '',
     notes: ''
   });
-  const [selectedShipment, setSelectedShipment] = useState<any>(null);
+  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  const [showEditShipment, setShowEditShipment] = useState(false);
+  const [showStatusUpdate, setShowStatusUpdate] = useState(false);
+  const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
+  const [editShipmentForm, setEditShipmentForm] = useState({
+    type: 'incoming' as 'incoming' | 'outgoing',
+    supplier: '',
+    destination: '',
+    items: '',
+    eta: undefined as Date | undefined,
+    trackingNumber: '',
+    value: '',
+    notes: ''
+  });
+  const [newStatus, setNewStatus] = useState<Shipment['status']>('pending');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleStockEntry = () => {
-    if (!stockForm.productId || !stockForm.quantity) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-    toast.success('Stock entry recorded successfully');
-    setStockForm({
-      productId: '',
-      type: 'Stock In',
-      quantity: '',
-      notes: ''
+  useEffect(() => {
+    loadData();
+    
+    // Set up real-time subscription for shipments
+    const unsubscribe = subscribeToShipments((updatedShipments) => {
+      setShipments(updatedShipments);
     });
+    
+    return () => unsubscribe();
+  }, []);
+
+  const loadData = async () => {
+    try {
+
+      const [stockMovements, shipmentsData, inventory] = await Promise.all([
+        getStockMovements(),
+        getAllShipments(),
+        getAllInventoryItems()
+      ]);
+      setStockEntries(stockMovements);
+      setShipments(shipmentsData);
+      setInventoryItems(inventory);
+    } catch (error) {
+      toast.error('Failed to load warehouse data');
+    }
   };
 
-  const handleCreateShipment = () => {
-    if (!shipmentForm.trackingNumber || !shipmentForm.items) {
+  const handleStockEntry = async () => {
+    if (!stockForm.productId || !stockForm.quantity || !stockForm.reason || !user) {
       toast.error('Please fill in all required fields');
       return;
     }
-    toast.success('Shipment created successfully');
-    setShipmentForm({
-      type: 'Incoming',
-      supplier: '',
-      destination: '',
-      items: '',
-      eta: undefined,
-      trackingNumber: '',
-      notes: ''
+    
+    try {
+      await adjustStock(
+        stockForm.productId,
+        parseInt(stockForm.quantity),
+        stockForm.type,
+        stockForm.reason,
+        user.id,
+        stockForm.notes
+      );
+      
+      toast.success('Stock entry recorded successfully');
+      setStockForm({
+        productId: '',
+        type: 'in',
+        quantity: '',
+        reason: '',
+        notes: ''
+      });
+      
+      // Reload stock movements
+      const updatedMovements = await getStockMovements();
+      setStockEntries(updatedMovements);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to record stock entry');
+    }
+  };
+
+  const handleCreateShipment = async () => {
+    if (!shipmentForm.trackingNumber || !shipmentForm.items || !shipmentForm.value) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    try {
+      const shipmentData: CreateShipment = {
+        type: shipmentForm.type,
+        trackingNumber: shipmentForm.trackingNumber,
+        items: parseInt(shipmentForm.items),
+        value: parseFloat(shipmentForm.value),
+        eta: shipmentForm.eta,
+        notes: shipmentForm.notes,
+        requestedBy: user?.displayName || user?.email || 'Unknown'
+      };
+      
+      if (shipmentForm.type === 'incoming') {
+        shipmentData.supplier = shipmentForm.supplier;
+      } else {
+        shipmentData.destination = shipmentForm.destination;
+      }
+      
+      await createShipment(shipmentData);
+      toast.success('Shipment created successfully');
+      
+      setShipmentForm({
+        type: 'incoming',
+        supplier: '',
+        destination: '',
+        items: '',
+        eta: undefined,
+        trackingNumber: '',
+        value: '',
+        notes: ''
+      });
+    } catch (error) {
+      toast.error('Failed to create shipment');
+    }
+  };
+
+  const handleEditShipment = (shipment: Shipment) => {
+    setEditingShipment(shipment);
+    setEditShipmentForm({
+      type: shipment.type,
+      supplier: shipment.supplier || '',
+      destination: shipment.destination || '',
+      items: shipment.items.toString(),
+      eta: shipment.eta?.toDate ? shipment.eta.toDate() : shipment.eta ? new Date(shipment.eta) : undefined,
+      trackingNumber: shipment.trackingNumber,
+      value: shipment.value.toString(),
+      notes: shipment.notes || ''
     });
+    setShowEditShipment(true);
+  };
+
+  const handleUpdateShipment = async () => {
+    if (!editingShipment || !editShipmentForm.trackingNumber || !editShipmentForm.items || !editShipmentForm.value) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const updateData: UpdateShipment = {
+        id: editingShipment.id,
+        type: editShipmentForm.type,
+        trackingNumber: editShipmentForm.trackingNumber,
+        items: parseInt(editShipmentForm.items),
+        value: parseFloat(editShipmentForm.value),
+        eta: editShipmentForm.eta,
+        notes: editShipmentForm.notes
+      };
+
+      if (editShipmentForm.type === 'incoming') {
+        updateData.supplier = editShipmentForm.supplier;
+      } else {
+        updateData.destination = editShipmentForm.destination;
+      }
+
+      await updateShipment(updateData);
+      toast.success('Shipment updated successfully');
+      setShowEditShipment(false);
+      setEditingShipment(null);
+    } catch (error) {
+      toast.error('Failed to update shipment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleStatusUpdate = (shipment: Shipment) => {
+    setEditingShipment(shipment);
+    setNewStatus(shipment.status);
+    setShowStatusUpdate(true);
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!editingShipment) return;
+
+    try {
+      setIsSubmitting(true);
+      await updateShipmentStatus(editingShipment.id, newStatus);
+      toast.success('Shipment status updated successfully');
+      setShowStatusUpdate(false);
+      setEditingShipment(null);
+    } catch (error) {
+      toast.error('Failed to update shipment status');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteShipment = async (shipment: Shipment) => {
+    if (!confirm('Are you sure you want to delete this shipment? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await deleteShipment(shipment.id);
+      toast.success('Shipment deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete shipment');
+    }
   };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'Arriving Today':
-      case 'Ready to Ship':
-      case 'Completed':
+      case 'arriving_today':
+      case 'ready_to_ship':
+      case 'delivered':
         return 'default';
-      case 'In Transit':
-      case 'Processing':
-      case 'In Progress':
+      case 'in_transit':
+      case 'processing':
         return 'secondary';
-      case 'Delayed':
+      case 'cancelled':
         return 'destructive';
-      case 'Pending':
+      case 'pending':
         return 'outline';
       default:
         return 'outline';
     }
   };
 
+  const formatDate = (date: any) => {
+    if (!date) return 'N/A';
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    return dateObj.toLocaleDateString();
+  };
+
+  const formatDateTime = (date: any) => {
+    if (!date) return 'N/A';
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    return dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
+  };
+
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'Stock In':
-        return <Package className="h-4 w-4 text-green-500" />;
-      case 'Stock Out':
-        return <Package className="h-4 w-4 text-red-500" />;
-      case 'Adjustment':
-        return <Edit className="h-4 w-4 text-yellow-500" />;
+      case 'in':
+        return <ArrowUp className="h-4 w-4 text-green-600" />;
+      case 'out':
+        return <ArrowDown className="h-4 w-4 text-red-600" />;
+      case 'adjustment':
+        return <RotateCcw className="h-4 w-4 text-blue-600" />;
       default:
-        return <Package className="h-4 w-4 text-muted-foreground" />;
+        return <Package className="h-4 w-4" />;
     }
   };
 
@@ -197,24 +345,25 @@ export default function WarehouseManagementPage() {
                     <SelectValue placeholder="Select product" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PROD-001">Laptop Dell XPS 13</SelectItem>
-                    <SelectItem value="PROD-002">Wireless Mouse</SelectItem>
-                    <SelectItem value="PROD-003">Office Chair</SelectItem>
-                    <SelectItem value="PROD-004">Monitor 27" 4K</SelectItem>
+                    {inventoryItems.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} - {item.sku}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Type</Label>
-                  <Select value={stockForm.type} onValueChange={(value) => setStockForm(prev => ({ ...prev, type: value }))}>
+                  <Select value={stockForm.type} onValueChange={(value) => setStockForm(prev => ({ ...prev, type: value as 'in' | 'out' | 'adjustment' }))}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Stock In">Stock In</SelectItem>
-                      <SelectItem value="Stock Out">Stock Out</SelectItem>
-                      <SelectItem value="Adjustment">Adjustment</SelectItem>
+                      <SelectItem value="in">Stock In</SelectItem>
+                      <SelectItem value="out">Stock Out</SelectItem>
+                      <SelectItem value="adjustment">Adjustment</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -227,6 +376,14 @@ export default function WarehouseManagementPage() {
                     onChange={(e) => setStockForm(prev => ({ ...prev, quantity: e.target.value }))}
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Reason *</Label>
+                <Input
+                  placeholder="Enter reason for stock movement"
+                  value={stockForm.reason}
+                  onChange={(e) => setStockForm(prev => ({ ...prev, reason: e.target.value }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
@@ -254,23 +411,23 @@ export default function WarehouseManagementPage() {
                     {getTypeIcon(entry.type)}
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2">
-                        <p className="font-medium">{entry.id}</p>
-                        <Badge variant={entry.type === 'Stock In' ? 'default' : entry.type === 'Stock Out' ? 'secondary' : 'outline'}>
-                          {entry.type}
+                        <p className="font-medium">{entry.itemName}</p>
+                        <Badge variant={entry.type === 'in' ? 'default' : entry.type === 'out' ? 'secondary' : 'outline'}>
+                          {entry.type === 'in' ? 'Stock In' : entry.type === 'out' ? 'Stock Out' : 'Adjustment'}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">{entry.productName}</p>
+                      <p className="text-sm text-muted-foreground">{entry.reason}</p>
                       <p className="text-xs text-muted-foreground">
-                        {entry.date} • {entry.user}
+                        {formatDateTime(entry.timestamp)} • {entry.performedBy}
                       </p>
                     </div>
                   </div>
                   <div className="text-right space-y-1">
                     <p className="font-bold text-lg">
-                      {entry.type === 'Stock Out' ? '-' : entry.type === 'Adjustment' && entry.quantity < 0 ? '' : '+'}
+                      {entry.type === 'out' ? '-' : entry.type === 'adjustment' && entry.quantity < 0 ? '' : '+'}
                       {Math.abs(entry.quantity)}
                     </p>
-                    <p className="text-xs text-muted-foreground">{entry.notes}</p>
+                    <p className="text-xs text-muted-foreground">{entry.notes || 'No notes'}</p>
                   </div>
                 </div>
               ))}
@@ -307,17 +464,17 @@ export default function WarehouseManagementPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Shipment Type</Label>
-                <Select value={shipmentForm.type} onValueChange={(value) => setShipmentForm(prev => ({ ...prev, type: value }))}>
+                <Select value={shipmentForm.type} onValueChange={(value) => setShipmentForm(prev => ({ ...prev, type: value as 'incoming' | 'outgoing' }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Incoming">Incoming</SelectItem>
-                    <SelectItem value="Outgoing">Outgoing</SelectItem>
+                    <SelectItem value="incoming">Incoming</SelectItem>
+                    <SelectItem value="outgoing">Outgoing</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {shipmentForm.type === 'Incoming' ? (
+              {shipmentForm.type === 'incoming' ? (
                 <div className="space-y-2">
                   <Label>Supplier</Label>
                   <Input
@@ -354,6 +511,16 @@ export default function WarehouseManagementPage() {
                     onChange={(e) => setShipmentForm(prev => ({ ...prev, trackingNumber: e.target.value }))}
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Total Value ($)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="Enter total value"
+                  value={shipmentForm.value}
+                  onChange={(e) => setShipmentForm(prev => ({ ...prev, value: e.target.value }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>ETA / Ship Date</Label>
@@ -396,17 +563,17 @@ export default function WarehouseManagementPage() {
                     <Badge variant={getStatusBadgeVariant(shipment.status)}>
                       {shipment.status}
                     </Badge>
-                    <Badge variant={shipment.type === 'Incoming' ? 'default' : 'secondary'}>
-                      {shipment.type}
+                    <Badge variant={shipment.type === 'incoming' ? 'default' : 'secondary'}>
+                      {shipment.type === 'incoming' ? 'Incoming' : 'Outgoing'}
                     </Badge>
                   </div>
                   <div className="text-sm text-muted-foreground">
                     <p>
-                      {shipment.type === 'Incoming' ? `From: ${shipment.supplier}` : `To: ${shipment.destination}`}
+                      {shipment.type === 'incoming' ? `From: ${shipment.supplier || 'N/A'}` : `To: ${shipment.destination || 'N/A'}`}
                     </p>
                     <p>Items: {shipment.items} • Value: ${shipment.value.toLocaleString()}</p>
                     <p>Tracking: {shipment.trackingNumber}</p>
-                    {shipment.eta && <p>ETA: {shipment.eta}</p>}
+                    {shipment.eta && <p>ETA: {formatDate(shipment.eta)}</p>}
                     {shipment.requestedBy && <p>Requested by: {shipment.requestedBy}</p>}
                   </div>
                 </div>
@@ -440,17 +607,17 @@ export default function WarehouseManagementPage() {
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Type</Label>
-                              <Badge variant={selectedShipment.type === 'Incoming' ? 'default' : 'secondary'} className="mt-1">
-                                {selectedShipment.type}
+                              <Badge variant={selectedShipment.type === 'incoming' ? 'default' : 'secondary'} className="mt-1">
+                                {selectedShipment.type === 'incoming' ? 'Incoming' : 'Outgoing'}
                               </Badge>
                             </div>
                           </div>
                           <div>
                             <Label className="text-sm font-medium">
-                              {selectedShipment.type === 'Incoming' ? 'Supplier' : 'Destination'}
+                              {selectedShipment.type === 'incoming' ? 'Supplier' : 'Destination'}
                             </Label>
                             <p className="text-sm">
-                              {selectedShipment.type === 'Incoming' ? selectedShipment.supplier : selectedShipment.destination}
+                              {selectedShipment.type === 'incoming' ? selectedShipment.supplier || 'N/A' : selectedShipment.destination || 'N/A'}
                             </p>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
@@ -470,15 +637,28 @@ export default function WarehouseManagementPage() {
                           {selectedShipment.eta && (
                             <div>
                               <Label className="text-sm font-medium">ETA</Label>
-                              <p className="text-sm">{selectedShipment.eta}</p>
+                              <p className="text-sm">{formatDate(selectedShipment.eta)}</p>
                             </div>
                           )}
                           <div className="flex space-x-2 pt-4">
-                            <Button variant="outline" className="flex-1">
+                            <Button 
+                              variant="outline" 
+                              className="flex-1"
+                              onClick={() => {
+                                handleEditShipment(selectedShipment);
+                                setSelectedShipment(null);
+                              }}
+                            >
                               <Edit className="mr-2 h-4 w-4" />
                               Edit
                             </Button>
-                            <Button className="flex-1">
+                            <Button 
+                              className="flex-1"
+                              onClick={() => {
+                                handleStatusUpdate(selectedShipment);
+                                setSelectedShipment(null);
+                              }}
+                            >
                               <CheckCircle className="mr-2 h-4 w-4" />
                               Update Status
                             </Button>
@@ -487,8 +667,19 @@ export default function WarehouseManagementPage() {
                       </DialogContent>
                     )}
                   </Dialog>
-                  <Button size="sm" variant="outline">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleEditShipment(shipment)}
+                  >
                     <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="destructive"
+                    onClick={() => handleDeleteShipment(shipment)}
+                  >
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
@@ -516,6 +707,146 @@ export default function WarehouseManagementPage() {
           {activeSection === 'shipments' && renderShipments()}
         </div>
       </div>
+
+      {/* Edit Shipment Dialog */}
+      <Dialog open={showEditShipment} onOpenChange={setShowEditShipment}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Shipment</DialogTitle>
+            <DialogDescription>
+              Update shipment details
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Shipment Type</Label>
+              <Select value={editShipmentForm.type} onValueChange={(value) => setEditShipmentForm(prev => ({ ...prev, type: value as 'incoming' | 'outgoing' }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="incoming">Incoming</SelectItem>
+                  <SelectItem value="outgoing">Outgoing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editShipmentForm.type === 'incoming' ? (
+              <div className="space-y-2">
+                <Label>Supplier</Label>
+                <Input
+                  placeholder="Enter supplier name"
+                  value={editShipmentForm.supplier}
+                  onChange={(e) => setEditShipmentForm(prev => ({ ...prev, supplier: e.target.value }))}
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Destination</Label>
+                <Input
+                  placeholder="Enter destination"
+                  value={editShipmentForm.destination}
+                  onChange={(e) => setEditShipmentForm(prev => ({ ...prev, destination: e.target.value }))}
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Number of Items</Label>
+                <Input
+                  type="number"
+                  placeholder="Item count"
+                  value={editShipmentForm.items}
+                  onChange={(e) => setEditShipmentForm(prev => ({ ...prev, items: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tracking Number</Label>
+                <Input
+                  placeholder="Tracking #"
+                  value={editShipmentForm.trackingNumber}
+                  onChange={(e) => setEditShipmentForm(prev => ({ ...prev, trackingNumber: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Total Value ($)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Enter total value"
+                value={editShipmentForm.value}
+                onChange={(e) => setEditShipmentForm(prev => ({ ...prev, value: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>ETA / Ship Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {editShipmentForm.eta ? format(editShipmentForm.eta, 'PPP') : 'Select date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={editShipmentForm.eta}
+                    onSelect={(date) => setEditShipmentForm(prev => ({ ...prev, eta: date }))}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                placeholder="Add notes about this shipment"
+                value={editShipmentForm.notes}
+                onChange={(e) => setEditShipmentForm(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+            <Button onClick={handleUpdateShipment} className="w-full" disabled={isSubmitting}>
+              <Save className="mr-2 h-4 w-4" />
+              {isSubmitting ? 'Updating...' : 'Update Shipment'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Status Update Dialog */}
+      <Dialog open={showStatusUpdate} onOpenChange={setShowStatusUpdate}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Shipment Status</DialogTitle>
+            <DialogDescription>
+              Change the status of this shipment
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>New Status</Label>
+              <Select value={newStatus} onValueChange={(value) => setNewStatus(value as Shipment['status'])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="in_transit">In Transit</SelectItem>
+                  <SelectItem value="arriving_today">Arriving Today</SelectItem>
+                  <SelectItem value="ready_to_ship">Ready to Ship</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleUpdateStatus} className="w-full" disabled={isSubmitting}>
+              <CheckCircle className="mr-2 h-4 w-4" />
+              {isSubmitting ? 'Updating...' : 'Update Status'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

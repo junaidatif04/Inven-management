@@ -45,20 +45,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Initialize app data and run migrations only after user is authenticated and has proper permissions
       if (user && (user.role === 'admin' || user.role === 'warehouse_staff')) {
-        // Run user role migration for admin users
-        if (user.role === 'admin') {
-          migrateUserRoles()
-            .then(count => {
-              if (count > 0) {
-                console.log(`Successfully migrated ${count} users from 'user' role to 'internal_user'`);
+        // Add a small delay to ensure Firebase Auth token is fully propagated to Firestore
+        setTimeout(async () => {
+          try {
+            // Run user role migration for admin users
+            if (user.role === 'admin') {
+              try {
+                const count = await migrateUserRoles();
+                if (count > 0) {
+                  console.log(`Successfully migrated ${count} users from 'user' role to 'internal_user'`);
+                }
+              } catch (error) {
+                console.error('Error during user role migration:', error);
+                // Don't block app initialization if migration fails
               }
-            })
-            .catch(error => {
-              console.error('Error during user role migration:', error);
-            });
-        }
-        
-        initializeApp();
+            }
+            
+            // Initialize app data
+            try {
+              await initializeApp();
+              console.log('App initialization completed successfully');
+            } catch (error) {
+              console.error('Failed to initialize app:', error);
+              // Show user-friendly error message
+              toast.error('Failed to load application data. Please refresh the page.');
+            }
+          } catch (error) {
+            console.error('Error during app initialization process:', error);
+          }
+        }, 1000); // 1 second delay to ensure auth token propagation
       }
     });
 

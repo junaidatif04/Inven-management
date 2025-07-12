@@ -11,12 +11,12 @@ import {
   TrendingUp,
   Activity,
   Eye,
-  Plus,
   DollarSign,
   RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { DashboardStats } from '@/services/analyticsService';
 import { subscribeToRecentOrders } from '@/services/orderService';
 import { Order } from '@/services/orderService';
@@ -35,6 +35,7 @@ import { Supplier } from '@/types/inventory';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalInventoryValue: 0,
     lowStockAlerts: 0,
@@ -51,6 +52,10 @@ export default function AdminDashboard() {
   const [systemLogs, setSystemLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  const handleViewAllUsers = () => {
+    navigate('/dashboard/user-management');
+  };
 
   // Authentication guard
   if (!user) {
@@ -481,14 +486,14 @@ export default function AdminDashboard() {
                     <p className="text-sm text-slate-500 dark:text-slate-400">Suppliers</p>
                   </div>
                 </div>
-                <div className="flex space-x-2">
-                  <Button className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-sm">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add User
-                  </Button>
-                  <Button variant="outline" className="flex-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700">
+                <div className="flex justify-center">
+                  <Button 
+                    variant="outline" 
+                    className="w-full bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                    onClick={handleViewAllUsers}
+                  >
                     <Eye className="mr-2 h-4 w-4" />
-                    View All
+                    View All Users
                   </Button>
                 </div>
               </CardContent>

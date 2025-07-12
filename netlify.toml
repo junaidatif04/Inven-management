@@ -11,6 +11,23 @@
   VITE_FIREBASE_APP_ID = "1:679251672484:web:899117c5ea32c235831531"
   VITE_FIREBASE_MEASUREMENT_ID = "G-17WW0LFQEP"
 
+# Exclude static assets from SPA redirect
+[[redirects]]
+  from = "/assets/*"
+  to = "/assets/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/*.js"
+  to = "/:splat.js"
+  status = 200
+
+[[redirects]]
+  from = "/*.css"
+  to = "/:splat.css"
+  status = 200
+
+# SPA fallback for all other routes
 [[redirects]]
   from = "/*"
   to = "/index.html"

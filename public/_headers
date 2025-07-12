@@ -1,3 +1,15 @@
+# Headers for JavaScript files
+/*.js
+  Content-Type: application/javascript
+
+# Headers for CSS files
+/*.css
+  Content-Type: text/css
+
+# Headers for assets directory
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # Headers for all pages
 /*
   Cross-Origin-Opener-Policy: same-origin-allow-popups

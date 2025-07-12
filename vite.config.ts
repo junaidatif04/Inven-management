@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
-  base: process.env.NODE_ENV === 'production' ? '/Inven-management/' : '/',
+  base: process.env.GITHUB_PAGES === 'true' ? '/Inven-management/' : '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

@@ -1,10 +1,8 @@
-import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Toaster } from '@/components/ui/sonner';
-import { migrateUserRoles } from '@/services/userService';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -77,18 +75,8 @@ function DashboardRouter() {
 }
 
 function App() {
-  useEffect(() => {
-    // Migrate any users with 'user' role to 'internal_user' when the app starts
-    migrateUserRoles()
-      .then(count => {
-        if (count > 0) {
-          console.log(`Successfully migrated ${count} users from 'user' role to 'internal_user'`);
-        }
-      })
-      .catch(error => {
-        console.error('Error during user role migration:', error);
-      });
-  }, []);
+  // Note: User role migration is now handled in AuthContext after authentication
+  // This prevents permission errors when no user is authenticated
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="inventory-ui-theme">

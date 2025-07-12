@@ -9,6 +9,7 @@ import {
   User,
   UserRole
 } from '@/services/authService';
+import { migrateUserRoles } from '@/services/userService';
 import { toast } from 'sonner';
 import { initializeApp } from '@/services/appInitService';
 
@@ -37,13 +38,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Initialize app data on startup
-    initializeApp();
-    
     // Listen for authentication state changes
     const unsubscribe = onAuthStateChange((user) => {
       setUser(user);
       setIsLoading(false);
+      
+      // Initialize app data and run migrations only after user is authenticated and has proper permissions
+      if (user && (user.role === 'admin' || user.role === 'warehouse_staff')) {
+        // Run user role migration for admin users
+        if (user.role === 'admin') {
+          migrateUserRoles()
+            .then(count => {
+              if (count > 0) {
+                console.log(`Successfully migrated ${count} users from 'user' role to 'internal_user'`);
+              }
+            })
+            .catch(error => {
+              console.error('Error during user role migration:', error);
+            });
+        }
+        
+        initializeApp();
+      }
     });
 
     return () => unsubscribe();

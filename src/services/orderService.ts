@@ -153,13 +153,19 @@ export const deleteOrder = async (id: string): Promise<void> => {
 // Real-time subscriptions
 export const subscribeToOrders = (callback: (orders: Order[]) => void) => {
   const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (querySnapshot) => {
-    const orders = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Order[];
-    callback(orders);
-  });
+  return onSnapshot(q, 
+    (querySnapshot) => {
+      const orders = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
+      callback(orders);
+    },
+    (error) => {
+      console.error('Error in orders subscription:', error);
+      callback([]);
+    }
+  );
 };
 
 export const subscribeToOrdersByStatus = (status: Order['status'], callback: (orders: Order[]) => void) => {
@@ -168,13 +174,19 @@ export const subscribeToOrdersByStatus = (status: Order['status'], callback: (or
     where('status', '==', status),
     orderBy('createdAt', 'desc')
   );
-  return onSnapshot(q, (querySnapshot) => {
-    const orders = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Order[];
-    callback(orders);
-  });
+  return onSnapshot(q, 
+    (querySnapshot) => {
+      const orders = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
+      callback(orders);
+    },
+    (error) => {
+      console.error('Error in orders by status subscription:', error);
+      callback([]);
+    }
+  );
 };
 
 export const subscribeToRecentOrders = (callback: (orders: Order[]) => void) => {
@@ -183,13 +195,19 @@ export const subscribeToRecentOrders = (callback: (orders: Order[]) => void) => 
     orderBy('createdAt', 'desc'),
     limit(10)
   );
-  return onSnapshot(q, (querySnapshot) => {
-    const orders = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Order[];
-    callback(orders);
-  });
+  return onSnapshot(q, 
+    (querySnapshot) => {
+      const orders = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
+      callback(orders);
+    },
+    (error) => {
+      console.error('Error in recent orders subscription:', error);
+      callback([]);
+    }
+  );
 };
 
 // Analytics and Statistics

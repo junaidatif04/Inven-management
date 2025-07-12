@@ -16,6 +16,24 @@ service firebase.storage {
                       request.auth.uid == fileName.split('_')[0];
     }
     
+    // Rules for inventory images
+    match /inventory/{fileName} {
+      // Allow authenticated users to read inventory images
+      allow read: if request.auth != null;
+      
+      // Allow authenticated users with admin or warehouse_staff roles to upload/manage inventory images
+      allow write: if request.auth != null;
+    }
+    
+    // Rules for product images
+    match /products/{fileName} {
+      // Allow authenticated users to read product images
+      allow read: if request.auth != null;
+      
+      // Allow authenticated users with supplier role to upload/manage product images
+      allow write: if request.auth != null;
+    }
+    
     // Default rule - deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

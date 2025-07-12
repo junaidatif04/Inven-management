@@ -122,15 +122,23 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
       // This prevents the "message channel closed" error
       getDoc(doc(db, 'users', firebaseUser.uid))
         .then(userDoc => {
-          if (userDoc.exists()) {
-            callback(userDoc.data() as User);
-          } else {
-            callback(null);
+          // Check if user is still authenticated before processing the result
+          if (auth.currentUser && auth.currentUser.uid === firebaseUser.uid) {
+            if (userDoc.exists()) {
+              callback(userDoc.data() as User);
+            } else {
+              callback(null);
+            }
           }
+          // If user is no longer authenticated, don't call callback to avoid race conditions
         })
         .catch(error => {
-          console.error('Error in auth state change:', error);
-          callback(null);
+          // Only log error if user is still authenticated (not a logout scenario)
+          if (auth.currentUser && auth.currentUser.uid === firebaseUser.uid) {
+            console.error('Error in auth state change:', error);
+            callback(null);
+          }
+          // If user logged out, silently ignore the error as it's expected
         });
     } else {
       callback(null);

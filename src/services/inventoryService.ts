@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { InventoryItem, CreateInventoryItem, UpdateInventoryItem, StockMovement } from '@/types/inventory';
+import { deleteImage } from './imageUploadService';
 
 // Inventory Items CRUD
 export const getAllInventoryItems = async (): Promise<InventoryItem[]> => {
@@ -101,6 +102,21 @@ export const updateInventoryItem = async (item: UpdateInventoryItem, userId: str
 
 export const deleteInventoryItem = async (id: string): Promise<void> => {
   try {
+    // Get the item first to check for image
+    const itemDoc = await getDoc(doc(db, 'inventory', id));
+    if (itemDoc.exists()) {
+      const item = itemDoc.data() as InventoryItem;
+      
+      // Delete image if it exists
+      if (item.imagePath) {
+        try {
+          await deleteImage(item.imagePath);
+        } catch (imageError) {
+          console.warn('Failed to delete image:', imageError);
+        }
+      }
+    }
+    
     const batch = writeBatch(db);
     
     // Delete the inventory item

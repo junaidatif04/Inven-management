@@ -301,7 +301,7 @@ export default function ReportsPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`} />
-                        <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, 'Value']} />
+                        <Tooltip formatter={(value) => [`$${(value || 0).toLocaleString()}`, 'Value']} />
                         <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -370,7 +370,7 @@ export default function ReportsPage() {
                           <p className="text-sm text-muted-foreground">{product.orders} orders</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold">${product.revenue.toLocaleString()}</p>
+                          <p className="font-bold">${(product.revenue || 0).toLocaleString()}</p>
                           <Badge variant="outline">{index + 1}</Badge>
                         </div>
                       </div>

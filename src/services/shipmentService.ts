@@ -135,13 +135,19 @@ export const deleteShipment = async (id: string): Promise<void> => {
 // Real-time subscriptions
 export const subscribeToShipments = (callback: (shipments: Shipment[]) => void) => {
   const q = query(collection(db, 'shipments'), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (querySnapshot) => {
-    const shipments = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Shipment[];
-    callback(shipments);
-  });
+  return onSnapshot(q, 
+    (querySnapshot) => {
+      const shipments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Shipment[];
+      callback(shipments);
+    },
+    (error) => {
+      console.error('Error in shipments subscription:', error);
+      callback([]);
+    }
+  );
 };
 
 export const subscribeToShipmentsByType = (type: Shipment['type'], callback: (shipments: Shipment[]) => void) => {
@@ -150,13 +156,19 @@ export const subscribeToShipmentsByType = (type: Shipment['type'], callback: (sh
     where('type', '==', type),
     orderBy('createdAt', 'desc')
   );
-  return onSnapshot(q, (querySnapshot) => {
-    const shipments = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Shipment[];
-    callback(shipments);
-  });
+  return onSnapshot(q, 
+    (querySnapshot) => {
+      const shipments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Shipment[];
+      callback(shipments);
+    },
+    (error) => {
+      console.error('Error in shipments by type subscription:', error);
+      callback([]);
+    }
+  );
 };
 
 // Analytics

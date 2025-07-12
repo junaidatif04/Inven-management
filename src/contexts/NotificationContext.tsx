@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getAllInventoryItems } from '@/services/inventoryService';
 import { getAllOrders } from '@/services/orderService';
 import { getPendingAccessRequests } from '@/services/accessRequestService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface Notification {
   id: string;
@@ -26,7 +27,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 // Generate real notifications based on system data
-const generateRealNotifications = async (): Promise<Notification[]> => {
+const generateRealNotifications = async (userRole?: string): Promise<Notification[]> => {
   const notifications: Notification[] = [];
 
   try {
@@ -68,20 +69,26 @@ const generateRealNotifications = async (): Promise<Notification[]> => {
       });
     });
 
-    // Get access requests for notifications
-    const accessRequests = await getPendingAccessRequests();
-    accessRequests.slice(0, 2).forEach((request) => {
-      const requestDate = request.createdAt?.toDate ? request.createdAt.toDate() : new Date(request.createdAt);
-      notifications.push({
-        id: `access-${request.id}`,
-        title: 'New Access Request',
-        message: `${request.name} has requested ${request.requestedRole} access`,
-        type: 'info',
-        timestamp: requestDate,
-        read: false,
-        actionUrl: '/dashboard/access-requests',
-      });
-    });
+    // Get access requests for notifications (admin only)
+    if (userRole === 'admin') {
+      try {
+        const accessRequests = await getPendingAccessRequests();
+        accessRequests.slice(0, 2).forEach((request) => {
+          const requestDate = request.createdAt?.toDate ? request.createdAt.toDate() : new Date(request.createdAt);
+          notifications.push({
+            id: `access-${request.id}`,
+            title: 'New Access Request',
+            message: `${request.name} has requested ${request.requestedRole} access`,
+            type: 'info',
+            timestamp: requestDate,
+            read: false,
+            actionUrl: '/dashboard/access-requests',
+          });
+        });
+      } catch (error) {
+        console.error('Error loading access requests (admin only):', error);
+      }
+    }
 
   } catch (error) {
     console.error('Error generating notifications:', error);
@@ -100,30 +107,47 @@ const generateRealNotifications = async (): Promise<Notification[]> => {
 };
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [pendingAccessRequests, setPendingAccessRequests] = useState<number>(0);
 
   const loadRealNotifications = async () => {
+    if (!user || !user.role) {
+      console.log('User or user role not available, skipping notification load');
+      return;
+    }
+    
     try {
-      const realNotifications = await generateRealNotifications();
+      const realNotifications = await generateRealNotifications(user.role);
       setNotifications(realNotifications);
 
-      // Update pending access requests count
-      const accessRequests = await getPendingAccessRequests();
-      setPendingAccessRequests(accessRequests.length);
+      // Update pending access requests count (admin only)
+      if (user.role === 'admin') {
+        try {
+          const accessRequests = await getPendingAccessRequests();
+          setPendingAccessRequests(accessRequests.length);
+        } catch (error) {
+          console.error('Error loading access requests count (admin only):', error);
+          setPendingAccessRequests(0);
+        }
+      } else {
+        setPendingAccessRequests(0);
+      }
     } catch (error) {
       console.error('Error loading notifications:', error);
     }
   };
 
   useEffect(() => {
-    loadRealNotifications();
+    if (user && user.role) {
+      loadRealNotifications();
 
-    // Refresh notifications every 5 minutes
-    const interval = setInterval(loadRealNotifications, 5 * 60 * 1000);
+      // Refresh notifications every 5 minutes
+      const interval = setInterval(loadRealNotifications, 5 * 60 * 1000);
 
-    return () => clearInterval(interval);
-  }, []);
+      return () => clearInterval(interval);
+    }
+  }, [user, user?.role]);
 
   const addNotification = (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
     const newNotification: Notification = {

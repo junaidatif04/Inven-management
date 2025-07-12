@@ -58,11 +58,14 @@ service cloud.firestore {
       // Anyone can create access requests
       allow create: if true;
       
-      // Users can read their own requests
+      // Users can read their own requests, admins can read all
       allow read: if isAuthenticated() && (
         resource.data.email == request.auth.token.email ||
         isAdmin()
       );
+      
+      // Admins can read all access requests (for notifications and management)
+      allow read: if isAdmin();
       
       // Only admins can update/delete access requests
       allow update, delete: if isAdmin();
@@ -146,25 +149,27 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
-    // Catalog requests collection - supplier and admin access
+    // Catalog requests collection - internal user and admin access
     match /catalogRequests/{requestId} {
-      // Suppliers can read their own requests, admins can read all
+      // Users can read their own requests, admins can read all
       allow read: if isAuthenticated() && (
-        (getUserRole(request.auth.uid) == 'supplier' && resource.data.supplierId == request.auth.uid) ||
-        isAdmin()
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        hasWarehouseAccess()
       );
       
-      // Suppliers can create catalog requests
-      allow create: if isAuthenticated() && getUserRole(request.auth.uid) == 'supplier';
+      // Internal users can create catalog requests
+      allow create: if isAuthenticated() && getUserRole(request.auth.uid) in ['internal_user', 'admin', 'warehouse_staff'];
       
-      // Suppliers can update their own requests, admins can update all
+      // Users can update their own requests, admins and warehouse staff can update all
       allow update: if isAuthenticated() && (
-        (getUserRole(request.auth.uid) == 'supplier' && resource.data.supplierId == request.auth.uid) ||
-        isAdmin()
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        hasWarehouseAccess()
       );
       
-      // Only admins can delete catalog requests
-      allow delete: if isAdmin();
+      // Admins and warehouse staff can delete catalog requests
+      allow delete: if isAdmin() || hasWarehouseAccess();
     }
     
     // Audit logs collection - admin read-only

@@ -11,6 +11,8 @@ export interface InventoryItem {
   supplier: string;
   location: string;
   status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'discontinued';
+  imageUrl?: string;
+  imagePath?: string;
   lastUpdated: any;
   createdAt: any;
   updatedBy: string;
@@ -27,11 +29,15 @@ export interface CreateInventoryItem {
   unitPrice: number;
   supplier: string;
   location: string;
+  imageUrl?: string;
+  imagePath?: string;
 }
 
 export interface UpdateInventoryItem extends Partial<CreateInventoryItem> {
   id: string;
   status?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'discontinued';
+  imageUrl?: string;
+  imagePath?: string;
 }
 
 export interface StockMovement {

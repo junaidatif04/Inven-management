@@ -13,6 +13,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { uploadImage, deleteImage, ImageUploadResult } from './imageUploadService';
 
 export interface Product {
   id: string;
@@ -23,6 +24,8 @@ export interface Product {
   status: 'active' | 'low_stock' | 'out_of_stock' | 'discontinued';
   description?: string;
   sku?: string;
+  imageUrl?: string;
+  imagePath?: string;
   supplierId: string;
   supplierName: string;
   createdAt: Timestamp;
@@ -37,6 +40,8 @@ export interface CreateProduct {
   stock: number;
   description?: string;
   sku?: string;
+  imageUrl?: string;
+  imagePath?: string;
   supplierId: string;
   supplierName: string;
   createdBy: string;
@@ -50,6 +55,8 @@ export interface UpdateProduct {
   status?: 'active' | 'low_stock' | 'out_of_stock' | 'discontinued';
   description?: string;
   sku?: string;
+  imageUrl?: string;
+  imagePath?: string;
 }
 
 export interface PurchaseOrder {
@@ -192,11 +199,87 @@ export const updateProduct = async (productId: string, updates: UpdateProduct): 
 
 export const deleteProduct = async (productId: string): Promise<void> => {
   try {
+    // Get the product first to check if it has an image
+    const product = await getProduct(productId);
+    
+    // Delete the image if it exists
+    if (product?.imagePath) {
+      try {
+        await deleteImage(product.imagePath);
+      } catch (imageError) {
+        console.warn('Failed to delete product image:', imageError);
+        // Continue with product deletion even if image deletion fails
+      }
+    }
+    
     const docRef = doc(db, PRODUCTS_COLLECTION, productId);
     await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting product:', error);
     throw new Error('Failed to delete product');
+  }
+};
+
+// Image upload function for products
+export const uploadProductImage = async (file: File, productId?: string): Promise<ImageUploadResult> => {
+  try {
+    const folder = 'products';
+    const fileName = productId ? `${productId}_${Date.now()}` : `product_${Date.now()}`;
+    return await uploadImage(file, folder, fileName);
+  } catch (error) {
+    console.error('Error uploading product image:', error);
+    throw new Error('Failed to upload product image');
+  }
+};
+
+// Update product with new image (and optionally delete old image)
+export const updateProductImage = async (productId: string, file: File): Promise<void> => {
+  try {
+    // Get current product to check for existing image
+    const currentProduct = await getProduct(productId);
+    
+    // Upload new image
+    const uploadResult = await uploadProductImage(file, productId);
+    
+    // Update product with new image data
+    await updateProduct(productId, {
+      imageUrl: uploadResult.url,
+      imagePath: uploadResult.path
+    });
+    
+    // Delete old image if it exists
+    if (currentProduct?.imagePath && currentProduct.imagePath !== uploadResult.path) {
+      try {
+        await deleteImage(currentProduct.imagePath);
+      } catch (imageError) {
+        console.warn('Failed to delete old product image:', imageError);
+        // Don't throw error, as the main operation succeeded
+      }
+    }
+  } catch (error) {
+    console.error('Error updating product image:', error);
+    throw new Error('Failed to update product image');
+  }
+};
+
+// Remove product image
+export const removeProductImage = async (productId: string): Promise<void> => {
+  try {
+    const currentProduct = await getProduct(productId);
+    
+    if (currentProduct?.imagePath) {
+      // Delete the image file
+      await deleteImage(currentProduct.imagePath);
+      
+      // Update product to remove image references
+      await updateProduct(productId, {
+        imageUrl: undefined,
+        imagePath: undefined
+      });
+    }
+  } catch (error) {
+    console.error('Error removing product image:', error);
+    throw new Error('Failed to remove product image');
   }
 };
 

@@ -35,6 +35,7 @@ import {
   getProductsBySupplier,
   createProduct,
   updateProduct,
+  uploadProductImage,
 
 
   getAllPurchaseOrders,
@@ -72,6 +73,10 @@ export default function ProductManagementPage() {
     stock: '',
     description: ''
   });
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editProductForm, setEditProductForm] = useState<UpdateProduct>({});
 
 
@@ -186,12 +191,30 @@ export default function ProductManagementPage() {
     }
   };
 
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
+
   const handleCreateProduct = async () => {
     if (!newProductForm.name || !newProductForm.category || !newProductForm.price || !user) {
       toast.error('Please fill in all required fields');
       return;
     }
     
+    setIsSubmitting(true);
     try {
       const productData: CreateProduct = {
         name: newProductForm.name,
@@ -203,6 +226,21 @@ export default function ProductManagementPage() {
         supplierName: user.displayName || user.email || 'Unknown',
         createdBy: user.id
       };
+
+      // Upload image if selected
+      if (selectedImage) {
+        setIsUploadingImage(true);
+        try {
+          const uploadResult = await uploadProductImage(selectedImage);
+          productData.imageUrl = uploadResult.url;
+          productData.imagePath = uploadResult.path;
+        } catch (imageError) {
+          console.error('Error uploading image:', imageError);
+          toast.error('Product created but image upload failed');
+        } finally {
+          setIsUploadingImage(false);
+        }
+      }
       
       await createProduct(productData);
       toast.success('Product created successfully');
@@ -213,8 +251,12 @@ export default function ProductManagementPage() {
         stock: '',
         description: ''
       });
+      setSelectedImage(null);
+      setImagePreview(null);
     } catch (error) {
       toast.error('Failed to create product');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -316,8 +358,57 @@ export default function ProductManagementPage() {
                   onChange={(e) => setNewProductForm(prev => ({ ...prev, description: e.target.value }))}
                 />
               </div>
-              <Button onClick={handleCreateProduct} className="w-full">
-                Add Product
+              
+              {/* Image Upload Section */}
+              <div className="space-y-2">
+                <Label>Product Image (Optional)</Label>
+                <div className="space-y-2">
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img 
+                        src={imagePreview} 
+                        alt="Product preview" 
+                        className="w-full h-32 object-cover rounded-md border"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={handleRemoveImage}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-md p-4 text-center">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                        id="product-image-upload"
+                      />
+                      <label 
+                        htmlFor="product-image-upload" 
+                        className="cursor-pointer flex flex-col items-center space-y-2"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                          <Plus className="h-4 w-4" />
+                        </div>
+                        <span className="text-sm text-muted-foreground">Click to upload image</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <Button 
+                onClick={handleCreateProduct} 
+                className="w-full"
+                disabled={isSubmitting || isUploadingImage}
+              >
+                {isUploadingImage ? 'Uploading Image...' : isSubmitting ? 'Creating...' : 'Add Product'}
               </Button>
             </div>
           </DialogContent>
@@ -345,6 +436,24 @@ export default function ProductManagementPage() {
           <Card key={product.id} className="hover:shadow-md transition-shadow">
             <CardContent className="pt-6">
               <div className="space-y-4">
+                {/* Product Image */}
+                <div className="w-full h-32 bg-muted rounded-md overflow-hidden">
+                  {product.imageUrl ? (
+                    <img 
+                      src={product.imageUrl} 
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <Package className="h-8 w-8 mx-auto mb-2" />
+                        <p className="text-xs">No image</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <h3 className="font-semibold">{product.name}</h3>
@@ -393,6 +502,24 @@ export default function ProductManagementPage() {
                           </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
+                          {/* Product Image */}
+                          <div className="w-full h-48 bg-muted rounded-md overflow-hidden">
+                            {selectedProduct.imageUrl ? (
+                              <img 
+                                src={selectedProduct.imageUrl} 
+                                alt={selectedProduct.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                                <div className="text-center">
+                                  <Package className="h-12 w-12 mx-auto mb-2" />
+                                  <p className="text-sm">No image available</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <Label className="text-sm font-medium">Category</Label>
@@ -474,7 +601,7 @@ export default function ProductManagementPage() {
                       {po.status}
                     </Badge>
                   </div>
-                  <p className="text-lg font-bold">${po.total.toLocaleString()}</p>
+                  <p className="text-lg font-bold">${(po.total || 0).toLocaleString()}</p>
                 </div>
                 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -502,7 +629,7 @@ export default function ProductManagementPage() {
                     <div key={index} className="flex justify-between items-center p-2 bg-muted/50 rounded">
                       <span className="text-sm">{item.productName}</span>
                       <span className="text-sm font-medium">
-                        {item.quantity} × ${item.price} = ${(item.quantity * item.price).toLocaleString()}
+                        {item.quantity} × ${item.price || 0} = ${((item.quantity || 0) * (item.price || 0)).toLocaleString()}
                       </span>
                     </div>
                   ))}

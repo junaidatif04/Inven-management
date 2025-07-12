@@ -306,7 +306,7 @@ export default function SupplierDashboard() {
                 <TrendingUp className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${supplierStats.monthlyRevenue.toLocaleString()}</div>
+                <div className="text-2xl font-bold">${(supplierStats.monthlyRevenue || 0).toLocaleString()}</div>
                 <p className="text-xs text-muted-foreground">This month</p>
               </CardContent>
             </Card>
@@ -410,7 +410,7 @@ export default function SupplierDashboard() {
                                   {po.status}
                                 </Badge>
                               </div>
-                              <p className="text-sm font-medium">${po.total.toLocaleString()}</p>
+                              <p className="text-sm font-medium">${(po.total || 0).toLocaleString()}</p>
                             </div>
                             <div className="text-xs text-muted-foreground">
                               <p>Requested: {formatDate(po.createdAt)}</p>
@@ -450,7 +450,7 @@ export default function SupplierDashboard() {
                                 </Badge>
                               </div>
                               <p className="text-xs text-muted-foreground">
-                                {po.items.length} items • ${po.total.toLocaleString()}
+                                {po.items.length} items • ${(po.total || 0).toLocaleString()}
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 Due: {formatDate(po.requestedDate)}

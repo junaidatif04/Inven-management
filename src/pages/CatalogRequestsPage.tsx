@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,128 +10,43 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { NavigationHeader } from '@/components/NavigationHeader';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Search,
   Filter,
   Eye,
   ShoppingCart,
-  Star
+  Package
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  CatalogRequest,
+  CatalogRequestItem,
+  createCatalogRequest,
+  getCatalogRequestsByUser,
+  subscribeToCatalogRequests
+} from '@/services/catalogRequestService';
+import { getAllProducts } from '@/services/productService';
+import { getAllInventoryItems } from '@/services/inventoryService';
 
-// Mock product catalog
-const productCatalog = [
-  { 
-    id: 'PROD-001', 
-    name: 'Laptop Dell XPS 13', 
-    category: 'Electronics', 
-    price: 1299, 
-    image: 'https://images.pexels.com/photos/205421/pexels-photo-205421.jpeg?auto=compress&cs=tinysrgb&w=200', 
-    inStock: true,
-    rating: 4.8,
-    description: 'High-performance laptop for professional use',
-    supplier: 'TechCorp Industries'
-  },
-  { 
-    id: 'PROD-002', 
-    name: 'Wireless Mouse', 
-    category: 'Accessories', 
-    price: 49, 
-    image: 'https://images.pexels.com/photos/2115257/pexels-photo-2115257.jpeg?auto=compress&cs=tinysrgb&w=200', 
-    inStock: true,
-    rating: 4.5,
-    description: 'Ergonomic wireless mouse with precision tracking',
-    supplier: 'Office Supplies Co'
-  },
-  { 
-    id: 'PROD-003', 
-    name: 'Office Chair Ergonomic', 
-    category: 'Furniture', 
-    price: 299, 
-    image: 'https://images.pexels.com/photos/586996/pexels-photo-586996.jpeg?auto=compress&cs=tinysrgb&w=200', 
-    inStock: false,
-    rating: 4.3,
-    description: 'Comfortable ergonomic office chair with lumbar support',
-    supplier: 'Furniture Plus'
-  },
-  { 
-    id: 'PROD-004', 
-    name: 'Monitor 27" 4K', 
-    category: 'Electronics', 
-    price: 399, 
-    image: 'https://images.pexels.com/photos/777001/pexels-photo-777001.jpeg?auto=compress&cs=tinysrgb&w=200', 
-    inStock: true,
-    rating: 4.7,
-    description: 'Ultra HD 4K monitor for enhanced productivity',
-    supplier: 'TechCorp Industries'
-  },
-  { 
-    id: 'PROD-005', 
-    name: 'Desk Lamp LED', 
-    category: 'Office', 
-    price: 79, 
-    image: 'https://images.pexels.com/photos/1036936/pexels-photo-1036936.jpeg?auto=compress&cs=tinysrgb&w=200', 
-    inStock: true,
-    rating: 4.2,
-    description: 'Adjustable LED desk lamp with multiple brightness levels',
-    supplier: 'Office Supplies Co'
-  },
-  { 
-    id: 'PROD-006', 
-    name: 'Keyboard Mechanical', 
-    category: 'Accessories', 
-    price: 129, 
-    image: 'https://images.pexels.com/photos/1772123/pexels-photo-1772123.jpeg?auto=compress&cs=tinysrgb&w=200', 
-    inStock: true,
-    rating: 4.6,
-    description: 'Mechanical keyboard with tactile switches',
-    supplier: 'TechCorp Industries'
-  },
-];
+// Default product image
+// Removed DEFAULT_PRODUCT_IMAGE - now showing 'No image' placeholder when no image is available
 
-// Mock user requests
-const myRequests = [
-  { 
-    id: 'REQ-001', 
-    items: [{ name: 'Laptop Dell XPS 13', quantity: 1, price: 1299 }], 
-    status: 'Approved', 
-    total: 1299, 
-    requestDate: '2024-01-10', 
-    progress: 75,
-    location: 'Building A, Floor 3',
-    justification: 'Need new laptop for development work'
-  },
-  { 
-    id: 'REQ-002', 
-    items: [{ name: 'Wireless Mouse', quantity: 2, price: 49 }], 
-    status: 'Pending', 
-    total: 98, 
-    requestDate: '2024-01-12', 
-    progress: 25,
-    location: 'Building A, Floor 3',
-    justification: 'Replace broken mice'
-  },
-  { 
-    id: 'REQ-003', 
-    items: [{ name: 'Monitor 27" 4K', quantity: 1, price: 399 }], 
-    status: 'Fulfilled', 
-    total: 399, 
-    requestDate: '2024-01-08', 
-    progress: 100,
-    location: 'Building A, Floor 3',
-    justification: 'Additional monitor for productivity'
-  },
-  { 
-    id: 'REQ-004', 
-    items: [{ name: 'Desk Lamp LED', quantity: 1, price: 79 }], 
-    status: 'Rejected', 
-    total: 79, 
-    requestDate: '2024-01-05', 
-    progress: 0,
-    location: 'Building A, Floor 3',
-    justification: 'Better lighting for workspace'
-  },
-];
+// Unified catalog item interface
+interface CatalogItem {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  price: number;
+  supplier: string;
+  imageUrl?: string;
+  type: 'product' | 'inventory';
+  // Additional fields for inventory items
+  quantity?: number;
+  sku?: string;
+  location?: string;
+}
 
 const sections = [
   { id: 'catalog', name: 'Product Catalog' },
@@ -139,25 +54,187 @@ const sections = [
 ];
 
 export default function CatalogRequestsPage() {
+  const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('catalog');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [selectedRequest, setSelectedRequest] = useState<any>(null);
-  const [cart, setCart] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<CatalogItem | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<CatalogRequest | null>(null);
+  const [cart, setCart] = useState<CatalogRequestItem[]>([]);
   const [requestForm, setRequestForm] = useState({
     location: '',
     justification: '',
-    priority: 'Medium'
+    priority: 'Medium' as 'Low' | 'Medium' | 'High' | 'Urgent'
   });
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [requests, setRequests] = useState<CatalogRequest[]>([]);
 
-  const categories = ['All', ...Array.from(new Set(productCatalog.map(p => p.category)))];
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user) return;
+      
+      try {
+
+        
+        // Load products and inventory items
+        const [productsData, inventoryData] = await Promise.all([
+          getAllProducts(),
+          getAllInventoryItems()
+        ]);
+        
+        // Convert products to catalog items
+        const productCatalogItems: CatalogItem[] = productsData.map(product => ({
+          id: product.id!,
+          name: product.name,
+          description: product.description,
+          category: product.category,
+          price: product.price,
+          supplier: product.supplierName,
+          imageUrl: product.imageUrl,
+          type: 'product' as const
+        }));
+        
+        // Convert inventory items to catalog items
+        const inventoryCatalogItems: CatalogItem[] = inventoryData.map(item => ({
+          id: item.id!,
+          name: item.name,
+          description: item.description,
+          category: item.category,
+          price: item.unitPrice,
+          supplier: item.supplier,
+          imageUrl: item.imageUrl,
+          type: 'inventory' as const,
+          quantity: item.quantity,
+          sku: item.sku,
+          location: item.location
+        }));
+        
+        // Combine both types of items
+        const allCatalogItems = [...productCatalogItems, ...inventoryCatalogItems];
+        setCatalogItems(allCatalogItems);
+        
+        // Load user requests
+        const requestsData = await getCatalogRequestsByUser(user.id);
+        setRequests(requestsData);
+        
+      } catch (error) {
+        console.error('Error loading data:', error);
+        toast.error('Failed to load data');
+      } finally {
+
+      }
+    };
+
+    loadData();
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToCatalogRequests((updatedRequests) => {
+      const userRequests = updatedRequests.filter(req => req.userId === user?.id);
+      setRequests(userRequests);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const categories = ['All', ...Array.from(new Set(catalogItems.map(item => item.category)))];
   
-  const filteredProducts = productCatalog.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
+  const filteredCatalogItems = catalogItems.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const addToCart = (catalogItem: CatalogItem) => {
+    const existingItem = cart.find(item => item.productId === catalogItem.id);
+    if (existingItem) {
+      setCart(cart.map(item => 
+        item.productId === catalogItem.id 
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ));
+    } else {
+      const newItem: CatalogRequestItem = {
+        productId: catalogItem.id,
+        productName: catalogItem.name,
+        quantity: 1,
+        price: catalogItem.price,
+        category: catalogItem.category,
+        supplier: catalogItem.supplier
+      };
+      setCart([...cart, newItem]);
+    }
+    toast.success(`${catalogItem.name} added to cart`);
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(cart.filter(item => item.productId !== productId));
+    toast.success('Item removed from cart');
+  };
+
+
+
+  const getTotalAmount = () => {
+    return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
+  const submitRequest = async () => {
+    if (!user) {
+      toast.error('Please log in to submit a request');
+      return;
+    }
+
+    if (cart.length === 0) {
+      toast.error('Please add items to your cart before submitting');
+      return;
+    }
+
+    if (!requestForm.location || !requestForm.justification) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      const requestData = {
+        userId: user.id,
+        userName: user.name || user.email,
+        userEmail: user.email,
+        items: cart,
+        location: requestForm.location,
+        justification: requestForm.justification,
+        priority: requestForm.priority,
+        totalAmount: getTotalAmount()
+      };
+
+      await createCatalogRequest(requestData);
+      
+      // Reset form and cart
+      setCart([]);
+      setRequestForm({
+        location: '',
+        justification: '',
+        priority: 'Medium'
+      });
+      
+      // Refresh requests
+      const updatedRequests = await getCatalogRequestsByUser(user.id);
+      setRequests(updatedRequests);
+      
+      toast.success('Request submitted successfully!');
+      setActiveSection('requests');
+      
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      toast.error('Failed to submit request');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -173,51 +250,17 @@ export default function CatalogRequestsPage() {
     }
   };
 
-  const addToCart = (product: any) => {
-    const existingItem = cart.find(item => item.id === product.id);
-    if (existingItem) {
-      setCart(cart.map(item => 
-        item.id === product.id 
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
-    } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'Urgent': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      case 'High': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+      case 'Medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'Low': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
-    toast.success(`${product.name} added to cart`);
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter(item => item.id !== productId));
-    toast.success('Item removed from cart');
-  };
 
-  const submitRequest = () => {
-    if (cart.length === 0) {
-      toast.error('Please add items to cart first');
-      return;
-    }
-    if (!requestForm.location || !requestForm.justification) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-    toast.success('Request submitted successfully');
-    setCart([]);
-    setRequestForm({
-      location: '',
-      justification: '',
-      priority: 'Medium'
-    });
-  };
-
-  const getRatingStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        className={`h-3 w-3 ${i < Math.floor(rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
-      />
-    ));
-  };
 
   const getCurrentSectionName = () => {
     return sections.find(s => s.id === activeSection)?.name || '';
@@ -229,7 +272,7 @@ export default function CatalogRequestsPage() {
         <div>
           <h2 className="text-xl font-semibold">Product Catalog</h2>
           <p className="text-sm text-muted-foreground">
-            Browse and select products for your requests
+            Browse and select products and inventory items for your requests
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -260,26 +303,26 @@ export default function CatalogRequestsPage() {
                   <>
                     <ScrollArea className="h-[300px]">
                       <div className="space-y-3">
-                        {cart.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        {cart.map((item, index) => (
+                          <div key={`${item.productId}-${index}`} className="flex items-center justify-between p-3 border rounded-lg">
                             <div className="flex items-center space-x-3">
-                              <img 
-                                src={item.image} 
-                                alt={item.name} 
-                                className="w-12 h-12 object-cover rounded"
-                              />
+                              <div className="w-12 h-12 bg-muted rounded overflow-hidden flex-shrink-0">
+                                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                                  <Package className="h-4 w-4" />
+                                </div>
+                              </div>
                               <div>
-                                <p className="font-medium">{item.name}</p>
-                                <p className="text-sm text-muted-foreground">${item.price} each</p>
+                                <p className="font-medium">{item.productName}</p>
+                                <p className="text-sm text-muted-foreground">${item.price.toFixed(2)} each</p>
                               </div>
                             </div>
                             <div className="flex items-center space-x-2">
                               <span className="font-medium">Qty: {item.quantity}</span>
-                              <span className="font-bold">${(item.price * item.quantity).toLocaleString()}</span>
+                              <span className="font-bold">${(item.price * item.quantity).toFixed(2)}</span>
                               <Button 
                                 size="sm" 
                                 variant="outline"
-                                onClick={() => removeFromCart(item.id)}
+                                onClick={() => removeFromCart(item.productId)}
                               >
                                 Remove
                               </Button>
@@ -292,7 +335,7 @@ export default function CatalogRequestsPage() {
                     <div className="border-t pt-4">
                       <div className="flex justify-between text-lg font-bold mb-4">
                         <span>Total:</span>
-                        <span>${cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()}</span>
+                        <span>${cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}</span>
                       </div>
                       
                       <div className="space-y-4">
@@ -307,7 +350,7 @@ export default function CatalogRequestsPage() {
                           </div>
                           <div className="space-y-2">
                             <Label>Priority</Label>
-                            <Select value={requestForm.priority} onValueChange={(value) => setRequestForm(prev => ({ ...prev, priority: value }))}>
+                            <Select value={requestForm.priority} onValueChange={(value) => setRequestForm(prev => ({ ...prev, priority: value as 'Low' | 'Medium' | 'High' | 'Urgent' }))}>
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
@@ -315,6 +358,7 @@ export default function CatalogRequestsPage() {
                                 <SelectItem value="Low">Low</SelectItem>
                                 <SelectItem value="Medium">Medium</SelectItem>
                                 <SelectItem value="High">High</SelectItem>
+                                <SelectItem value="Urgent">Urgent</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -329,8 +373,12 @@ export default function CatalogRequestsPage() {
                           />
                         </div>
                         
-                        <Button onClick={submitRequest} className="w-full">
-                          Submit Request
+                        <Button 
+                          onClick={submitRequest} 
+                          className="w-full"
+                          disabled={cart.length === 0 || !requestForm.location || !requestForm.justification || submitting}
+                        >
+                          {submitting ? 'Submitting...' : 'Submit Request'}
                         </Button>
                       </div>
                     </div>
@@ -349,7 +397,7 @@ export default function CatalogRequestsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search products..."
+                placeholder="Search products and inventory..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
@@ -375,33 +423,53 @@ export default function CatalogRequestsPage() {
         </CardContent>
       </Card>
 
-      {/* Product Grid */}
+      {/* Catalog Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {filteredProducts.map((product) => (
-          <Card key={product.id} className="overflow-hidden hover:shadow-md transition-shadow">
-            <div className="relative">
-              <img 
-                src={product.image} 
-                alt={product.name} 
-                className="w-full h-48 object-cover"
-              />
+        {filteredCatalogItems.map((item) => (
+          <Card key={item.id} className="overflow-hidden hover:shadow-md transition-shadow">
+            <div className="relative w-full h-48 bg-muted overflow-hidden">
+              {item.imageUrl ? (
+                <img 
+                  src={item.imageUrl} 
+                  alt={item.name} 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                  <div className="text-center">
+                    <Package className="h-12 w-12 mx-auto mb-2" />
+                    <p className="text-sm">No image</p>
+                  </div>
+                </div>
+              )}
+              {/* Type indicator */}
+              <div className="absolute top-2 left-2">
+                <Badge variant={item.type === 'inventory' ? 'default' : 'secondary'} className="text-xs">
+                  {item.type === 'inventory' ? 'Inventory' : 'Product'}
+                </Badge>
+              </div>
             </div>
             <CardContent className="p-4">
               <div className="space-y-3">
                 <div>
-                  <h3 className="font-semibold truncate">{product.name}</h3>
-                  <p className="text-sm text-muted-foreground">{product.category}</p>
-                  <div className="flex items-center space-x-1 mt-1">
-                    {getRatingStars(product.rating)}
-                    <span className="text-sm text-muted-foreground ml-1">({product.rating})</span>
-                  </div>
+                  <h3 className="font-semibold truncate">{item.name}</h3>
+                  <p className="text-sm text-muted-foreground">{item.category}</p>
+                  {item.sku && (
+                    <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
+                  )}
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <p className="text-lg font-bold">${product.price}</p>
-                  <Badge variant={product.inStock ? 'default' : 'secondary'}>
-                    {product.inStock ? 'In Stock' : 'Out of Stock'}
-                  </Badge>
+                  <p className="text-lg font-bold">${item.price.toFixed(2)}</p>
+                  {item.type === 'inventory' ? (
+                    <Badge variant={item.quantity && item.quantity > 0 ? 'default' : 'secondary'}>
+                      {item.quantity && item.quantity > 0 ? `Stock: ${item.quantity}` : 'Out of Stock'}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">
+                      Product
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="flex space-x-2">
@@ -411,7 +479,7 @@ export default function CatalogRequestsPage() {
                         size="sm" 
                         variant="outline" 
                         className="flex-1"
-                        onClick={() => setSelectedProduct(product)}
+                        onClick={() => setSelectedProduct(item)}
                       >
                         <Eye className="h-3 w-3 mr-1" />
                         View
@@ -422,47 +490,77 @@ export default function CatalogRequestsPage() {
                         <DialogHeader>
                           <DialogTitle>{selectedProduct.name}</DialogTitle>
                           <DialogDescription>
-                            Product details and specifications
+                            {selectedProduct.type === 'inventory' ? 'Inventory item' : 'Product'} details and specifications
                           </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
-                          <img 
-                            src={selectedProduct.image} 
-                            alt={selectedProduct.name} 
-                            className="w-full h-48 object-cover rounded"
-                          />
+                          <div className="w-full h-48 bg-muted rounded overflow-hidden">
+                            {selectedProduct.imageUrl ? (
+                              <img 
+                                src={selectedProduct.imageUrl} 
+                                alt={selectedProduct.name} 
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                                <div className="text-center">
+                                  <Package className="h-12 w-12 mx-auto mb-2" />
+                                  <p className="text-sm">No image</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Type:</span>
+                              <Badge variant={selectedProduct.type === 'inventory' ? 'default' : 'secondary'}>
+                                {selectedProduct.type === 'inventory' ? 'Inventory' : 'Product'}
+                              </Badge>
+                            </div>
                             <div className="flex justify-between">
                               <span className="text-sm text-muted-foreground">Category:</span>
                               <span className="text-sm">{selectedProduct.category}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-sm text-muted-foreground">Price:</span>
-                              <span className="text-sm font-bold">${selectedProduct.price}</span>
+                              <span className="text-sm font-bold">${selectedProduct.price.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-sm text-muted-foreground">Supplier:</span>
                               <span className="text-sm">{selectedProduct.supplier}</span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-muted-foreground">Rating:</span>
-                              <div className="flex items-center space-x-1">
-                                {getRatingStars(selectedProduct.rating)}
-                                <span className="text-sm">({selectedProduct.rating})</span>
+                            {selectedProduct.sku && (
+                              <div className="flex justify-between">
+                                <span className="text-sm text-muted-foreground">SKU:</span>
+                                <span className="text-sm">{selectedProduct.sku}</span>
                               </div>
+                            )}
+                            {selectedProduct.type === 'inventory' && selectedProduct.quantity !== undefined && (
+                              <div className="flex justify-between">
+                                <span className="text-sm text-muted-foreground">Available:</span>
+                                <span className="text-sm">{selectedProduct.quantity} units</span>
+                              </div>
+                            )}
+                            {selectedProduct.location && (
+                              <div className="flex justify-between">
+                                <span className="text-sm text-muted-foreground">Location:</span>
+                                <span className="text-sm">{selectedProduct.location}</span>
+                              </div>
+                            )}
+                          </div>
+                          {selectedProduct.description && (
+                            <div>
+                              <Label className="text-sm font-medium">Description</Label>
+                              <p className="text-sm text-muted-foreground mt-1">{selectedProduct.description}</p>
                             </div>
-                          </div>
-                          <div>
-                            <Label className="text-sm font-medium">Description</Label>
-                            <p className="text-sm text-muted-foreground mt-1">{selectedProduct.description}</p>
-                          </div>
+                          )}
                           <Button 
                             onClick={() => addToCart(selectedProduct)} 
                             className="w-full"
-                            disabled={!selectedProduct.inStock}
+                            disabled={selectedProduct.type === 'inventory' && (!selectedProduct.quantity || selectedProduct.quantity === 0)}
                           >
                             <ShoppingCart className="mr-2 h-4 w-4" />
-                            {selectedProduct.inStock ? 'Add to Cart' : 'Out of Stock'}
+                            {selectedProduct.type === 'inventory' && (!selectedProduct.quantity || selectedProduct.quantity === 0) ? 'Out of Stock' : 'Add to Cart'}
                           </Button>
                         </div>
                       </DialogContent>
@@ -471,8 +569,8 @@ export default function CatalogRequestsPage() {
                   <Button 
                     size="sm" 
                     className="flex-1"
-                    onClick={() => addToCart(product)}
-                    disabled={!product.inStock}
+                    onClick={() => addToCart(item)}
+                    disabled={item.type === 'inventory' && (!item.quantity || item.quantity === 0)}
                   >
                     <ShoppingCart className="h-3 w-3 mr-1" />
                     Add
@@ -498,100 +596,97 @@ export default function CatalogRequestsPage() {
       <Card>
         <CardContent className="p-6">
           <div className="space-y-4">
-            {myRequests.map((request) => (
+            {requests.map((request) => (
               <div key={request.id} className="p-4 border rounded-lg space-y-3 hover:bg-muted/50 transition-colors">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <p className="font-medium">{request.id}</p>
-                    <Badge variant={getStatusBadgeVariant(request.status)}>
-                      {request.status}
-                    </Badge>
+                  <div>
+                    <h4 className="font-semibold">Request #{request.id}</h4>
+                    <p className="text-sm text-muted-foreground">{request.createdAt ? new Date(request.createdAt.toDate()).toLocaleDateString() : 'N/A'}</p>
                   </div>
-                  <p className="font-bold">${request.total}</p>
-                </div>
-                
-                <div className="space-y-1">
-                  {request.items.map((item, index) => (
-                    <p key={index} className="text-sm text-muted-foreground">
-                      {item.name} × {item.quantity}
-                    </p>
-                  ))}
+                  <Badge variant={getStatusBadgeVariant(request.status)}>
+                    {request.status}
+                  </Badge>
                 </div>
                 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Progress</span>
-                    <span className="font-medium">{request.progress}%</span>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Items:</span>
+                    <span>{request.items.length} items</span>
                   </div>
-                  <Progress value={request.progress} className="h-2" />
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="font-semibold">${(request.totalAmount || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                     <span className="text-muted-foreground">Priority:</span>
+                     <Badge variant="outline" className={getPriorityColor(request.priority)}>
+                       {request.priority}
+                     </Badge>
+                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Location:</span>
+                    <span>{request.location}</span>
+                  </div>
                 </div>
                 
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Requested: {request.requestDate}
-                  </span>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => setSelectedRequest(request)}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View Details
-                      </Button>
-                    </DialogTrigger>
-                    {selectedRequest && (
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>Request Details</DialogTitle>
-                          <DialogDescription>
-                            {selectedRequest.id} - {selectedRequest.status}
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label className="text-sm font-medium">Status</Label>
-                              <Badge variant={getStatusBadgeVariant(selectedRequest.status)} className="mt-1">
-                                {selectedRequest.status}
-                              </Badge>
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Total</Label>
-                              <p className="text-sm font-bold">${selectedRequest.total}</p>
-                            </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setSelectedRequest(request)}
+                  className="w-full"
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  View Details
+                </Button>
+                
+                {selectedRequest && selectedRequest.id === request.id && (
+                  <Dialog open={true} onOpenChange={() => setSelectedRequest(null)}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Request Details</DialogTitle>
+                        <DialogDescription>
+                          Request #{selectedRequest.id} - {selectedRequest.status}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm font-medium">Status</Label>
+                            <Badge variant={getStatusBadgeVariant(selectedRequest.status)} className="mt-1">
+                              {selectedRequest.status}
+                            </Badge>
                           </div>
                           <div>
-                            <Label className="text-sm font-medium">Items</Label>
-                            <div className="mt-1 space-y-1">
-                              {selectedRequest.items.map((item: any, index: number) => (
-                                <p key={index} className="text-sm">
-                                  {item.name} × {item.quantity} = ${(item.price * item.quantity).toLocaleString()}
-                                </p>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <Label className="text-sm font-medium">Location</Label>
-                            <p className="text-sm">{selectedRequest.location}</p>
-                          </div>
-                          <div>
-                            <Label className="text-sm font-medium">Justification</Label>
-                            <p className="text-sm text-muted-foreground">{selectedRequest.justification}</p>
-                          </div>
-                          <div>
-                            <Label className="text-sm font-medium">Progress</Label>
-                            <div className="mt-1">
-                              <Progress value={selectedRequest.progress} className="h-2" />
-                              <p className="text-sm text-muted-foreground mt-1">{selectedRequest.progress}% complete</p>
-                            </div>
+                            <Label className="text-sm font-medium">Total</Label>
+                            <p className="text-sm font-bold">${(selectedRequest.totalAmount || 0).toFixed(2)}</p>
                           </div>
                         </div>
-                      </DialogContent>
-                    )}
+                        <div>
+                          <Label className="text-sm font-medium">Items</Label>
+                          <div className="mt-1 space-y-1">
+                            {selectedRequest.items.map((item: any, index: number) => (
+                              <p key={index} className="text-sm">
+                                {item.productName} × {item.quantity} = ${(item.price * item.quantity).toFixed(2)}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Location</Label>
+                          <p className="text-sm">{selectedRequest.location}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Justification</Label>
+                          <p className="text-sm text-muted-foreground">{selectedRequest.justification}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Priority</Label>
+                          <p className="text-sm">{selectedRequest.priority}</p>
+                        </div>
+                      </div>
+                    </DialogContent>
                   </Dialog>
-                </div>
+                )}
               </div>
             ))}
           </div>

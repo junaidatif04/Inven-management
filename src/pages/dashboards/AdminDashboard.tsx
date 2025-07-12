@@ -16,6 +16,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 import { DashboardStats } from '@/services/analyticsService';
 import { subscribeToRecentOrders } from '@/services/orderService';
 import { Order } from '@/services/orderService';
@@ -23,6 +24,8 @@ import { getAllInventoryItems } from '@/services/inventoryService';
 import { getAllOrders } from '@/services/orderService';
 import { getAllUsers } from '@/services/userService';
 import { getAllSuppliers } from '@/services/supplierService';
+import { Supplier } from '@/types/inventory';
+import { createSampleSuppliers } from '@/utils/sampleData';
 
 
 
@@ -31,6 +34,7 @@ import { getAllSuppliers } from '@/services/supplierService';
 
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalInventoryValue: 0,
     lowStockAlerts: 0,
@@ -48,6 +52,29 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
+  // Authentication guard
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
+          <p className="text-gray-600">Please log in to access the admin dashboard.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (user.role !== 'admin') {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+          <p className="text-gray-600">You don't have permission to access the admin dashboard.</p>
+        </div>
+      </div>
+    );
+  }
+
   const loadRealData = async () => {
     try {
       setLoading(true);
@@ -56,7 +83,29 @@ export default function AdminDashboard() {
       const inventoryItems = await getAllInventoryItems();
       const orders = await getAllOrders();
       const users = await getAllUsers();
-      const suppliers = await getAllSuppliers();
+      
+      // Handle suppliers with fallback to sample data creation
+      let suppliers: Supplier[] = [];
+      try {
+        suppliers = await getAllSuppliers();
+        // If no suppliers exist, create sample suppliers
+        if (suppliers.length === 0) {
+          console.log('No suppliers found, creating sample suppliers...');
+          await createSampleSuppliers();
+          suppliers = await getAllSuppliers();
+          toast.success('Sample suppliers created successfully!');
+        }
+      } catch (error) {
+        console.log('Error fetching suppliers, creating sample suppliers...', error);
+        try {
+          await createSampleSuppliers();
+          suppliers = await getAllSuppliers();
+          toast.success('Sample suppliers created successfully!');
+        } catch (sampleError) {
+          console.error('Failed to create sample suppliers:', sampleError);
+          toast.error('Failed to load suppliers data');
+        }
+      }
 
       // Calculate real inventory value
       const totalInventoryValue = inventoryItems.reduce((sum, item) =>

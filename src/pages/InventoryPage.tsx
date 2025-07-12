@@ -37,7 +37,10 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
-  RotateCcw
+  RotateCcw,
+  Upload,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,6 +52,7 @@ import {
   deleteInventoryItem,
   adjustStock
 } from '@/services/inventoryService';
+import { uploadImage, deleteImage } from '@/services/imageUploadService';
 
 export default function InventoryPage() {
   const { user } = useAuth();
@@ -76,8 +80,14 @@ export default function InventoryPage() {
     maxStockLevel: 0,
     unitPrice: 0,
     supplier: '',
-    location: ''
+    location: '',
+    imageUrl: '',
+    imagePath: ''
   });
+  
+  // Image upload states
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>('');
   
   const [stockAdjustment, setStockAdjustment] = useState({
     type: 'in' as 'in' | 'out' | 'adjustment',
@@ -130,7 +140,16 @@ export default function InventoryPage() {
     try {
       if (!user) return;
       
-      await createInventoryItem(formData, user.id);
+      let finalFormData = { ...formData };
+      
+      // Upload image if selected
+      if (selectedImage) {
+        const uploadResult = await uploadImage(selectedImage, 'inventory');
+        finalFormData.imageUrl = uploadResult.url;
+        finalFormData.imagePath = uploadResult.path;
+      }
+      
+      await createInventoryItem(finalFormData, user.id);
       toast.success('Item created successfully');
       setIsCreateDialogOpen(false);
       resetForm();
@@ -144,7 +163,25 @@ export default function InventoryPage() {
     try {
       if (!user || !selectedItem) return;
       
-      await updateInventoryItem({ id: selectedItem.id, ...formData }, user.id);
+      let finalFormData = { ...formData };
+      
+      // Upload new image if selected
+      if (selectedImage) {
+        // Delete old image if exists
+        if (formData.imagePath) {
+          try {
+            await deleteImage(formData.imagePath);
+          } catch (error) {
+            console.error('Failed to delete old image:', error);
+          }
+        }
+        
+        const uploadResult = await uploadImage(selectedImage, 'inventory');
+        finalFormData.imageUrl = uploadResult.url;
+        finalFormData.imagePath = uploadResult.path;
+      }
+      
+      await updateInventoryItem({ id: selectedItem.id, ...finalFormData }, user.id);
       toast.success('Item updated successfully');
       setIsEditDialogOpen(false);
       resetForm();
@@ -201,8 +238,12 @@ export default function InventoryPage() {
       maxStockLevel: 0,
       unitPrice: 0,
       supplier: '',
-      location: ''
+      location: '',
+      imageUrl: '',
+      imagePath: ''
     });
+    setSelectedImage(null);
+    setImagePreview('');
   };
 
   const openEditDialog = (item: InventoryItem) => {
@@ -217,8 +258,12 @@ export default function InventoryPage() {
       maxStockLevel: item.maxStockLevel,
       unitPrice: item.unitPrice,
       supplier: item.supplier,
-      location: item.location
+      location: item.location,
+      imageUrl: item.imageUrl || '',
+      imagePath: item.imagePath || ''
     });
+    setImagePreview(item.imageUrl || '');
+    setSelectedImage(null);
     setIsEditDialogOpen(true);
   };
 
@@ -240,6 +285,31 @@ export default function InventoryPage() {
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
+  };
+
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (formData.imagePath) {
+      try {
+        await deleteImage(formData.imagePath);
+        setFormData(prev => ({ ...prev, imageUrl: '', imagePath: '' }));
+      } catch (error) {
+        console.error('Failed to delete image:', error);
+      }
+    }
+    setSelectedImage(null);
+    setImagePreview('');
   };
 
   if (loading) {
@@ -566,6 +636,47 @@ export default function InventoryPage() {
                 placeholder="Enter storage location"
               />
             </div>
+            
+            {/* Image Upload Section */}
+            <div className="space-y-2 col-span-2">
+              <Label>Item Image (Optional)</Label>
+              <div className="space-y-4">
+                {imagePreview ? (
+                  <div className="relative">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-32 h-32 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                      onClick={handleRemoveImage}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center">
+                    <ImageIcon className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Upload an image for this item</p>
+                    <Upload className="h-4 w-4 inline mr-1" />
+                    <label htmlFor="image-upload" className="text-blue-600 hover:text-blue-700 cursor-pointer text-sm font-medium">
+                      Choose file
+                    </label>
+                    <input
+                      id="image-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
@@ -672,6 +783,47 @@ export default function InventoryPage() {
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                 placeholder="Enter storage location"
               />
+            </div>
+            
+            {/* Image Upload Section */}
+            <div className="space-y-2 col-span-2">
+              <Label>Item Image (Optional)</Label>
+              <div className="space-y-4">
+                {imagePreview ? (
+                  <div className="relative">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-32 h-32 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                      onClick={handleRemoveImage}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center">
+                    <ImageIcon className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Upload an image for this item</p>
+                    <Upload className="h-4 w-4 inline mr-1" />
+                    <label htmlFor="edit-image-upload" className="text-blue-600 hover:text-blue-700 cursor-pointer text-sm font-medium">
+                      Choose file
+                    </label>
+                    <input
+                      id="edit-image-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <DialogFooter>

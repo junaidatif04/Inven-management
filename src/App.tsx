@@ -82,7 +82,7 @@ function App() {
     <ThemeProvider defaultTheme="light" storageKey="inventory-ui-theme">
       <AuthProvider>
         <NotificationProvider>
-          <Router basename={import.meta.env.PROD ? '/Inven-management' : '/'}>
+          <Router>
             <div className="min-h-screen bg-background">
               <Routes>
                 <Route path="/" element={<LandingPage />} />

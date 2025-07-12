@@ -65,6 +65,8 @@ export default function WarehouseManagementPage() {
     notes: ''
   });
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  const [showCreateShipment, setShowCreateShipment] = useState(false);
+  const [showStockEntry, setShowStockEntry] = useState(false);
   const [showEditShipment, setShowEditShipment] = useState(false);
   const [showStatusUpdate, setShowStatusUpdate] = useState(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
@@ -133,6 +135,8 @@ export default function WarehouseManagementPage() {
         notes: ''
       });
       
+      setShowStockEntry(false);
+      
       // Reload stock movements
       const updatedMovements = await getStockMovements();
       setStockEntries(updatedMovements);
@@ -177,6 +181,8 @@ export default function WarehouseManagementPage() {
         value: '',
         notes: ''
       });
+      
+      setShowCreateShipment(false);
     } catch (error) {
       toast.error('Failed to create shipment');
     }
@@ -323,13 +329,12 @@ export default function WarehouseManagementPage() {
             Track all stock movements and adjustments
           </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Stock Entry
-            </Button>
-          </DialogTrigger>
+        <Button onClick={() => setShowStockEntry(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Stock Entry
+        </Button>
+        
+        <Dialog open={showStockEntry} onOpenChange={setShowStockEntry}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>New Stock Entry</DialogTitle>
@@ -447,13 +452,12 @@ export default function WarehouseManagementPage() {
             Track incoming and outgoing shipments
           </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Truck className="mr-2 h-4 w-4" />
-              New Shipment
-            </Button>
-          </DialogTrigger>
+        <Button onClick={() => setShowCreateShipment(true)}>
+          <Truck className="mr-2 h-4 w-4" />
+          New Shipment
+        </Button>
+        
+        <Dialog open={showCreateShipment} onOpenChange={setShowCreateShipment}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Create New Shipment</DialogTitle>

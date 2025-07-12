@@ -203,6 +203,24 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
     
+    // Shipments collection - warehouse and admin access
+    match /shipments/{shipmentId} {
+      // All authenticated users can read shipments
+      allow read: if isAuthenticated();
+      
+      // Only warehouse staff and admins can modify shipments
+      allow create, update, delete: if hasWarehouseAccess();
+    }
+    
+    // Stock movements collection - warehouse and admin access
+    match /stockMovements/{movementId} {
+      // All authenticated users can read stock movements
+      allow read: if isAuthenticated();
+      
+      // Only warehouse staff and admins can create stock movements
+      allow create, update, delete: if hasWarehouseAccess();
+    }
+    
     // Default deny rule for any other collections
     match /{document=**} {
       allow read, write: if false;

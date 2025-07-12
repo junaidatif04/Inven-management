@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,76 +13,151 @@ import {
   TruckIcon as Truck, 
   Plus, 
   Minus, 
-  Search,
+
   PackageCheck,
-  PackageX,
-  BarChart3
+  PackageX
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Mock data
-const shipments = {
-  incoming: [
-    { id: 'SH-001', supplier: 'TechCorp Industries', items: 15, status: 'In Transit', eta: '2024-01-16' },
-    { id: 'SH-002', supplier: 'Office Supplies Co', items: 8, status: 'Arriving Today', eta: '2024-01-15' },
-    { id: 'SH-003', supplier: 'Furniture Plus', items: 3, status: 'Delayed', eta: '2024-01-17' },
-  ],
-  outgoing: [
-    { id: 'OUT-001', destination: 'IT Department', items: 5, status: 'Ready to Ship', requestedBy: 'Alice Johnson' },
-    { id: 'OUT-002', destination: 'Marketing', items: 2, status: 'Processing', requestedBy: 'Bob Smith' },
-    { id: 'OUT-003', destination: 'HR', items: 8, status: 'Shipped', requestedBy: 'Carol Davis' },
-  ]
-};
-
-const quickStats = {
-  totalItems: 1247,
-  lowStock: 12,
-  recentUpdates: 23,
-  pendingShipments: 6
-};
+import { useAuth } from '@/contexts/AuthContext';
+import { getAllInventoryItems, adjustStock, getLowStockItems } from '@/services/inventoryService';
+import { getAllShipments, subscribeToShipments, Shipment } from '@/services/shipmentService';
+import { InventoryItem } from '@/types/inventory';
 
 export default function WarehouseDashboard() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [stockForm, setStockForm] = useState({
     productId: '',
     quantity: '',
     action: 'in',
     notes: ''
   });
+  
+  // Real-time data states
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Computed stats from real data
+  const quickStats = {
+    totalItems: inventoryItems.reduce((sum, item) => sum + item.quantity, 0),
+    lowStock: lowStockItems.length,
+    recentUpdates: inventoryItems.filter(item => {
+      const updatedAt = item.lastUpdated?.toDate ? item.lastUpdated.toDate() : new Date(item.lastUpdated || 0);
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      return updatedAt > yesterday;
+    }).length,
+    pendingShipments: shipments.filter(s => s.status === 'pending' || s.status === 'processing').length
+  };
+  
+  const incomingShipments = shipments.filter(s => s.type === 'incoming');
+  const outgoingShipments = shipments.filter(s => s.type === 'outgoing');
+  
+  useEffect(() => {
+    loadInitialData();
+    
+    // Set up real-time subscription for shipments
+    const unsubscribe = subscribeToShipments((updatedShipments) => {
+      setShipments(updatedShipments);
+    });
+    
+    return () => unsubscribe();
+  }, []);
+  
+  const loadInitialData = async () => {
+    try {
+      setIsLoading(true);
+      const [inventoryData, lowStockData, shipmentsData] = await Promise.all([
+        getAllInventoryItems(),
+        getLowStockItems(),
+        getAllShipments()
+      ]);
+      
+      setInventoryItems(inventoryData);
+      setLowStockItems(lowStockData);
+      setShipments(shipmentsData);
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const handleStockUpdate = (e: React.FormEvent) => {
+  const handleStockUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stockForm.productId || !stockForm.quantity) {
+    if (!stockForm.productId || !stockForm.quantity || !user) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    const action = stockForm.action === 'in' ? 'added to' : 'removed from';
-    toast.success(`${stockForm.quantity} units ${action} inventory for ${stockForm.productId}`);
-    
-    // Reset form
-    setStockForm({
-      productId: '',
-      quantity: '',
-      action: 'in',
-      notes: ''
-    });
+    try {
+      await adjustStock(
+        stockForm.productId,
+        parseInt(stockForm.quantity),
+        stockForm.action as 'in' | 'out',
+        stockForm.notes || 'Quick stock update from dashboard',
+        user.id,
+        stockForm.notes
+      );
+      
+      const action = stockForm.action === 'in' ? 'added to' : 'removed from';
+      toast.success(`${stockForm.quantity} units ${action} inventory`);
+      
+      // Reset form and reload data
+      setStockForm({
+        productId: '',
+        quantity: '',
+        action: 'in',
+        notes: ''
+      });
+      
+      // Refresh inventory data
+      const [inventoryData, lowStockData] = await Promise.all([
+        getAllInventoryItems(),
+        getLowStockItems()
+      ]);
+      setInventoryItems(inventoryData);
+      setLowStockItems(lowStockData);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update stock');
+    }
+  };
+
+  const handleNewShipment = () => {
+    navigate('/warehouse-management');
   };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'Arriving Today':
-      case 'Ready to Ship':
+      case 'arriving_today':
+      case 'ready_to_ship':
+      case 'delivered':
         return 'default';
-      case 'In Transit':
-      case 'Processing':
+      case 'in_transit':
+      case 'processing':
         return 'secondary';
-      case 'Delayed':
+      case 'cancelled':
         return 'destructive';
-      case 'Shipped':
+      case 'pending':
         return 'outline';
       default:
         return 'outline';
     }
+  };
+  
+  const formatStatusText = (status: string) => {
+    return status.split('_').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  };
+  
+  const formatDate = (date: any) => {
+    if (!date) return 'N/A';
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    return dateObj.toLocaleDateString();
   };
 
   return (
@@ -94,11 +170,7 @@ export default function WarehouseDashboard() {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline">
-            <BarChart3 className="mr-2 h-4 w-4" />
-            View Reports
-          </Button>
-          <Button>
+          <Button onClick={handleNewShipment}>
             <Plus className="mr-2 h-4 w-4" />
             New Shipment
           </Button>
@@ -166,17 +238,19 @@ export default function WarehouseDashboard() {
               <CardContent>
                 <form onSubmit={handleStockUpdate} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="productId">Product ID / SKU</Label>
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="productId"
-                        placeholder="Search by ID or SKU"
-                        value={stockForm.productId}
-                        onChange={(e) => setStockForm(prev => ({ ...prev, productId: e.target.value }))}
-                        className="pl-8"
-                      />
-                    </div>
+                    <Label htmlFor="productId">Product</Label>
+                    <Select value={stockForm.productId} onValueChange={(value) => setStockForm(prev => ({ ...prev, productId: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {inventoryItems.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name} - {item.sku}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -250,25 +324,35 @@ export default function WarehouseDashboard() {
                   <TabsContent value="incoming" className="space-y-4">
                     <ScrollArea className="h-[300px]">
                       <div className="space-y-3">
-                        {shipments.incoming.map((shipment) => (
-                          <div key={shipment.id} className="flex items-center justify-between p-3 border rounded-lg">
-                            <div className="space-y-1">
-                              <div className="flex items-center space-x-2">
-                                <p className="font-medium text-sm">{shipment.id}</p>
-                                <Badge variant={getStatusBadgeVariant(shipment.status)}>
-                                  {shipment.status}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground">{shipment.supplier}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {shipment.items} items • ETA: {shipment.eta}
-                              </p>
-                            </div>
-                            <Button size="sm" variant="outline">
-                              Track
-                            </Button>
+                        {isLoading ? (
+                          <div className="text-center py-8 text-muted-foreground">
+                            Loading shipments...
                           </div>
-                        ))}
+                        ) : incomingShipments.length === 0 ? (
+                          <div className="text-center py-8 text-muted-foreground">
+                            No incoming shipments
+                          </div>
+                        ) : (
+                          incomingShipments.map((shipment) => (
+                            <div key={shipment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div className="space-y-1">
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-sm">{shipment.trackingNumber}</p>
+                                  <Badge variant={getStatusBadgeVariant(shipment.status)}>
+                                    {formatStatusText(shipment.status)}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground">{shipment.supplier || 'Unknown Supplier'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {shipment.items} items • ETA: {formatDate(shipment.eta)}
+                                </p>
+                              </div>
+                              <Button size="sm" variant="outline">
+                                Track
+                              </Button>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </ScrollArea>
                   </TabsContent>
@@ -276,25 +360,35 @@ export default function WarehouseDashboard() {
                   <TabsContent value="outgoing" className="space-y-4">
                     <ScrollArea className="h-[300px]">
                       <div className="space-y-3">
-                        {shipments.outgoing.map((shipment) => (
-                          <div key={shipment.id} className="flex items-center justify-between p-3 border rounded-lg">
-                            <div className="space-y-1">
-                              <div className="flex items-center space-x-2">
-                                <p className="font-medium text-sm">{shipment.id}</p>
-                                <Badge variant={getStatusBadgeVariant(shipment.status)}>
-                                  {shipment.status}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground">{shipment.destination}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {shipment.items} items • {shipment.requestedBy}
-                              </p>
-                            </div>
-                            <Button size="sm" variant="outline">
-                              Process
-                            </Button>
+                        {isLoading ? (
+                          <div className="text-center py-8 text-muted-foreground">
+                            Loading shipments...
                           </div>
-                        ))}
+                        ) : outgoingShipments.length === 0 ? (
+                          <div className="text-center py-8 text-muted-foreground">
+                            No outgoing shipments
+                          </div>
+                        ) : (
+                          outgoingShipments.map((shipment) => (
+                            <div key={shipment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div className="space-y-1">
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-sm">{shipment.trackingNumber}</p>
+                                  <Badge variant={getStatusBadgeVariant(shipment.status)}>
+                                    {formatStatusText(shipment.status)}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground">{shipment.destination || 'Unknown Destination'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {shipment.items} items • {shipment.requestedBy || 'Unknown'}
+                                </p>
+                              </div>
+                              <Button size="sm" variant="outline">
+                                Process
+                              </Button>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </ScrollArea>
                   </TabsContent>

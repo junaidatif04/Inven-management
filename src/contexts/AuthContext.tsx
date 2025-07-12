@@ -5,6 +5,7 @@ import {
   signUpWithEmailAndPassword,
   signOut,
   onAuthStateChange,
+  getCurrentUser,
   User,
   UserRole
 } from '@/services/authService';
@@ -17,6 +18,7 @@ interface AuthContextType {
   loginWithEmail: (email: string, password: string) => Promise<boolean>;
   signUpWithEmail: (email: string, password: string, name: string, role: UserRole) => Promise<boolean>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -130,13 +132,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
   };
 
+  const refreshUser = async (): Promise<void> => {
+    try {
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+      }
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+    }
+  };
+
   const value = {
     user,
     isLoading,
     loginWithGoogle,
     loginWithEmail,
     signUpWithEmail,
-    logout
+    logout,
+    refreshUser
   };
 
   return (

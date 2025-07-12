@@ -13,6 +13,13 @@ dist-ssr
 *.local
 .env
 
+# TypeScript build cache
+*.tsbuildinfo
+
+# Firebase exports and temporary files
+users.json
+FIREBASE_STORAGE_SETUP.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

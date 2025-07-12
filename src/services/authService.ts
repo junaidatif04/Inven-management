@@ -26,6 +26,7 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
+  profilePicture?: string;
   displayName?: string;
   isEmailVerified?: boolean;
   createdAt?: any;
@@ -145,6 +146,30 @@ export const updateUserRole = async (userId: string, role: UserRole): Promise<vo
     }, { merge: true });
   } catch (error) {
     console.error('Error updating user role:', error);
+    throw error;
+  }
+};
+
+export const updateUserProfilePicture = async (userId: string, profilePictureUrl: string): Promise<void> => {
+  try {
+    await setDoc(doc(db, 'users', userId), {
+      profilePicture: profilePictureUrl,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error('Error updating user profile picture:', error);
+    throw error;
+  }
+};
+
+export const updateUserProfile = async (userId: string, updates: Partial<Pick<User, 'name' | 'profilePicture'>>): Promise<void> => {
+  try {
+    await setDoc(doc(db, 'users', userId), {
+      ...updates,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
     throw error;
   }
 };

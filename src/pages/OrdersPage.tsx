@@ -26,11 +26,31 @@ import {
   Clock,
   RefreshCw,
   Eye,
-  Plus
+  Plus,
+  Edit,
+  Trash2,
+  MoreHorizontal
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { getAllOrders, updateOrderStatus, Order } from '@/services/orderService';
+import { getAllOrders, updateOrderStatus, deleteOrder, Order, subscribeToOrders } from '@/services/orderService';
 import { getAllSuppliers } from '@/services/supplierService';
+import OrderDialog from '@/components/OrderDialog';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -40,36 +60,65 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  
+  // Dialog states
+  const [orderDialog, setOrderDialog] = useState({
+    open: false,
+    mode: 'create' as 'create' | 'edit' | 'view',
+    order: null as Order | null
+  });
+  
+  // Delete confirmation
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false,
+    orderId: '',
+    orderNumber: ''
+  });
 
   const loadRealData = async () => {
     try {
       setLoading(true);
 
-      // Load real orders and suppliers
-      const [ordersData, suppliersData] = await Promise.all([
-        getAllOrders(),
-        getAllSuppliers()
-      ]);
+      // Load suppliers for mapping
+      const suppliersData = await getAllSuppliers();
 
-      // Map supplier names to orders
-      const ordersWithSupplierNames = ordersData.map(order => ({
-        ...order,
-        supplierName: suppliersData.find(s => s.id === order.supplierId)?.name || 'Unknown Supplier'
-      }));
+      // Subscribe to real-time orders
+      const unsubscribe = subscribeToOrders((ordersData) => {
+        // Map supplier names to orders
+        const ordersWithSupplierNames = ordersData.map(order => ({
+          ...order,
+          supplierName: suppliersData.find(s => s.id === order.supplierId)?.name || 'Unknown Supplier'
+        }));
 
-      setOrders(ordersWithSupplierNames);
-      setLastUpdated(new Date());
+        setOrders(ordersWithSupplierNames);
+        setLastUpdated(new Date());
+        setLoading(false);
+      });
+
+      // Return cleanup function
+      return unsubscribe;
 
     } catch (error) {
       console.error('Error loading orders:', error);
       toast.error('Failed to load orders data');
-    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadRealData();
+    let unsubscribe: (() => void) | undefined;
+    
+    const setupSubscription = async () => {
+      unsubscribe = await loadRealData();
+    };
+    
+    setupSubscription();
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -115,8 +164,67 @@ export default function OrdersPage() {
   };
 
   const refreshData = async () => {
-    await loadRealData();
-    toast.success('Orders data refreshed');
+    try {
+      setLoading(true);
+      const suppliersData = await getAllSuppliers();
+      const ordersData = await getAllOrders();
+      
+      const ordersWithSupplierNames = ordersData.map(order => ({
+        ...order,
+        supplierName: suppliersData.find(s => s.id === order.supplierId)?.name || 'Unknown Supplier'
+      }));
+      
+      setOrders(ordersWithSupplierNames);
+      setLastUpdated(new Date());
+      toast.success('Orders data refreshed');
+    } catch (error) {
+      console.error('Error refreshing orders:', error);
+      toast.error('Failed to refresh orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Dialog handlers
+  const openCreateDialog = () => {
+    setOrderDialog({ open: true, mode: 'create', order: null });
+  };
+  
+  const openEditDialog = (order: Order) => {
+    setOrderDialog({ open: true, mode: 'edit', order });
+  };
+  
+  const openViewDialog = (order: Order) => {
+    setOrderDialog({ open: true, mode: 'view', order });
+  };
+  
+  const closeOrderDialog = () => {
+    setOrderDialog({ open: false, mode: 'create', order: null });
+  };
+  
+  // Delete handlers
+  const openDeleteDialog = (orderId: string, orderNumber: string) => {
+    setDeleteDialog({ open: true, orderId, orderNumber });
+  };
+  
+  const closeDeleteDialog = () => {
+    setDeleteDialog({ open: false, orderId: '', orderNumber: '' });
+  };
+  
+  const handleDeleteOrder = async () => {
+    try {
+      await deleteOrder(deleteDialog.orderId);
+      toast.success('Order deleted successfully');
+      closeDeleteDialog();
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      toast.error('Failed to delete order');
+    }
+  };
+  
+  const handleDialogSuccess = () => {
+    // Real-time subscription will automatically update the orders
+    setLastUpdated(new Date());
   };
 
 
@@ -158,7 +266,7 @@ export default function OrdersPage() {
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button onClick={() => toast.info('Order placement feature coming soon!')}>
+          <Button onClick={openCreateDialog}>
             <Plus className="mr-2 h-4 w-4" />
             Place New Order
           </Button>
@@ -299,10 +407,30 @@ export default function OrdersPage() {
                     <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
                     <TableCell>{formatDate(order.createdAt)}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openViewDialog(order)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditDialog(order)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit Order
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => openDeleteDialog(order.id, order.orderNumber)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Order
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -311,6 +439,33 @@ export default function OrdersPage() {
           )}
         </CardContent>
       </Card>
+      
+      {/* Order Dialog */}
+      <OrderDialog
+        open={orderDialog.open}
+        onOpenChange={closeOrderDialog}
+        order={orderDialog.order}
+        mode={orderDialog.mode}
+        onSuccess={handleDialogSuccess}
+      />
+      
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog.open} onOpenChange={closeDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete order {deleteDialog.orderNumber}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete Order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

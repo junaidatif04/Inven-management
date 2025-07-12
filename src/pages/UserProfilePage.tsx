@@ -15,6 +15,7 @@ import { submitAccessRequest } from '@/services/accessRequestService';
 import { sendRequestConfirmationEmail } from '@/services/emailService';
 import { deleteUser } from '@/services/userService';
 import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2 } from 'lucide-react';
+import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 
 export default function UserProfilePage() {
   const { user, logout } = useAuth();
@@ -165,11 +166,14 @@ export default function UserProfilePage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex-shrink-0 h-24 w-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl font-bold text-slate-500">
-                  {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                </div>
-                
-                <div className="space-y-1">
+                  <ProfilePictureUpload 
+                    currentImageUrl={user.profilePicture || user.avatar}
+                    userName={user.name}
+                    size="lg"
+                    showUploadButton={true}
+                  />
+                  
+                  <div className="space-y-1">
                   <h3 className="text-xl font-semibold">{user.name}</h3>
                   <p className="text-sm text-muted-foreground">{user.email}</p>
                   <div className="flex items-center space-x-2 mt-2">

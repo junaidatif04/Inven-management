@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -167,6 +167,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <>
             <div className="flex items-center space-x-3 mb-4">
               <Avatar className="ring-2 ring-slate-200 dark:ring-slate-700">
+                <AvatarImage 
+                  src={user?.profilePicture || user?.avatar} 
+                  alt={user?.name}
+                />
                 <AvatarFallback>
                   {user?.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </AvatarFallback>
@@ -196,6 +200,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <TooltipTrigger asChild>
                   <div className="flex justify-center">
                     <Avatar className="h-8 w-8 ring-2 ring-slate-200 dark:ring-slate-700">
+                      <AvatarImage 
+                        src={user?.profilePicture || user?.avatar} 
+                        alt={user?.name}
+                      />
                       <AvatarFallback className="text-xs">
                         {user?.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                       </AvatarFallback>
@@ -307,6 +315,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <div className="flex items-center space-x-2">
               <Avatar className="h-9 w-9 ring-2 ring-slate-200 dark:ring-slate-700">
+                <AvatarImage 
+                  src={user?.profilePicture || user?.avatar} 
+                  alt={user?.name}
+                />
                 <AvatarFallback className="text-xs">
                   {user?.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </AvatarFallback>

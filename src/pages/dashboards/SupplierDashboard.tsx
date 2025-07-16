@@ -30,7 +30,7 @@ import {
   CreateProduct,
   UpdateProduct
 } from '@/services/productService';
-import { createDisplayRequest, getDisplayRequestsBySupplier, getQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/displayRequestService';
+import { createDisplayRequest, getDisplayRequestsBySupplier, subscribeToQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/displayRequestService';
 import type { Product } from '@/services/productService';
 import { DisplayRequest, QuantityRequest, QuantityResponse, CreateDisplayRequest } from '@/types/displayRequest';
 
@@ -72,17 +72,14 @@ export default function SupplierDashboard() {
     }
 
     let unsubscribeProducts: (() => void) | null = null;
+    let unsubscribeQuantityRequests: (() => void) | null = null;
 
-    const loadAdditionalData = async () => {
+    const loadDisplayRequests = async () => {
       try {
-        const [displayRequestsData, quantityRequestsData] = await Promise.all([
-          getDisplayRequestsBySupplier(user.id),
-          getQuantityRequestsBySupplier(user.id)
-        ]);
+        const displayRequestsData = await getDisplayRequestsBySupplier(user.id);
         setDisplayRequests(displayRequestsData);
-        setQuantityRequests(quantityRequestsData);
       } catch (error) {
-        console.error('Error loading additional data:', error);
+        console.error('Error loading display requests:', error);
       }
     };
 
@@ -92,7 +89,12 @@ export default function SupplierDashboard() {
         setLoading(false);
       });
 
-      loadAdditionalData();
+      // Real-time subscription for quantity requests
+      unsubscribeQuantityRequests = subscribeToQuantityRequestsBySupplier(user.id, (quantityRequestsData) => {
+        setQuantityRequests(quantityRequestsData);
+      });
+
+      loadDisplayRequests();
     } catch (error) {
       console.error('Error setting up subscriptions in SupplierDashboard:', error);
       setLoading(false);
@@ -101,6 +103,7 @@ export default function SupplierDashboard() {
     return () => {
       try {
         if (unsubscribeProducts) unsubscribeProducts();
+        if (unsubscribeQuantityRequests) unsubscribeQuantityRequests();
       } catch (error) {
         console.error('Error cleaning up subscriptions:', error);
       }
@@ -249,13 +252,9 @@ export default function SupplierDashboard() {
       setSelectedProducts([]);
       setShowDisplayRequestDialog(false);
       
-      // Reload data
-      const [displayRequestsData, quantityRequestsData] = await Promise.all([
-        getDisplayRequestsBySupplier(user.id),
-        getQuantityRequestsBySupplier(user.id)
-      ]);
+      // Reload display requests (quantity requests update via subscription)
+      const displayRequestsData = await getDisplayRequestsBySupplier(user.id);
       setDisplayRequests(displayRequestsData);
-      setQuantityRequests(quantityRequestsData);
     } catch (error) {
       console.error('Error submitting display request:', error);
       toast.error('Failed to submit display request');
@@ -286,9 +285,7 @@ export default function SupplierDashboard() {
       setSelectedQuantityRequest(null);
       setQuantityResponse({ quantity: 0, notes: '' });
       
-      // Reload quantity requests
-      const quantityRequestsData = await getQuantityRequestsBySupplier(user.id);
-      setQuantityRequests(quantityRequestsData);
+      // Quantity requests will be updated automatically via real-time subscription
     } catch (error) {
       console.error('Error submitting quantity response:', error);
       toast.error('Failed to submit quantity response');
@@ -318,9 +315,7 @@ export default function SupplierDashboard() {
       setSelectedQuantityRequest(null);
       setQuantityResponse({ quantity: 0, notes: '' });
       
-      // Reload quantity requests
-      const quantityRequestsData = await getQuantityRequestsBySupplier(user.id);
-      setQuantityRequests(quantityRequestsData);
+      // Quantity requests will be updated automatically via real-time subscription
     } catch (error) {
       console.error('Error rejecting quantity request:', error);
       toast.error('Failed to reject quantity request');

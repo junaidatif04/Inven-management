@@ -28,6 +28,7 @@ import ProductManagementPage from '@/pages/ProductManagementPage';
 import ProductCatalogPage from '@/pages/ProductCatalogPage';
 import MyOrdersPage from '@/pages/MyOrdersPage';
 import CatalogRequestsPage from '@/pages/CatalogRequestsPage';
+import AdminCatalogRequestsPage from '@/pages/AdminCatalogRequestsPage';
 import { useAuth } from '@/contexts/AuthContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -71,6 +72,7 @@ function DashboardRouter() {
         <Route path="/my-orders" element={<MyOrdersPage />} />
         <Route path="/access-requests" element={<AccessRequestsPage />} />
         <Route path="/catalog-requests" element={<CatalogRequestsPage />} />
+        <Route path="/admin-catalog-requests" element={<AdminCatalogRequestsPage />} />
       </Routes>
     </DashboardLayout>
   );

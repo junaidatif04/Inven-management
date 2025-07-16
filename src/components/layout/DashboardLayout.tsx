@@ -33,7 +33,7 @@ const navigation = [
   { name: 'Order Management', href: '/dashboard/orders', icon: ShoppingCart, roles: ['admin', 'warehouse_staff'] },
   { name: 'My Orders', href: '/dashboard/my-orders', icon: ShoppingCart, roles: ['internal_user'] },
   { name: 'Product Catalog', href: '/dashboard/product-catalog', icon: Package, roles: ['internal_user'] },
-  { name: 'Catalog Requests', href: '/dashboard/catalog-requests', icon: FileText, roles: ['admin'] },
+  { name: 'Product Management', href: '/dashboard/admin-catalog-requests', icon: FileText, roles: ['admin'] },
   { name: 'Suppliers', href: '/dashboard/suppliers', icon: Users, roles: ['admin'] },
   { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, roles: ['admin'] },
   { name: 'User Management', href: '/dashboard/user-management', icon: UserCog, roles: ['admin'] },

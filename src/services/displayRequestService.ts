@@ -4,12 +4,14 @@ import {
   getDocs,
   getDoc,
   addDoc,
+  updateDoc,
   deleteDoc,
   query,
   where,
   orderBy,
   serverTimestamp,
-  writeBatch
+  writeBatch,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
@@ -316,6 +318,29 @@ export const createQuantityRequest = async (
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
+    
+    // Create notification for supplier
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        title: 'New Quantity Request',
+        message: `Admin has requested ${requestData.requestedQuantity} units of ${requestData.productName}`,
+        type: 'info',
+        userId: requestData.supplierEmail,
+        supplierId: requestData.supplierId,
+        read: false,
+        actionUrl: '/dashboard',
+        createdAt: serverTimestamp(),
+        metadata: {
+          requestId: docRef.id,
+          productName: requestData.productName,
+          requestedQuantity: requestData.requestedQuantity
+        }
+      });
+    } catch (notificationError) {
+      console.error('Error creating notification:', notificationError);
+      // Don't fail the main request if notification fails
+    }
+    
     return docRef.id;
   } catch (error) {
     console.error('Error creating quantity request:', error);
@@ -339,6 +364,78 @@ export const getQuantityRequest = async (requestId: string): Promise<QuantityReq
   } catch (error) {
     console.error('Error fetching quantity request:', error);
     throw new Error('Failed to fetch quantity request');
+  }
+};
+
+// Real-time subscription for quantity requests by supplier
+export const subscribeToQuantityRequestsBySupplier = (
+  supplierId: string, 
+  callback: (requests: QuantityRequest[]) => void
+): (() => void) => {
+  if (!supplierId || typeof supplierId !== 'string') {
+    console.warn('Invalid supplierId provided to subscribeToQuantityRequestsBySupplier:', supplierId);
+    callback([]);
+    return () => {};
+  }
+
+  const q = query(
+    collection(db, QUANTITY_REQUESTS_COLLECTION),
+    where('supplierId', '==', supplierId),
+    orderBy('requestedAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    const requests = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as QuantityRequest[];
+    callback(requests);
+  }, (error) => {
+    console.error('Error in quantity requests subscription:', error);
+    callback([]);
+  });
+};
+
+// Real-time subscription for quantity requests by requester
+export const subscribeToQuantityRequestsByRequester = (
+  requesterId: string, 
+  callback: (requests: QuantityRequest[]) => void
+): (() => void) => {
+  if (!requesterId || typeof requesterId !== 'string') {
+    console.warn('Invalid requesterId provided to subscribeToQuantityRequestsByRequester:', requesterId);
+    callback([]);
+    return () => {};
+  }
+
+  const q = query(
+    collection(db, QUANTITY_REQUESTS_COLLECTION),
+    where('requestedBy', '==', requesterId),
+    orderBy('requestedAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    const requests = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as QuantityRequest[];
+    callback(requests);
+  }, (error) => {
+    console.error('Error in quantity requests subscription:', error);
+    callback([]);
+  });
+};
+
+// Cancel quantity request
+export const cancelQuantityRequest = async (requestId: string): Promise<void> => {
+  try {
+    const docRef = doc(db, QUANTITY_REQUESTS_COLLECTION, requestId);
+    await updateDoc(docRef, {
+      status: 'cancelled',
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error cancelling quantity request:', error);
+    throw new Error('Failed to cancel quantity request');
   }
 };
 
@@ -366,5 +463,36 @@ export const deleteDisplayRequest = async (requestId: string, supplierId: string
   } catch (error) {
     console.error('Error deleting display request:', error);
     throw new Error('Failed to delete display request');
+  }
+};
+
+// Delete quantity request (cancel first if active, then delete)
+export const deleteQuantityRequest = async (requestId: string, requesterId: string): Promise<void> => {
+  try {
+    // First verify the request belongs to the requester
+    const quantityRequest = await getQuantityRequest(requestId);
+    
+    if (!quantityRequest) {
+      throw new Error('Quantity request not found');
+    }
+    
+    if (quantityRequest.requestedBy !== requesterId) {
+      throw new Error('Unauthorized: You can only delete your own requests');
+    }
+    
+    // If the request is still active (pending or awaiting response), cancel it first
+    if (quantityRequest.status === 'pending') {
+      await updateDoc(doc(db, QUANTITY_REQUESTS_COLLECTION, requestId), {
+        status: 'cancelled',
+        updatedAt: serverTimestamp()
+      });
+    }
+    
+    // Delete the quantity request
+    const docRef = doc(db, QUANTITY_REQUESTS_COLLECTION, requestId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error('Error deleting quantity request:', error);
+    throw new Error('Failed to delete quantity request');
   }
 };

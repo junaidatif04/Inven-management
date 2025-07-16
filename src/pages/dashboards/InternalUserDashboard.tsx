@@ -71,9 +71,9 @@ export default function InternalUserDashboard() {
             category: item.category,
             price: item.unitPrice,
             stock: item.quantity,
-            status: item.status === 'in_stock' ? 'active' : 
-                   item.status === 'low_stock' ? 'low_stock' : 
-                   item.status === 'out_of_stock' ? 'out_of_stock' : 'discontinued',
+            status: item.status === 'in_stock' ? 'approved' : 
+                   item.status === 'low_stock' ? 'approved' : 
+                   item.status === 'out_of_stock' ? 'discontinued' : 'discontinued',
             description: item.description,
             sku: item.sku,
             imageUrl: item.imageUrl,
@@ -318,8 +318,8 @@ export default function InternalUserDashboard() {
                               <p className="text-sm font-bold">${product.price}</p>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <Badge variant={product.stock > 0 ? 'default' : 'secondary'}>
-                                {product.stock > 0 ? 'In Stock' : 'Out of Stock'}
+                              <Badge variant={(product.stock || 0) > 0 ? 'default' : 'secondary'}>
+                                {(product.stock || 0) > 0 ? 'In Stock' : 'Out of Stock'}
                               </Badge>
                             </div>
                           </div>

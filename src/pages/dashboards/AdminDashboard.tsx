@@ -26,7 +26,7 @@ import { getAllOrders } from '@/services/orderService';
 import { getAllUsers } from '@/services/userService';
 import { getAllSuppliers } from '@/services/supplierService';
 import { Supplier } from '@/types/inventory';
-import { displayRequestService, getAllDisplayRequests, getAllQuantityRequests } from '@/services/displayRequestService';
+import { getAllDisplayRequests, getAllQuantityRequests } from '@/services/displayRequestService';
 import type { DisplayRequest, QuantityRequest } from '@/types/displayRequest';
 
 
@@ -156,8 +156,8 @@ export default function AdminDashboard() {
       const activeSuppliers = suppliers.filter(s => s.status === 'active').length;
       
       // Calculate display and quantity request stats
-      const pendingDisplayRequests = displayRequests.filter(req => req.status === 'pending').length;
-      const pendingQuantityRequests = quantityRequests.filter(req => req.status === 'pending').length;
+      const pendingDisplayRequests = displayRequests.filter((req: DisplayRequest) => req.status === 'pending').length;
+      const pendingQuantityRequests = quantityRequests.filter((req: QuantityRequest) => req.status === 'pending').length;
 
       const newStats: DashboardStats = {
         totalInventoryValue,

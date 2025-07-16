@@ -4,40 +4,35 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Package, 
-  ShoppingCart, 
-  TrendingUp, 
-  Clock,
   Plus,
   Edit,
-  CalendarIcon,
-  Send,
   Trash2,
-  Eye
+  Eye,
+  Send,
+  Clock
 } from 'lucide-react';
-import { format } from 'date-fns';
+
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
-  getAllProducts,
-  getProductsBySupplier,
   subscribeToProductsBySupplier,
   createProduct,
   updateProduct,
   deleteProduct,
-  submitProductForDisplay
+  CreateProduct,
+  UpdateProduct
 } from '@/services/productService';
 import { createDisplayRequest, getDisplayRequestsBySupplier, getQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/displayRequestService';
-import type { Product, CreateProduct, UpdateProduct } from '@/services/productService';
-import { DisplayRequest, QuantityRequest, QuantityResponse } from '@/types/displayRequest';
+import type { Product } from '@/services/productService';
+import { DisplayRequest, QuantityRequest, QuantityResponse, CreateDisplayRequest } from '@/types/displayRequest';
 
 
 
@@ -135,7 +130,7 @@ export default function SupplierDashboard() {
     setProductForm({
       name: product.name,
       category: product.category,
-      price: product.price,
+      price: product.price.toString(),
       description: product.description || '',
       sku: product.sku || ''
     });
@@ -148,7 +143,7 @@ export default function SupplierDashboard() {
   };
 
   const handleCreateProduct = async () => {
-    if (!user?.id || !productForm.name || !productForm.category || productForm.price <= 0) {
+    if (!user?.id || !productForm.name || !productForm.category || parseFloat(productForm.price) <= 0) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -158,7 +153,7 @@ export default function SupplierDashboard() {
       const productData: CreateProduct = {
         name: productForm.name,
         category: productForm.category,
-        price: productForm.price,
+        price: parseFloat(productForm.price),
         description: productForm.description,
         sku: productForm.sku,
         supplierId: user.id,
@@ -179,7 +174,7 @@ export default function SupplierDashboard() {
   };
 
   const handleUpdateProduct = async () => {
-    if (!selectedProduct || !productForm.name || !productForm.category || productForm.price <= 0) {
+    if (!selectedProduct || !productForm.name || !productForm.category || parseFloat(productForm.price) <= 0) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -189,7 +184,7 @@ export default function SupplierDashboard() {
       const updates: UpdateProduct = {
         name: productForm.name,
         category: productForm.category,
-        price: productForm.price,
+        price: parseFloat(productForm.price),
         description: productForm.description,
         sku: productForm.sku
       };
@@ -230,14 +225,27 @@ export default function SupplierDashboard() {
 
     try {
       setIsSubmitting(true);
-      await createDisplayRequest({
-        supplierId: user.id,
-        supplierName: user.displayName || user.email || 'Unknown Supplier',
-        productIds: selectedProducts,
-        notes: 'Request to display selected products'
-      });
       
-      toast.success('Display request submitted successfully');
+      // Create display requests for each selected product
+      for (const productId of selectedProducts) {
+        const product = products.find(p => p.id === productId);
+        if (product) {
+          const requestData: CreateDisplayRequest = {
+            productId: product.id,
+            productName: product.name,
+            productDescription: product.description || '',
+            productSku: product.sku || `SKU-${product.id.slice(-8)}`,
+            productPrice: product.price,
+            productImageUrl: product.imageUrl || '',
+            supplierId: user.id,
+            supplierName: user.displayName || user.email || 'Unknown Supplier',
+            supplierEmail: user.email || ''
+          };
+          await createDisplayRequest(requestData);
+        }
+      }
+      
+      toast.success('Display requests submitted successfully');
       setSelectedProducts([]);
       setShowDisplayRequestDialog(false);
       
@@ -257,7 +265,7 @@ export default function SupplierDashboard() {
   };
 
   const handleQuantityResponse = async () => {
-    if (!selectedQuantityRequest || quantityResponse.quantity <= 0) {
+    if (!selectedQuantityRequest || quantityResponse.quantity <= 0 || !user?.id) {
       toast.error('Please enter a valid quantity');
       return;
     }
@@ -265,12 +273,13 @@ export default function SupplierDashboard() {
     try {
       setIsSubmitting(true);
       const response: QuantityResponse = {
-        approved: true,
-        quantity: quantityResponse.quantity,
+        quantityRequestId: selectedQuantityRequest.id,
+        status: 'approved_full',
+        approvedQuantity: quantityResponse.quantity,
         notes: quantityResponse.notes
       };
       
-      await respondToQuantityRequest(selectedQuantityRequest.id, response);
+      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id);
       toast.success('Quantity response submitted successfully');
       
       setShowQuantityResponseDialog(false);
@@ -289,7 +298,7 @@ export default function SupplierDashboard() {
   };
 
   const handleRejectQuantityRequest = async () => {
-    if (!selectedQuantityRequest || !quantityResponse.notes.trim()) {
+    if (!selectedQuantityRequest || !quantityResponse.notes.trim() || !user?.id) {
       toast.error('Please provide a reason for rejection');
       return;
     }
@@ -297,12 +306,12 @@ export default function SupplierDashboard() {
     try {
       setIsSubmitting(true);
       const response: QuantityResponse = {
-        approved: false,
-        quantity: 0,
-        notes: quantityResponse.notes
+        quantityRequestId: selectedQuantityRequest.id,
+        status: 'rejected',
+        rejectionReason: quantityResponse.notes
       };
       
-      await respondToQuantityRequest(selectedQuantityRequest.id, response);
+      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id);
       toast.success('Quantity request rejected');
       
       setShowQuantityResponseDialog(false);
@@ -715,7 +724,7 @@ export default function SupplierDashboard() {
                 step="0.01"
                 min="0"
                 value={productForm.price}
-                onChange={(e) => setProductForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => setProductForm(prev => ({ ...prev, price: e.target.value }))}
                 placeholder="0.00"
               />
             </div>
@@ -796,7 +805,7 @@ export default function SupplierDashboard() {
                 step="0.01"
                 min="0"
                 value={productForm.price}
-                onChange={(e) => setProductForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => setProductForm(prev => ({ ...prev, price: e.target.value }))}
                 placeholder="0.00"
               />
             </div>

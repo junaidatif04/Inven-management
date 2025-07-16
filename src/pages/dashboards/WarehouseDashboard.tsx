@@ -183,7 +183,8 @@ export default function WarehouseDashboard() {
         supplierName: selectedDisplayRequest.supplierName,
         supplierEmail: selectedDisplayRequest.supplierEmail,
         requestedBy: user.id,
-        requesterName: user.displayName || user.email || 'Warehouse Staff'
+        requesterName: user.displayName || user.email || 'Warehouse Staff',
+        requestedQuantity: quantityRequestForm.requestedQuantity
       }, user.id, user.displayName || user.email || 'Warehouse Staff');
       
       toast.success('Quantity request sent to supplier');

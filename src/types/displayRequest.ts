@@ -42,6 +42,7 @@ export interface QuantityRequest {
   supplierEmail: string;
   requestedBy: string; // Admin/Warehouse staff user ID
   requesterName: string;
+  requestedQuantity: number;
   status: 'pending' | 'approved_full' | 'approved_partial' | 'rejected';
   requestedAt: any; // Firestore Timestamp
   respondedAt?: any; // Firestore Timestamp
@@ -61,6 +62,7 @@ export interface CreateQuantityRequest {
   supplierEmail: string;
   requestedBy: string;
   requesterName: string;
+  requestedQuantity: number;
 }
 
 export interface QuantityResponse {

@@ -20,14 +20,15 @@ export interface Product {
   name: string;
   category: string;
   price: number;
-  stock: number;
-  status: 'active' | 'low_stock' | 'out_of_stock' | 'discontinued';
+  stock?: number; // Legacy field - suppliers don't track stock anymore
+  status: 'proposed' | 'display_requested' | 'approved' | 'rejected' | 'discontinued';
   description?: string;
   sku?: string;
   imageUrl?: string;
   imagePath?: string;
   supplierId: string;
   supplierName: string;
+  displayRequestId?: string; // Link to display request if submitted
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
@@ -37,7 +38,6 @@ export interface CreateProduct {
   name: string;
   category: string;
   price: number;
-  stock: number;
   description?: string;
   sku?: string;
   imageUrl?: string;
@@ -51,12 +51,12 @@ export interface UpdateProduct {
   name?: string;
   category?: string;
   price?: number;
-  stock?: number;
-  status?: 'active' | 'low_stock' | 'out_of_stock' | 'discontinued';
+  status?: 'proposed' | 'display_requested' | 'approved' | 'rejected' | 'discontinued';
   description?: string;
   sku?: string;
   imageUrl?: string;
   imagePath?: string;
+  displayRequestId?: string;
 }
 
 export interface PurchaseOrder {
@@ -159,12 +159,10 @@ export const getProduct = async (productId: string): Promise<Product | null> => 
 export const createProduct = async (productData: CreateProduct): Promise<string> => {
   try {
     const now = Timestamp.now();
-    const status = productData.stock === 0 ? 'out_of_stock' : 
-                  productData.stock < 10 ? 'low_stock' : 'active';
     
     const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), {
       ...productData,
-      status,
+      status: 'proposed', // All new products start as proposed
       createdAt: now,
       updatedAt: now
     });
@@ -180,15 +178,8 @@ export const updateProduct = async (productId: string, updates: UpdateProduct): 
   try {
     const docRef = doc(db, PRODUCTS_COLLECTION, productId);
     
-    // Auto-update status based on stock if stock is being updated
-    let finalUpdates = { ...updates };
-    if (updates.stock !== undefined) {
-      finalUpdates.status = updates.stock === 0 ? 'out_of_stock' : 
-                           updates.stock < 10 ? 'low_stock' : 'active';
-    }
-    
     await updateDoc(docRef, {
-      ...finalUpdates,
+      ...updates,
       updatedAt: Timestamp.now()
     });
   } catch (error) {
@@ -505,4 +496,45 @@ export const subscribeToPurchaseOrdersBySupplier = (supplierId: string, callback
     console.error('Error in purchase orders by supplier subscription:', error);
     callback([]);
   });
+};
+
+// New functions for supplier workflow
+export const getProposedProductsBySupplier = async (supplierId: string): Promise<Product[]> => {
+  try {
+    const q = query(
+      collection(db, PRODUCTS_COLLECTION),
+      where('supplierId', '==', supplierId),
+      where('status', '==', 'proposed'),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Product[];
+  } catch (error) {
+    console.error('Error fetching proposed products:', error);
+    throw new Error('Failed to fetch proposed products');
+  }
+};
+
+export const submitProductForDisplay = async (productId: string, displayRequestId: string): Promise<void> => {
+  try {
+    await updateProduct(productId, {
+      status: 'display_requested',
+      displayRequestId
+    });
+  } catch (error) {
+    console.error('Error submitting product for display:', error);
+    throw new Error('Failed to submit product for display');
+  }
+};
+
+export const updateProductStatus = async (productId: string, status: Product['status']): Promise<void> => {
+  try {
+    await updateProduct(productId, { status });
+  } catch (error) {
+    console.error('Error updating product status:', error);
+    throw new Error('Failed to update product status');
+  }
 };

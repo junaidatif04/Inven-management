@@ -101,13 +101,17 @@ service cloud.firestore {
       allow create, update, delete: if hasWarehouseAccess();
     }
     
-    // Products collection - warehouse and admin access
+    // Products collection - supplier, warehouse and admin access
     match /products/{productId} {
       // All authenticated users can read products
       allow read: if isAuthenticated();
       
-      // Only warehouse staff and admins can modify products
-      allow create, update, delete: if hasWarehouseAccess();
+      // Suppliers can create and manage their own products, warehouse staff and admins can modify all
+      allow create: if isAuthenticated() && (getUserRole(request.auth.uid) == 'supplier' || hasWarehouseAccess());
+      allow update, delete: if isAuthenticated() && (
+        (resource.data.supplierId == request.auth.uid && getUserRole(request.auth.uid) == 'supplier') ||
+        hasWarehouseAccess()
+      );
     }
     
     // Warehouses collection - admin only
@@ -224,6 +228,89 @@ service cloud.firestore {
       
       // Only warehouse staff and admins can create stock movements
       allow create, update, delete: if hasWarehouseAccess();
+    }
+    
+    // Display requests collection - supplier and warehouse access
+    match /displayRequests/{requestId} {
+      // Suppliers can read their own requests, warehouse staff and admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.supplierId == request.auth.uid ||
+        hasWarehouseAccess()
+      );
+      
+      // Suppliers can create display requests
+      allow create: if isAuthenticated() && getUserRole(request.auth.uid) == 'supplier';
+      
+      // Warehouse staff and admins can update display requests (approve/reject)
+      allow update: if hasWarehouseAccess();
+      
+      // Suppliers can delete their own pending requests, admins can delete any
+      allow delete: if isAuthenticated() && (
+        (resource.data.supplierId == request.auth.uid && 
+         getUserRole(request.auth.uid) == 'supplier' && 
+         resource.data.status == 'pending') ||
+        isAdmin()
+      );
+    }
+    
+    // Quantity requests collection - supplier and warehouse access
+    match /quantityRequests/{requestId} {
+      // Suppliers can read their own requests, warehouse staff and admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.supplierId == request.auth.uid ||
+        hasWarehouseAccess()
+      );
+      
+      // Warehouse staff can create quantity requests
+      allow create: if hasWarehouseAccess();
+      
+      // Suppliers can update quantity requests (respond), warehouse staff can update status
+      allow update: if isAuthenticated() && (
+        (resource.data.supplierId == request.auth.uid && getUserRole(request.auth.uid) == 'supplier') ||
+        hasWarehouseAccess()
+      );
+      
+      // Admins can delete quantity requests
+      allow delete: if isAdmin();
+    }
+    
+    // Customer orders collection - end user access
+    match /customerOrders/{orderId} {
+      // Users can read their own orders, warehouse staff and admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        hasWarehouseAccess()
+      );
+      
+      // End users can create customer orders
+      allow create: if isAuthenticated() && getUserRole(request.auth.uid) == 'end_user';
+      
+      // Warehouse staff and admins can update customer orders (accept/cancel)
+      allow update: if hasWarehouseAccess();
+      
+      // Admins can delete customer orders
+      allow delete: if isAdmin();
+    }
+    
+    // Purchase orders collection - supplier and warehouse access
+    match /purchaseOrders/{orderId} {
+      // Suppliers can read their own orders, warehouse staff and admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.supplierId == request.auth.uid ||
+        hasWarehouseAccess()
+      );
+      
+      // Warehouse staff can create purchase orders
+      allow create: if hasWarehouseAccess();
+      
+      // Suppliers can update purchase orders (accept/reject), warehouse staff can update status
+      allow update: if isAuthenticated() && (
+        (resource.data.supplierId == request.auth.uid && getUserRole(request.auth.uid) == 'supplier') ||
+        hasWarehouseAccess()
+      );
+      
+      // Admins can delete purchase orders
+      allow delete: if isAdmin();
     }
     
     // Default deny rule for any other collections

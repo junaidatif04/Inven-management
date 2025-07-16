@@ -1,0 +1,370 @@
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  addDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  writeBatch
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import {
+  DisplayRequest,
+  CreateDisplayRequest,
+  QuantityRequest,
+  CreateQuantityRequest,
+  QuantityResponse
+} from '@/types/displayRequest';
+
+// Re-export types for external use
+export type { 
+  DisplayRequest,
+  CreateDisplayRequest,
+  QuantityRequest,
+  CreateQuantityRequest,
+  QuantityResponse 
+};
+import { createInventoryItem } from './inventoryService';
+import { CreateInventoryItem } from '@/types/inventory';
+
+const DISPLAY_REQUESTS_COLLECTION = 'displayRequests';
+const QUANTITY_REQUESTS_COLLECTION = 'quantityRequests';
+
+// Display Request Functions
+export const createDisplayRequest = async (requestData: CreateDisplayRequest): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, DISPLAY_REQUESTS_COLLECTION), {
+      ...requestData,
+      status: 'pending',
+      requestedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating display request:', error);
+    throw new Error('Failed to create display request');
+  }
+};
+
+export const getAllDisplayRequests = async (): Promise<DisplayRequest[]> => {
+  try {
+    const q = query(
+      collection(db, DISPLAY_REQUESTS_COLLECTION),
+      orderBy('requestedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as DisplayRequest[];
+  } catch (error) {
+    console.error('Error fetching display requests:', error);
+    throw new Error('Failed to fetch display requests');
+  }
+};
+
+export const getDisplayRequestsBySupplier = async (supplierId: string): Promise<DisplayRequest[]> => {
+  try {
+    const q = query(
+      collection(db, DISPLAY_REQUESTS_COLLECTION),
+      where('supplierId', '==', supplierId),
+      orderBy('requestedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as DisplayRequest[];
+  } catch (error) {
+    console.error('Error fetching supplier display requests:', error);
+    throw new Error('Failed to fetch supplier display requests');
+  }
+};
+
+export const getPendingDisplayRequests = async (): Promise<DisplayRequest[]> => {
+  try {
+    const q = query(
+      collection(db, DISPLAY_REQUESTS_COLLECTION),
+      where('status', '==', 'pending'),
+      orderBy('requestedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as DisplayRequest[];
+  } catch (error) {
+    console.error('Error fetching pending display requests:', error);
+    throw new Error('Failed to fetch pending display requests');
+  }
+};
+
+export const reviewDisplayRequest = async (
+  requestId: string,
+  status: 'accepted' | 'rejected',
+  reviewerId: string,
+  reviewerName: string,
+  rejectionReason?: string
+): Promise<string | null> => {
+  try {
+    const batch = writeBatch(db);
+    
+    // Update display request
+    const displayRequestRef = doc(db, DISPLAY_REQUESTS_COLLECTION, requestId);
+    batch.update(displayRequestRef, {
+      status,
+      reviewedAt: serverTimestamp(),
+      reviewedBy: reviewerId,
+      reviewerName,
+      rejectionReason: rejectionReason || null,
+      updatedAt: serverTimestamp()
+    });
+    
+    let quantityRequestId = null;
+    
+    // If accepted, create quantity request
+    if (status === 'accepted') {
+      const displayRequest = await getDoc(displayRequestRef);
+      if (displayRequest.exists()) {
+        const data = displayRequest.data() as DisplayRequest;
+        
+        const quantityRequestRef = doc(collection(db, QUANTITY_REQUESTS_COLLECTION));
+        batch.set(quantityRequestRef, {
+          displayRequestId: requestId,
+          productId: data.productId,
+          productName: data.productName,
+          supplierId: data.supplierId,
+          supplierName: data.supplierName,
+          supplierEmail: data.supplierEmail,
+          requestedBy: reviewerId,
+          requesterName: reviewerName,
+          status: 'pending',
+          requestedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        // Link quantity request to display request
+        batch.update(displayRequestRef, {
+          quantityRequestId: quantityRequestRef.id
+        });
+        
+        quantityRequestId = quantityRequestRef.id;
+      }
+    }
+    
+    await batch.commit();
+    return quantityRequestId;
+  } catch (error) {
+    console.error('Error reviewing display request:', error);
+    throw new Error('Failed to review display request');
+  }
+};
+
+// Quantity Request Functions
+export const getAllQuantityRequests = async (): Promise<QuantityRequest[]> => {
+  try {
+    const q = query(
+      collection(db, QUANTITY_REQUESTS_COLLECTION),
+      orderBy('requestedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as QuantityRequest[];
+  } catch (error) {
+    console.error('Error fetching quantity requests:', error);
+    throw new Error('Failed to fetch quantity requests');
+  }
+};
+
+export const getQuantityRequestsBySupplier = async (supplierId: string): Promise<QuantityRequest[]> => {
+  try {
+    const q = query(
+      collection(db, QUANTITY_REQUESTS_COLLECTION),
+      where('supplierId', '==', supplierId),
+      orderBy('requestedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as QuantityRequest[];
+  } catch (error) {
+    console.error('Error fetching supplier quantity requests:', error);
+    throw new Error('Failed to fetch supplier quantity requests');
+  }
+};
+
+export const getPendingQuantityRequests = async (): Promise<QuantityRequest[]> => {
+  try {
+    const q = query(
+      collection(db, QUANTITY_REQUESTS_COLLECTION),
+      where('status', '==', 'pending'),
+      orderBy('requestedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as QuantityRequest[];
+  } catch (error) {
+    console.error('Error fetching pending quantity requests:', error);
+    throw new Error('Failed to fetch pending quantity requests');
+  }
+};
+
+export const respondToQuantityRequest = async (
+  requestId: string,
+  response: QuantityResponse,
+  userId: string
+): Promise<void> => {
+  try {
+    const batch = writeBatch(db);
+    
+    // Update quantity request
+    const quantityRequestRef = doc(db, QUANTITY_REQUESTS_COLLECTION, requestId);
+    batch.update(quantityRequestRef, {
+      status: response.status,
+      approvedQuantity: response.approvedQuantity || null,
+      rejectionReason: response.rejectionReason || null,
+      notes: response.notes || null,
+      respondedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    // If approved (full or partial), create inventory item
+    if ((response.status === 'approved_full' || response.status === 'approved_partial') && response.approvedQuantity) {
+      const quantityRequest = await getDoc(quantityRequestRef);
+      if (quantityRequest.exists()) {
+        const qrData = quantityRequest.data() as QuantityRequest;
+        
+        // Get display request data for product details
+        const displayRequestRef = doc(db, DISPLAY_REQUESTS_COLLECTION, qrData.displayRequestId);
+        const displayRequest = await getDoc(displayRequestRef);
+        
+        if (displayRequest.exists()) {
+          const drData = displayRequest.data() as DisplayRequest;
+          
+          // Create inventory item
+          const inventoryData: CreateInventoryItem = {
+            name: drData.productName,
+            description: drData.productDescription || '',
+            sku: drData.productSku || '',
+            category: 'Supplier Product', // Default category
+            quantity: response.approvedQuantity,
+            minStockLevel: Math.max(1, Math.floor(response.approvedQuantity * 0.1)), // 10% of initial stock
+            maxStockLevel: response.approvedQuantity * 2, // 200% of initial stock
+            unitPrice: drData.productPrice,
+            supplierId: drData.supplierId,
+            supplierName: drData.supplierName,
+            imageUrl: drData.productImageUrl,
+            location: 'Main Warehouse', // Default location
+            isPublished: false // Not published by default
+          };
+          
+          await createInventoryItem(inventoryData, userId);
+        }
+      }
+    }
+    
+    await batch.commit();
+  } catch (error) {
+    console.error('Error responding to quantity request:', error);
+    throw new Error('Failed to respond to quantity request');
+  }
+};
+
+// Helper function to get display request by ID
+export const getDisplayRequest = async (requestId: string): Promise<DisplayRequest | null> => {
+  try {
+    const docRef = doc(db, DISPLAY_REQUESTS_COLLECTION, requestId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      } as DisplayRequest;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching display request:', error);
+    throw new Error('Failed to fetch display request');
+  }
+};
+
+// Create a standalone quantity request (for warehouse to request from suppliers)
+export const createQuantityRequest = async (
+  requestData: CreateQuantityRequest,
+  userId: string,
+  userName: string
+): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, QUANTITY_REQUESTS_COLLECTION), {
+      ...requestData,
+      requestedBy: userId,
+      requesterName: userName,
+      status: 'pending',
+      requestedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating quantity request:', error);
+    throw new Error('Failed to create quantity request');
+  }
+};
+
+// Helper function to get quantity request by ID
+export const getQuantityRequest = async (requestId: string): Promise<QuantityRequest | null> => {
+  try {
+    const docRef = doc(db, QUANTITY_REQUESTS_COLLECTION, requestId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      } as QuantityRequest;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching quantity request:', error);
+    throw new Error('Failed to fetch quantity request');
+  }
+};
+
+// Delete display request (only allowed for pending requests)
+export const deleteDisplayRequest = async (requestId: string, supplierId: string): Promise<void> => {
+  try {
+    // First verify the request belongs to the supplier and is pending
+    const displayRequest = await getDisplayRequest(requestId);
+    
+    if (!displayRequest) {
+      throw new Error('Display request not found');
+    }
+    
+    if (displayRequest.supplierId !== supplierId) {
+      throw new Error('Unauthorized: You can only delete your own requests');
+    }
+    
+    if (displayRequest.status !== 'pending') {
+      throw new Error('Cannot delete request that has already been reviewed');
+    }
+    
+    // Delete the display request
+    const docRef = doc(db, DISPLAY_REQUESTS_COLLECTION, requestId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error('Error deleting display request:', error);
+    throw new Error('Failed to delete display request');
+  }
+};

@@ -6,7 +6,6 @@ const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'creat
     name: 'Wireless Mouse',
     category: 'Electronics',
     price: 29.99,
-    stock: 50,
     description: 'Ergonomic wireless mouse with long battery life',
     sku: 'WM001'
   },
@@ -14,7 +13,6 @@ const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'creat
     name: 'Office Chair',
     category: 'Furniture',
     price: 199.99,
-    stock: 25,
     description: 'Comfortable ergonomic office chair with lumbar support',
     sku: 'OC001'
   },
@@ -22,7 +20,6 @@ const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'creat
     name: 'Notebook Set',
     category: 'Office Supplies',
     price: 12.99,
-    stock: 100,
     description: 'Set of 3 lined notebooks for office use',
     sku: 'NB001'
   },
@@ -30,7 +27,6 @@ const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'creat
     name: 'USB-C Hub',
     category: 'Electronics',
     price: 49.99,
-    stock: 30,
     description: 'Multi-port USB-C hub with HDMI and USB 3.0 ports',
     sku: 'UH001'
   },
@@ -38,7 +34,6 @@ const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'creat
     name: 'Desk Lamp',
     category: 'Accessories',
     price: 39.99,
-    stock: 40,
     description: 'LED desk lamp with adjustable brightness',
     sku: 'DL001'
   },
@@ -46,7 +41,6 @@ const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'creat
     name: 'Whiteboard Markers',
     category: 'Office Supplies',
     price: 8.99,
-    stock: 75,
     description: 'Pack of 4 dry erase markers in assorted colors',
     sku: 'WM002'
   },
@@ -54,7 +48,6 @@ const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'creat
     name: 'Monitor Stand',
     category: 'Accessories',
     price: 34.99,
-    stock: 20,
     description: 'Adjustable monitor stand with storage compartment',
     sku: 'MS001'
   },
@@ -62,7 +55,6 @@ const sampleProducts: Omit<CreateProduct, 'supplierId' | 'supplierName' | 'creat
     name: 'Wireless Keyboard',
     category: 'Electronics',
     price: 79.99,
-    stock: 35,
     description: 'Compact wireless keyboard with backlight',
     sku: 'WK001'
   }

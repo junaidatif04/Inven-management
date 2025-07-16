@@ -8,9 +8,12 @@ export interface InventoryItem {
   minStockLevel: number;
   maxStockLevel: number;
   unitPrice: number;
-  supplier: string;
+  supplier: string; // Legacy field for backward compatibility
+  supplierId?: string; // New supplier ID field
+  supplierName?: string; // New supplier name field
   location: string;
   status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'discontinued';
+  isPublished: boolean; // Whether item is published to end-user catalog
   imageUrl?: string;
   imagePath?: string;
   lastUpdated: any;
@@ -27,8 +30,11 @@ export interface CreateInventoryItem {
   minStockLevel: number;
   maxStockLevel: number;
   unitPrice: number;
-  supplier: string;
+  supplier?: string; // Legacy field for backward compatibility
+  supplierId?: string; // New supplier ID field
+  supplierName?: string; // New supplier name field
   location: string;
+  isPublished?: boolean; // Whether item is published to end-user catalog
   imageUrl?: string;
   imagePath?: string;
 }
@@ -36,6 +42,7 @@ export interface CreateInventoryItem {
 export interface UpdateInventoryItem extends Partial<CreateInventoryItem> {
   id: string;
   status?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'discontinued';
+  isPublished?: boolean; // Whether item is published to end-user catalog
   imageUrl?: string;
   imagePath?: string;
 }

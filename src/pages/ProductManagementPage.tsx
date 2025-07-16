@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
+
 import { Textarea } from '@/components/ui/textarea';
 import { NavigationHeader } from '@/components/NavigationHeader';
 import { 
@@ -17,67 +17,94 @@ import {
   Package, 
   Edit, 
   Eye,
-  CalendarIcon,
+
   Send,
 
-  FileText
+  Upload,
+  X,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Inbox,
+  Trash2
 } from 'lucide-react';
-import { format } from 'date-fns';
+
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Product, 
   PurchaseOrder, 
   CreateProduct, 
-  UpdateProduct,
-  UpdatePurchaseOrder,
+
+
   getAllProducts,
   getProductsBySupplier,
   createProduct,
   updateProduct,
   uploadProductImage,
-
-
   getAllPurchaseOrders,
   getPurchaseOrdersBySupplier,
-  updatePurchaseOrder,
+
   subscribeToProducts,
   subscribeToProductsBySupplier,
   subscribeToPurchaseOrders,
   subscribeToPurchaseOrdersBySupplier
 } from '@/services/productService';
+import {
+  DisplayRequest,
+  QuantityRequest,
+  CreateDisplayRequest,
+  QuantityResponse,
+  createDisplayRequest,
+  getDisplayRequestsBySupplier,
+  getQuantityRequestsBySupplier,
+  respondToQuantityRequest,
+  deleteDisplayRequest
+} from '@/services/displayRequestService';
 
 
 
 const sections = [
-  { id: 'products', name: 'Product Catalog' },
-  { id: 'purchase-orders', name: 'Purchase Orders' }
+  { id: 'products', name: 'Product Catalog', icon: Package },
+  { id: 'requested-products', name: 'Requested Products', icon: Send },
+  { id: 'received-requests', name: 'Received Requests', icon: Inbox }
 ];
 
 export default function ProductManagementPage() {
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('products');
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
+  const [quantityRequests, setQuantityRequests] = useState<QuantityRequest[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
-  const [deliveryDate, setDeliveryDate] = useState<Date>();
-  const [response, setResponse] = useState('');
-  const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
+
+  const [selectedQuantityRequest, setSelectedQuantityRequest] = useState<QuantityRequest | null>(null);
+
+
+
   const [newProductForm, setNewProductForm] = useState({
     name: '',
     category: '',
     price: '',
-    stock: '',
     description: ''
   });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editProductForm, setEditProductForm] = useState<UpdateProduct>({});
+
+  const [quantityResponseForm, setQuantityResponseForm] = useState({
+    status: '' as 'approved_full' | 'approved_partial' | 'rejected' | '',
+    approvedQuantity: '',
+    rejectionReason: '',
+    notes: ''
+  });
+  const [showQuantityResponseDialog, setShowQuantityResponseDialog] = useState(false);
 
 
   useEffect(() => {
@@ -113,14 +140,17 @@ export default function ProductManagementPage() {
     if (!user) return;
     
     try {
-
       let productsData: Product[];
       let ordersData: PurchaseOrder[];
+      let displayRequestsData: DisplayRequest[] = [];
+      let quantityRequestsData: QuantityRequest[] = [];
       
       if (user.role === 'supplier') {
-        [productsData, ordersData] = await Promise.all([
+        [productsData, ordersData, displayRequestsData, quantityRequestsData] = await Promise.all([
           getProductsBySupplier(user.id),
-          getPurchaseOrdersBySupplier(user.id)
+          getPurchaseOrdersBySupplier(user.id),
+          getDisplayRequestsBySupplier(user.id),
+          getQuantityRequestsBySupplier(user.id)
         ]);
       } else {
         [productsData, ordersData] = await Promise.all([
@@ -131,10 +161,10 @@ export default function ProductManagementPage() {
       
       setProducts(productsData);
       setPurchaseOrders(ordersData);
+      setDisplayRequests(displayRequestsData);
+      setQuantityRequests(quantityRequestsData);
     } catch (error) {
       toast.error('Failed to load data');
-    } finally {
-
     }
   };
 
@@ -167,27 +197,102 @@ export default function ProductManagementPage() {
 
 
 
-  const handlePOResponse = async (poId: string) => {
-    if (!deliveryDate) {
-      toast.error('Please select a delivery date');
+
+
+  const handleCreateDisplayRequest = async (product: Product) => {
+    if (!user) return;
+    
+    try {
+      const requestData: CreateDisplayRequest = {
+        productId: product.id,
+        productName: product.name,
+        productDescription: product.description || '',
+        productSku: product.sku || `SKU-${product.id.slice(-8)}`, // Generate SKU if missing
+        productPrice: product.price,
+        productImageUrl: product.imageUrl || '',
+        supplierId: user.id,
+        supplierName: user.displayName || user.email || 'Unknown Supplier',
+        supplierEmail: user.email || ''
+      };
+      
+      await createDisplayRequest(requestData);
+      toast.success('Display request submitted successfully');
+      
+      // Reload display requests
+      const updatedDisplayRequests = await getDisplayRequestsBySupplier(user.id);
+      setDisplayRequests(updatedDisplayRequests);
+    } catch (error) {
+      console.error('Error creating display request:', error);
+      toast.error('Failed to create display request');
+    }
+  };
+
+  const handleQuantityResponse = async () => {
+    if (!selectedQuantityRequest || !user) return;
+    
+    if (!quantityResponseForm.status) {
+      toast.error('Please select a response type');
+      return;
+    }
+    
+    if (quantityResponseForm.status === 'rejected' && !quantityResponseForm.rejectionReason.trim()) {
+      toast.error('Please provide a rejection reason');
+      return;
+    }
+    
+    if ((quantityResponseForm.status === 'approved_partial') && (!quantityResponseForm.approvedQuantity || parseInt(quantityResponseForm.approvedQuantity) <= 0)) {
+      toast.error('Please enter a valid approved quantity');
       return;
     }
     
     try {
-      const updates: UpdatePurchaseOrder = {
-        status: 'confirmed',
-        response,
-        deliveryDate
+      const response: QuantityResponse = {
+        quantityRequestId: selectedQuantityRequest.id,
+        status: quantityResponseForm.status,
+        approvedQuantity: quantityResponseForm.status === 'rejected' ? undefined : 
+          quantityResponseForm.status === 'approved_full' ? undefined : parseInt(quantityResponseForm.approvedQuantity),
+        rejectionReason: quantityResponseForm.status === 'rejected' ? quantityResponseForm.rejectionReason : undefined,
+        notes: quantityResponseForm.notes || undefined
       };
       
-      await updatePurchaseOrder(poId, updates);
-      toast.success(`Response submitted for ${poId}`);
-      setSelectedPO(null);
-      setDeliveryDate(undefined);
-      setResponse('');
-      setQuantities({});
+      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id);
+      toast.success('Response submitted successfully');
+      
+      // Reset form and close dialog
+      setQuantityResponseForm({
+        status: '',
+        approvedQuantity: '',
+        rejectionReason: '',
+        notes: ''
+      });
+      setShowQuantityResponseDialog(false);
+      setSelectedQuantityRequest(null);
+      
+      // Reload quantity requests
+      const updatedQuantityRequests = await getQuantityRequestsBySupplier(user.id);
+      setQuantityRequests(updatedQuantityRequests);
     } catch (error) {
       toast.error('Failed to submit response');
+    }
+  };
+
+  const getDisplayRequestForProduct = (productId: string) => {
+    return displayRequests.find(req => req.productId === productId && req.status === 'pending');
+  };
+
+  const handleDeleteDisplayRequest = async (requestId: string) => {
+    if (!user) return;
+    
+    try {
+      await deleteDisplayRequest(requestId, user.id);
+      toast.success('Display request deleted successfully');
+      
+      // Reload display requests
+      const updatedDisplayRequests = await getDisplayRequestsBySupplier(user.id);
+      setDisplayRequests(updatedDisplayRequests);
+    } catch (error: any) {
+      console.error('Error deleting display request:', error);
+      toast.error(error.message || 'Failed to delete display request');
     }
   };
 
@@ -220,7 +325,6 @@ export default function ProductManagementPage() {
         name: newProductForm.name,
         category: newProductForm.category,
         price: parseFloat(newProductForm.price),
-        stock: parseInt(newProductForm.stock) || 0,
         description: newProductForm.description,
         supplierId: user.id,
         supplierName: user.displayName || user.email || 'Unknown',
@@ -248,7 +352,6 @@ export default function ProductManagementPage() {
         name: '',
         category: '',
         price: '',
-        stock: '',
         description: ''
       });
       setSelectedImage(null);
@@ -260,15 +363,63 @@ export default function ProductManagementPage() {
     }
   };
 
-  const handleUpdateProduct = async (productId: string) => {
+  const handleUpdateProduct = async (productId: string, updates: any) => {
     try {
-      await updateProduct(productId, editProductForm);
+      await updateProduct(productId, updates);
       toast.success('Product updated successfully');
-
-      setEditProductForm({});
-      setSelectedProduct(null);
+      setIsEditDialogOpen(false);
+      setEditingProduct(null);
     } catch (error) {
+      console.error('Error updating product:', error);
       toast.error('Failed to update product');
+    }
+  };
+
+  const handleEditProduct = (product: any) => {
+    setEditingProduct({
+      ...product,
+      images: product.images || []
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditFormChange = (field: string, value: any) => {
+    setEditingProduct((prev: any) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleEditImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const newImages = Array.from(files).map(file => ({
+        file,
+        preview: URL.createObjectURL(file)
+      }));
+      setEditingProduct((prev: any) => ({
+        ...prev,
+        images: [...(prev.images || []), ...newImages]
+      }));
+    }
+  };
+
+  const handleEditRemoveImage = (index: number) => {
+    setEditingProduct((prev: any) => ({
+      ...prev,
+      images: prev.images.filter((_: any, i: number) => i !== index)
+    }));
+  };
+
+  const handleSaveEdit = () => {
+    if (editingProduct) {
+      handleUpdateProduct(editingProduct.id, {
+        name: editingProduct.name,
+        category: editingProduct.category,
+        price: editingProduct.price,
+        description: editingProduct.description,
+        images: editingProduct.images
+      });
     }
   };
 
@@ -341,15 +492,7 @@ export default function ProductManagementPage() {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Initial Stock</Label>
-                <Input
-                  type="number"
-                  placeholder="Enter stock quantity"
-                  value={newProductForm.stock}
-                  onChange={(e) => setNewProductForm(prev => ({ ...prev, stock: e.target.value }))}
-                />
-              </div>
+
               <div className="space-y-2">
                 <Label>Description</Label>
                 <Textarea
@@ -470,10 +613,7 @@ export default function ProductManagementPage() {
                     <span className="text-sm text-muted-foreground">Price:</span>
                     <span className="font-bold">${product.price}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Stock:</span>
-                    <span className="font-medium">{product.stock} units</span>
-                  </div>
+
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Updated:</span>
                     <span className="text-sm">{formatDate(product.updatedAt)}</span>
@@ -537,10 +677,7 @@ export default function ProductManagementPage() {
                               <Label className="text-sm font-medium">Price</Label>
                               <p className="text-sm font-bold">${selectedProduct.price}</p>
                             </div>
-                            <div>
-                              <Label className="text-sm font-medium">Stock</Label>
-                              <p className="text-sm">{selectedProduct.stock} units</p>
-                            </div>
+
                           </div>
                           <div>
                             <Label className="text-sm font-medium">Last Updated</Label>
@@ -550,208 +687,455 @@ export default function ProductManagementPage() {
                             <Button 
                               variant="outline" 
                               className="flex-1"
-                              onClick={() => handleUpdateProduct(selectedProduct.id)}
+                              onClick={() => handleEditProduct(selectedProduct)}
                             >
                               <Edit className="mr-2 h-4 w-4" />
                               Edit
                             </Button>
-                            <Button className="flex-1">
-                              <Package className="mr-2 h-4 w-4" />
-                              Update Stock
-                            </Button>
+
                           </div>
                         </div>
                       </DialogContent>
                     )}
                   </Dialog>
-                  <Button size="sm" variant="outline" className="flex-1">
-                    <Edit className="h-3 w-3 mr-1" />
-                    Edit
-                  </Button>
+                  {user?.role === 'supplier' ? (
+                    <>
+                      {getDisplayRequestForProduct(product.id) ? (
+                        <Button 
+                          size="sm" 
+                          variant="secondary" 
+                          className="flex-1"
+                          disabled
+                        >
+                          <Clock className="h-3 w-3 mr-1" />
+                          Requested
+                        </Button>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          variant="default" 
+                          className="flex-1"
+                          onClick={() => handleCreateDisplayRequest(product)}
+                        >
+                          <Send className="h-3 w-3 mr-1" />
+                          Request
+                        </Button>
+                      )}
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="flex-1"
+                        onClick={() => handleEditProduct(product)}
+                      >
+                        <Edit className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                    </>
+                  ) : (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="flex-1"
+                      onClick={() => handleEditProduct(product)}
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+            <DialogDescription>
+              Update product information
+            </DialogDescription>
+          </DialogHeader>
+          {editingProduct && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Product Name</Label>
+                <Input
+                  value={editingProduct.name || ''}
+                  onChange={(e) => handleEditFormChange('name', e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select 
+                    value={editingProduct.category || ''} 
+                    onValueChange={(value) => handleEditFormChange('category', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Electronics">Electronics</SelectItem>
+                      <SelectItem value="Accessories">Accessories</SelectItem>
+                      <SelectItem value="Furniture">Furniture</SelectItem>
+                      <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Price ($)</Label>
+                  <Input
+                    type="number"
+                    value={editingProduct.price || ''}
+                    onChange={(e) => handleEditFormChange('price', parseFloat(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Textarea
+                  value={editingProduct.description || ''}
+                  onChange={(e) => handleEditFormChange('description', e.target.value)}
+                />
+              </div>
+              
+              {/* Image Upload for Edit */}
+              <div className="space-y-2">
+                <Label>Product Images</Label>
+                <div className="space-y-2">
+                  {editingProduct.images && editingProduct.images.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {editingProduct.images.map((image: any, index: number) => (
+                        <div key={index} className="relative">
+                          <img 
+                            src={image.preview || image.url} 
+                            alt={`Product ${index + 1}`}
+                            className="w-full h-20 object-cover rounded border"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="absolute -top-2 -right-2 h-6 w-6 p-0"
+                            onClick={() => handleEditRemoveImage(index)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="border-2 border-dashed border-muted-foreground/25 rounded-md p-4 text-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleEditImageSelect}
+                      className="hidden"
+                      id="edit-product-image-upload"
+                    />
+                    <label 
+                      htmlFor="edit-product-image-upload" 
+                      className="cursor-pointer flex flex-col items-center space-y-2"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                        <Upload className="h-4 w-4" />
+                      </div>
+                      <span className="text-sm text-muted-foreground">Add more images</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex space-x-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => setIsEditDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={handleSaveEdit}
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
-  const renderPurchaseOrders = () => (
+  const renderRequestedProducts = () => (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold">Purchase Orders</h2>
+        <h2 className="text-xl font-semibold">Requested Products</h2>
         <p className="text-sm text-muted-foreground">
-          Manage incoming purchase orders and respond to requests
+          Track your display requests to Admin/Warehouse
         </p>
       </div>
 
-      <Card>
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            {purchaseOrders.map((po) => (
-              <div key={po.id} className="p-4 border rounded-lg space-y-3 hover:bg-muted/50 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
+      {displayRequests.length === 0 ? (
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center py-8 text-muted-foreground">
+              <Send className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No display requests found</p>
+              <p className="text-sm">Products you request will appear here</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {displayRequests.map((request) => (
+            <Card key={request.id}>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
                     <div className="flex items-center space-x-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <p className="font-medium">{po.id}</p>
+                      <h3 className="font-semibold">{request.productName}</h3>
+                      <Badge variant={getStatusBadgeVariant(request.status)}>
+                        {request.status}
+                      </Badge>
                     </div>
-                    <Badge variant={getStatusBadgeVariant(po.status)}>
-                      {po.status}
-                    </Badge>
-                  </div>
-                  <p className="text-lg font-bold">${(po.total || 0).toLocaleString()}</p>
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Customer</Label>
-                    <p className="font-medium">{po.customer}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Requested</Label>
-                    <p>{formatDate(po.createdAt)}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Deadline</Label>
-                    <p>{formatDate(po.requestedDate)}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Items</Label>
-                    <p>{po.items.length} product(s)</p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Items:</Label>
-                  {po.items.map((item, index) => (
-                    <div key={index} className="flex justify-between items-center p-2 bg-muted/50 rounded">
-                      <span className="text-sm">{item.productName}</span>
-                      <span className="text-sm font-medium">
-                        {item.quantity} × ${item.price || 0} = ${((item.quantity || 0) * (item.price || 0)).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {po.notes && (
-                  <div>
-                    <Label className="text-sm font-medium">Notes:</Label>
-                    <p className="text-sm text-muted-foreground">{po.notes}</p>
-                  </div>
-                )}
-
-                <div className="flex space-x-2">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => setSelectedPO(po)}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View Details
-                      </Button>
-                    </DialogTrigger>
-                    {selectedPO && (
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                          <DialogTitle>Purchase Order Response</DialogTitle>
-                          <DialogDescription>
-                          Respond to {selectedPO.id} from {selectedPO.customer}
-                        </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label>Items</Label>
-                            {selectedPO.items.map((item: any, index: number) => (
-                              <div key={index} className="flex items-center justify-between p-2 border rounded">
-                                <span className="text-sm">{item.name}</span>
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-xs text-muted-foreground">Requested: {item.quantity}</span>
-                                  <Input
-                                    type="number"
-                                    placeholder={item.quantity.toString()}
-                                    className="w-20 h-8"
-                                    value={quantities[item.name] || item.quantity}
-                                    onChange={(e) => setQuantities(prev => ({
-                                      ...prev,
-                                      [item.name]: parseInt(e.target.value) || 0
-                                    }))}
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Delivery Date</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full justify-start">
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {deliveryDate ? format(deliveryDate, 'PPP') : 'Select delivery date'}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={deliveryDate}
-                                  onSelect={setDeliveryDate}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Response Notes</Label>
-                            <Textarea
-                              placeholder="Any additional information..."
-                              value={response}
-                              onChange={(e) => setResponse(e.target.value)}
-                            />
-                          </div>
-
-                          <div className="flex space-x-2">
-                            <Button 
-                              variant="outline" 
-                              className="flex-1"
-                              onClick={() => setSelectedPO(null)}
-                            >
-                              Cancel
-                            </Button>
-                            <Button 
-                              className="flex-1"
-                              onClick={() => handlePOResponse(selectedPO.id)}
-                            >
-                              <Send className="mr-2 h-4 w-4" />
-                              Submit Response
-                            </Button>
-                          </div>
-                        </div>
-                      </DialogContent>
+                    <p className="text-sm text-muted-foreground">
+                      SKU: {request.productSku || 'N/A'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Price: ${request.productPrice}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Requested: {formatDate(request.requestedAt)}
+                    </p>
+                    {request.reviewedAt && (
+                      <p className="text-sm text-muted-foreground">
+                        Reviewed: {formatDate(request.reviewedAt)} by {request.reviewerName}
+                      </p>
                     )}
-                  </Dialog>
-                  
-                  {po.status === 'pending' && (
-                    <Button 
-                      size="sm"
-                      onClick={() => setSelectedPO(po)}
-                    >
-                      <Send className="h-3 w-3 mr-1" />
-                      Respond
-                    </Button>
-                  )}
+                    {request.rejectionReason && (
+                      <p className="text-sm text-red-600">
+                        Reason: {request.rejectionReason}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {request.status === 'pending' && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeleteDisplayRequest(request.id)}
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Delete
+                        </Button>
+                        <Clock className="h-4 w-4 text-yellow-500" />
+                      </>
+                    )}
+                    {request.status === 'accepted' && (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    )}
+                    {request.status === 'rejected' && (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
+
+  const renderReceivedRequests = () => (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-semibold">Received Requests</h2>
+        <p className="text-sm text-muted-foreground">
+          Respond to quantity requests from Admin/Warehouse
+        </p>
+      </div>
+
+      {quantityRequests.length === 0 ? (
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center py-8 text-muted-foreground">
+              <Inbox className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No quantity requests found</p>
+              <p className="text-sm">Incoming requests will appear here</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {quantityRequests.map((request) => (
+            <Card key={request.id}>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <h3 className="font-semibold">{request.productName}</h3>
+                      <Badge variant={getStatusBadgeVariant(request.status)}>
+                        {request.status.replace('_', ' ')}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Requested by: {request.requesterName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Requested: {formatDate(request.requestedAt)}
+                    </p>
+                    {request.respondedAt && (
+                      <p className="text-sm text-muted-foreground">
+                        Responded: {formatDate(request.respondedAt)}
+                      </p>
+                    )}
+                    {request.approvedQuantity && (
+                      <p className="text-sm text-green-600">
+                        Approved Quantity: {request.approvedQuantity}
+                      </p>
+                    )}
+                    {request.rejectionReason && (
+                      <p className="text-sm text-red-600">
+                        Rejection Reason: {request.rejectionReason}
+                      </p>
+                    )}
+                    {request.notes && (
+                      <p className="text-sm text-muted-foreground">
+                        Notes: {request.notes}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {request.status === 'pending' && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelectedQuantityRequest(request);
+                          setShowQuantityResponseDialog(true);
+                        }}
+                      >
+                        Respond
+                      </Button>
+                    )}
+                    {request.status === 'approved_full' && (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    )}
+                    {request.status === 'approved_partial' && (
+                      <CheckCircle className="h-4 w-4 text-yellow-500" />
+                    )}
+                    {request.status === 'rejected' && (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Quantity Response Dialog */}
+      <Dialog open={showQuantityResponseDialog} onOpenChange={setShowQuantityResponseDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Respond to Quantity Request</DialogTitle>
+            <DialogDescription>
+              {selectedQuantityRequest?.productName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Response Type</Label>
+              <Select 
+                value={quantityResponseForm.status} 
+                onValueChange={(value: 'approved_full' | 'approved_partial' | 'rejected') => 
+                  setQuantityResponseForm(prev => ({ ...prev, status: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select response type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="approved_full">Approve Full</SelectItem>
+                  <SelectItem value="approved_partial">Approve Partial</SelectItem>
+                  <SelectItem value="rejected">Reject</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {quantityResponseForm.status === 'approved_partial' && (
+              <div className="space-y-2">
+                <Label>Approved Quantity</Label>
+                <Input
+                  type="number"
+                  placeholder="Enter quantity you can supply"
+                  value={quantityResponseForm.approvedQuantity}
+                  onChange={(e) => setQuantityResponseForm(prev => ({ ...prev, approvedQuantity: e.target.value }))}
+                />
+              </div>
+            )}
+            
+            {quantityResponseForm.status === 'rejected' && (
+              <div className="space-y-2">
+                <Label>Rejection Reason *</Label>
+                <Textarea
+                  placeholder="Please provide a reason for rejection..."
+                  value={quantityResponseForm.rejectionReason}
+                  onChange={(e) => setQuantityResponseForm(prev => ({ ...prev, rejectionReason: e.target.value }))}
+                />
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label>Additional Notes (Optional)</Label>
+              <Textarea
+                placeholder="Any additional notes..."
+                value={quantityResponseForm.notes}
+                onChange={(e) => setQuantityResponseForm(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+            
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => {
+                  setShowQuantityResponseDialog(false);
+                  setQuantityResponseForm({
+                    status: '',
+                    approvedQuantity: '',
+                    rejectionReason: '',
+                    notes: ''
+                  });
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="flex-1"
+                onClick={handleQuantityResponse}
+                disabled={!quantityResponseForm.status}
+              >
+                Submit Response
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
+
 
   return (
     <div className="h-full flex flex-col space-y-6">
@@ -767,7 +1151,8 @@ export default function ProductManagementPage() {
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="pb-6">
           {activeSection === 'products' && renderProducts()}
-          {activeSection === 'purchase-orders' && renderPurchaseOrders()}
+          {activeSection === 'requested-products' && renderRequestedProducts()}
+          {activeSection === 'received-requests' && renderReceivedRequests()}
         </div>
       </div>
     </div>

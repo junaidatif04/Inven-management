@@ -12,7 +12,8 @@ import {
   Activity,
   Eye,
   DollarSign,
-  RefreshCw
+  RefreshCw,
+  Package
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +26,8 @@ import { getAllOrders } from '@/services/orderService';
 import { getAllUsers } from '@/services/userService';
 import { getAllSuppliers } from '@/services/supplierService';
 import { Supplier } from '@/types/inventory';
+import { displayRequestService, getAllDisplayRequests, getAllQuantityRequests } from '@/services/displayRequestService';
+import type { DisplayRequest, QuantityRequest } from '@/types/displayRequest';
 
 
 
@@ -50,6 +53,8 @@ export default function AdminDashboard() {
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [lowStockItemsData, setLowStockItemsData] = useState<any[]>([]);
   const [systemLogs, setSystemLogs] = useState<any[]>([]);
+  const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
+  const [quantityRequests, setQuantityRequests] = useState<QuantityRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -91,6 +96,13 @@ export default function AdminDashboard() {
       
       // Load suppliers
       const suppliers: Supplier[] = await getAllSuppliers();
+      
+      // Load display requests and quantity requests
+      const displayRequests = await getAllDisplayRequests();
+      const quantityRequests = await getAllQuantityRequests();
+      
+      setDisplayRequests(displayRequests);
+      setQuantityRequests(quantityRequests);
 
       // Calculate real inventory value
       const totalInventoryValue = inventoryItems.reduce((sum, item) =>
@@ -142,6 +154,10 @@ export default function AdminDashboard() {
 
       // Calculate supplier stats
       const activeSuppliers = suppliers.filter(s => s.status === 'active').length;
+      
+      // Calculate display and quantity request stats
+      const pendingDisplayRequests = displayRequests.filter(req => req.status === 'pending').length;
+      const pendingQuantityRequests = quantityRequests.filter(req => req.status === 'pending').length;
 
       const newStats: DashboardStats = {
         totalInventoryValue,
@@ -152,7 +168,9 @@ export default function AdminDashboard() {
         totalUsers: users.length,
         activeSuppliers,
         monthlyOrderGrowth,
-        inventoryTurnover: 2.5
+        inventoryTurnover: 2.5,
+        pendingDisplayRequests,
+        pendingQuantityRequests
       };
 
       // Generate real system logs based on recent activity
@@ -356,6 +374,44 @@ export default function AdminDashboard() {
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {stats.activeSuppliers} suppliers
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Display Requests
+                </CardTitle>
+                <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg">
+                  <Eye className="h-4 w-4 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                  {stats.pendingDisplayRequests || 0}
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Pending review
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Quantity Requests
+                </CardTitle>
+                <div className="p-2 bg-gradient-to-br from-teal-500 to-green-600 rounded-lg">
+                  <Package className="h-4 w-4 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                  {stats.pendingQuantityRequests || 0}
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Awaiting response
                 </p>
               </CardContent>
             </Card>

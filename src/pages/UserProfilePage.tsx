@@ -13,10 +13,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/services/authService';
 import { submitAccessRequest } from '@/services/accessRequestService';
 import { sendRequestConfirmationEmail } from '@/services/emailService';
-import { deleteUser } from '@/services/userService';
+import { deleteUser, updateUser } from '@/services/userService';
 import { getSupplierByEmail, updateSupplier } from '@/services/supplierService';
 import { Supplier } from '@/types/inventory';
-import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2 } from 'lucide-react';
+import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2, Edit } from 'lucide-react';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 
 export default function UserProfilePage() {
@@ -37,6 +37,8 @@ export default function UserProfilePage() {
   const [taxId, setTaxId] = useState('');
   const [supplierData, setSupplierData] = useState<Supplier | null>(null);
   const [isEditingSupplier, setIsEditingSupplier] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: '' });
   const [supplierForm, setSupplierForm] = useState({
     companyName: '',
     contactPerson: '',
@@ -51,6 +53,7 @@ export default function UserProfilePage() {
       if (user.role === 'supplier') {
         loadSupplierData();
       }
+      setProfileForm({ name: user.name || '' });
     }
   }, [user]);
 
@@ -90,6 +93,26 @@ export default function UserProfilePage() {
     } catch (error) {
       console.error('Error updating supplier info:', error);
       toast.error('Failed to update supplier information. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!user) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      await updateUser({
+        id: user.id,
+        name: profileForm.name
+      });
+      toast.success('Profile updated successfully');
+      setIsEditingProfile(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
     } finally {
       setIsSubmitting(false);
     }
@@ -278,26 +301,56 @@ export default function UserProfilePage() {
               <Separator />
 
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">Account Details</h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Name</p>
-                    <p className="text-sm">{user.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Email</p>
-                    <p className="text-sm">{user.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Role</p>
-                    <p className="text-sm">{getRoleDisplayName(user.role)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Member Since</p>
-                    <p className="text-sm">{user.createdAt ? new Date(user.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium">Account Details</h4>
+                  {!isEditingProfile && (
+                    <Button variant="outline" size="sm" onClick={() => setIsEditingProfile(true)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                  )}
                 </div>
+                
+                {isEditingProfile ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="profileName">Name</Label>
+                      <Input
+                        id="profileName"
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Enter your name"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleUpdateProfile} disabled={isSubmitting}>
+                        {isSubmitting ? 'Saving...' : 'Save Changes'}
+                      </Button>
+                      <Button variant="outline" onClick={() => setIsEditingProfile(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Name</p>
+                      <p className="text-sm">{user.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Email</p>
+                      <p className="text-sm">{user.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Role</p>
+                      <p className="text-sm">{getRoleDisplayName(user.role)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Member Since</p>
+                      <p className="text-sm">{user.createdAt ? new Date(user.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <Separator />

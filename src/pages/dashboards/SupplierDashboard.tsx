@@ -27,28 +27,28 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
- 
- 
-  updatePurchaseOrder,
+  getAllProducts,
+  getProductsBySupplier,
   subscribeToProductsBySupplier,
-  subscribeToPurchaseOrdersBySupplier,
   createProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
+  submitProductForDisplay
 } from '@/services/productService';
-import type { Product, PurchaseOrder, CreateProduct, UpdateProduct } from '@/services/productService';
+import { createDisplayRequest, getDisplayRequestsBySupplier, getQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/displayRequestService';
+import type { Product, CreateProduct, UpdateProduct } from '@/services/productService';
+import { DisplayRequest, QuantityRequest, QuantityResponse } from '@/types/displayRequest';
 
 
 
 export default function SupplierDashboard() {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+
+  const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
+  const [quantityRequests, setQuantityRequests] = useState<QuantityRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
-  const [deliveryDate, setDeliveryDate] = useState<Date>();
-  const [response, setResponse] = useState('');
-  const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
+
   
   // Product CRUD states
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -58,12 +58,16 @@ export default function SupplierDashboard() {
   const [productForm, setProductForm] = useState({
     name: '',
     category: '',
-    price: 0,
-    stock: 0,
+    price: '',
     description: '',
     sku: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [showDisplayRequestDialog, setShowDisplayRequestDialog] = useState(false);
+  const [showQuantityResponseDialog, setShowQuantityResponseDialog] = useState(false);
+  const [selectedQuantityRequest, setSelectedQuantityRequest] = useState<QuantityRequest | null>(null);
+  const [quantityResponse, setQuantityResponse] = useState({ quantity: 0, notes: '' });
 
   useEffect(() => {
     if (!user?.id || typeof user.id !== 'string') {
@@ -73,7 +77,19 @@ export default function SupplierDashboard() {
     }
 
     let unsubscribeProducts: (() => void) | null = null;
-    let unsubscribePOs: (() => void) | null = null;
+
+    const loadAdditionalData = async () => {
+      try {
+        const [displayRequestsData, quantityRequestsData] = await Promise.all([
+          getDisplayRequestsBySupplier(user.id),
+          getQuantityRequestsBySupplier(user.id)
+        ]);
+        setDisplayRequests(displayRequestsData);
+        setQuantityRequests(quantityRequestsData);
+      } catch (error) {
+        console.error('Error loading additional data:', error);
+      }
+    };
 
     try {
       unsubscribeProducts = subscribeToProductsBySupplier(user.id, (productsData) => {
@@ -81,9 +97,7 @@ export default function SupplierDashboard() {
         setLoading(false);
       });
 
-      unsubscribePOs = subscribeToPurchaseOrdersBySupplier(user.id, (posData) => {
-        setPurchaseOrders(posData);
-      });
+      loadAdditionalData();
     } catch (error) {
       console.error('Error setting up subscriptions in SupplierDashboard:', error);
       setLoading(false);
@@ -92,51 +106,20 @@ export default function SupplierDashboard() {
     return () => {
       try {
         if (unsubscribeProducts) unsubscribeProducts();
-        if (unsubscribePOs) unsubscribePOs();
       } catch (error) {
         console.error('Error cleaning up subscriptions:', error);
       }
     };
   }, [user?.id]);
 
-  const handlePOResponse = async (poId: string) => {
-    if (!deliveryDate) {
-      toast.error('Please select a delivery date');
-      return;
-    }
 
-    try {
-      const updatedItems = selectedPO?.items.map(item => ({
-        ...item,
-        confirmedQuantity: quantities[item.productId] || item.quantity
-      })) || [];
-
-      await updatePurchaseOrder(poId, {
-        status: 'confirmed',
-
-        deliveryDate: deliveryDate,
-        items: updatedItems,
-        response: response
-      });
-
-      toast.success(`Response submitted for ${poId}`);
-      setSelectedPO(null);
-      setDeliveryDate(undefined);
-      setResponse('');
-      setQuantities({});
-    } catch (error) {
-      console.error('Error updating purchase order:', error);
-      toast.error('Failed to submit response');
-    }
-  };
 
   // Product CRUD functions
   const resetProductForm = () => {
     setProductForm({
       name: '',
       category: '',
-      price: 0,
-      stock: 0,
+      price: '',
       description: '',
       sku: ''
     });
@@ -153,7 +136,6 @@ export default function SupplierDashboard() {
       name: product.name,
       category: product.category,
       price: product.price,
-      stock: product.stock,
       description: product.description || '',
       sku: product.sku || ''
     });
@@ -174,14 +156,18 @@ export default function SupplierDashboard() {
     setIsSubmitting(true);
     try {
       const productData: CreateProduct = {
-        ...productForm,
+        name: productForm.name,
+        category: productForm.category,
+        price: productForm.price,
+        description: productForm.description,
+        sku: productForm.sku,
         supplierId: user.id,
         supplierName: user.displayName || user.email || 'Unknown Supplier',
         createdBy: user.id
       };
 
       await createProduct(productData);
-      toast.success('Product created successfully');
+      toast.success('Product added to your catalog');
       setShowAddProduct(false);
       resetProductForm();
     } catch (error) {
@@ -204,7 +190,6 @@ export default function SupplierDashboard() {
         name: productForm.name,
         category: productForm.category,
         price: productForm.price,
-        stock: productForm.stock,
         description: productForm.description,
         sku: productForm.sku
       };
@@ -236,6 +221,105 @@ export default function SupplierDashboard() {
     }
   };
 
+  // Display Request Functions
+  const handleSubmitDisplayRequest = async () => {
+    if (!user?.id || selectedProducts.length === 0) {
+      toast.error('Please select at least one product');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await createDisplayRequest({
+        supplierId: user.id,
+        supplierName: user.displayName || user.email || 'Unknown Supplier',
+        productIds: selectedProducts,
+        notes: 'Request to display selected products'
+      });
+      
+      toast.success('Display request submitted successfully');
+      setSelectedProducts([]);
+      setShowDisplayRequestDialog(false);
+      
+      // Reload data
+      const [displayRequestsData, quantityRequestsData] = await Promise.all([
+        getDisplayRequestsBySupplier(user.id),
+        getQuantityRequestsBySupplier(user.id)
+      ]);
+      setDisplayRequests(displayRequestsData);
+      setQuantityRequests(quantityRequestsData);
+    } catch (error) {
+      console.error('Error submitting display request:', error);
+      toast.error('Failed to submit display request');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleQuantityResponse = async () => {
+    if (!selectedQuantityRequest || quantityResponse.quantity <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const response: QuantityResponse = {
+        approved: true,
+        quantity: quantityResponse.quantity,
+        notes: quantityResponse.notes
+      };
+      
+      await respondToQuantityRequest(selectedQuantityRequest.id, response);
+      toast.success('Quantity response submitted successfully');
+      
+      setShowQuantityResponseDialog(false);
+      setSelectedQuantityRequest(null);
+      setQuantityResponse({ quantity: 0, notes: '' });
+      
+      // Reload quantity requests
+      const quantityRequestsData = await getQuantityRequestsBySupplier(user.id);
+      setQuantityRequests(quantityRequestsData);
+    } catch (error) {
+      console.error('Error submitting quantity response:', error);
+      toast.error('Failed to submit quantity response');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRejectQuantityRequest = async () => {
+    if (!selectedQuantityRequest || !quantityResponse.notes.trim()) {
+      toast.error('Please provide a reason for rejection');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const response: QuantityResponse = {
+        approved: false,
+        quantity: 0,
+        notes: quantityResponse.notes
+      };
+      
+      await respondToQuantityRequest(selectedQuantityRequest.id, response);
+      toast.success('Quantity request rejected');
+      
+      setShowQuantityResponseDialog(false);
+      setSelectedQuantityRequest(null);
+      setQuantityResponse({ quantity: 0, notes: '' });
+      
+      // Reload quantity requests
+      const quantityRequestsData = await getQuantityRequestsBySupplier(user.id);
+      setQuantityRequests(quantityRequestsData);
+    } catch (error) {
+      console.error('Error rejecting quantity request:', error);
+      toast.error('Failed to reject quantity request');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getStatusBadgeVariant = (status: string) => {
     switch (status.toLowerCase()) {
       case 'active':
@@ -262,11 +346,9 @@ export default function SupplierDashboard() {
 
   const supplierStats = {
     totalProducts: products.length,
-    activeOrders: purchaseOrders.filter(po => po.status === 'confirmed').length,
-    monthlyRevenue: purchaseOrders
-      .filter(po => po.status === 'completed' && po.createdAt)
-      .reduce((sum, po) => sum + po.total, 0),
-    pendingPOs: purchaseOrders.filter(po => po.status === 'pending').length
+    proposedProducts: products.filter(p => p.status === 'proposed').length,
+    displayRequests: displayRequests.length,
+    pendingQuantityRequests: quantityRequests.filter(qr => qr.status === 'pending').length
   };
 
   return (
@@ -279,9 +361,13 @@ export default function SupplierDashboard() {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline">
-            <TrendingUp className="mr-2 h-4 w-4" />
-            Analytics
+          <Button 
+            variant="outline" 
+            onClick={() => setShowDisplayRequestDialog(true)}
+            disabled={products.filter(p => p.status === 'proposed').length === 0}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            Request Display
           </Button>
           <Button onClick={handleAddProduct}>
             <Plus className="mr-2 h-4 w-4" />
@@ -296,45 +382,45 @@ export default function SupplierDashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Proposed Products</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{supplierStats.proposedProducts}</div>
+                <p className="text-xs text-muted-foreground">Ready for display request</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Display Requests</CardTitle>
+                <Send className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{supplierStats.displayRequests}</div>
+                <p className="text-xs text-muted-foreground">Submitted</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Quantity Requests</CardTitle>
+                <Clock className="h-4 w-4 text-yellow-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">{supplierStats.pendingQuantityRequests}</div>
+                <p className="text-xs text-muted-foreground">Need response</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Products</CardTitle>
                 <Package className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{supplierStats.totalProducts}</div>
                 <p className="text-xs text-muted-foreground">In catalog</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
-                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{supplierStats.activeOrders}</div>
-                <p className="text-xs text-muted-foreground">In progress</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">${(supplierStats.monthlyRevenue || 0).toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">This month</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending POs</CardTitle>
-                <Clock className="h-4 w-4 text-yellow-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">{supplierStats.pendingPOs}</div>
-                <p className="text-xs text-muted-foreground">Need response</p>
               </CardContent>
             </Card>
           </div>
@@ -372,7 +458,6 @@ export default function SupplierDashboard() {
                             <p className="text-xs text-muted-foreground">{product.category} • {product.id}</p>
                             <div className="flex items-center space-x-4 text-xs">
                               <span className="font-medium">${product.price}</span>
-                              <span className="text-muted-foreground">Stock: {product.stock}</span>
                             </div>
                           </div>
                           <div className="flex space-x-1">
@@ -399,175 +484,190 @@ export default function SupplierDashboard() {
               </CardContent>
             </Card>
 
-            {/* Purchase Orders */}
+            {/* Quantity Requests */}
             <Card>
               <CardHeader>
-                <CardTitle>Purchase Orders</CardTitle>
+                <CardTitle>Quantity Requests</CardTitle>
                 <CardDescription>
-                  Respond to incoming purchase orders
+                  Respond to quantity requests from warehouse staff
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="pending" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="pending">Pending Response</TabsTrigger>
-                    <TabsTrigger value="all">All Orders</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="pending" className="space-y-4">
-                    <ScrollArea className="h-[300px]">
-                      <div className="space-y-3">
-                        {purchaseOrders.filter(po => po.status === 'pending').map((po) => (
-                          <div key={po.id} className="p-3 border rounded-lg space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <p className="font-medium text-sm">{po.id}</p>
-                                <Badge variant={getStatusBadgeVariant(po.status)}>
-                                  {po.status}
-                                </Badge>
-                              </div>
-                              <p className="text-sm font-medium">${(po.total || 0).toLocaleString()}</p>
+                <ScrollArea className="h-[400px]">
+                  <div className="space-y-4">
+                    {loading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Loading quantity requests...
+                      </div>
+                    ) : quantityRequests.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No quantity requests found
+                      </div>
+                    ) : (
+                      quantityRequests.map((request) => (
+                        <div key={request.id} className="p-3 border rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <p className="font-medium text-sm">{request.productName}</p>
+                              <Badge variant={getStatusBadgeVariant(request.status)}>
+                                {request.status}
+                              </Badge>
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              <p>Requested: {formatDate(po.createdAt)}</p>
-                              <p>Deadline: {formatDate(po.requestedDate)}</p>
-                            </div>
-                            <div className="space-y-1">
-                              {po.items.map((item, index) => (
-                                <p key={index} className="text-xs">
-                                  {item.productName} × {item.quantity}
-                                </p>
-                              ))}
-                            </div>
+                            <p className="text-sm font-medium">Qty: {request.requestedQuantity}</p>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            <p>Requested: {formatDate(request.createdAt)}</p>
+                            <p>From: {request.requesterName}</p>
+                          </div>
+                          {request.notes && (
+                            <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                              {request.notes}
+                            </p>
+                          )}
+                          {request.status === 'pending' && (
                             <Button 
                               size="sm" 
                               className="w-full"
-                              onClick={() => setSelectedPO(po)}
+                              onClick={() => {
+                                setSelectedQuantityRequest(request);
+                                setQuantityResponse({ quantity: request.requestedQuantity, notes: '' });
+                                setShowQuantityResponseDialog(true);
+                              }}
                             >
                               <Send className="h-3 w-3 mr-1" />
                               Respond
                             </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-
-                  <TabsContent value="all" className="space-y-4">
-                    <ScrollArea className="h-[300px]">
-                      <div className="space-y-3">
-                        {purchaseOrders.map((po) => (
-                          <div key={po.id} className="flex items-center justify-between p-3 border rounded-lg">
-                            <div className="space-y-1">
-                              <div className="flex items-center space-x-2">
-                                <p className="font-medium text-sm">{po.id}</p>
-                                <Badge variant={getStatusBadgeVariant(po.status)}>
-                                  {po.status}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                {po.items.length} items • ${(po.total || 0).toLocaleString()}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Due: {formatDate(po.requestedDate)}
-                              </p>
-                            </div>
-                            <Button size="sm" variant="outline">
-                              View
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
 
-      {/* PO Response Modal */}
-      {selectedPO && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-lg">
-            <CardHeader>
-              <CardTitle>Respond to {selectedPO.id}</CardTitle>
-              <CardDescription>
-                Confirm quantities and delivery date
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Items</Label>
-                {selectedPO.items.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 border rounded">
-                    <span className="text-sm">{item.productName}</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-muted-foreground">Requested: {item.quantity}</span>
-                      <Input
-                        type="number"
-                        placeholder={item.quantity.toString()}
-                        className="w-20 h-8"
-                        value={quantities[item.productId] || item.quantity}
-                        onChange={(e) => setQuantities(prev => ({
-                          ...prev,
-                          [item.productId]: parseInt(e.target.value) || 0
-                        }))}
+      {/* Display Request Dialog */}
+      <Dialog open={showDisplayRequestDialog} onOpenChange={setShowDisplayRequestDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Submit Display Request</DialogTitle>
+            <DialogDescription>
+              Select products to request for display
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Select Products</Label>
+              <ScrollArea className="h-[200px] border rounded p-2">
+                <div className="space-y-2">
+                  {products.filter(p => p.status === 'proposed').map((product) => (
+                    <div key={product.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={product.id}
+                        checked={selectedProducts.includes(product.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedProducts(prev => [...prev, product.id]);
+                          } else {
+                            setSelectedProducts(prev => prev.filter(id => id !== product.id));
+                          }
+                        }}
+                        className="rounded"
                       />
+                      <label htmlFor={product.id} className="text-sm cursor-pointer flex-1">
+                        {product.name} - ${product.price}
+                      </label>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => {
+                  setShowDisplayRequestDialog(false);
+                  setSelectedProducts([]);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="flex-1"
+                onClick={handleSubmitDisplayRequest}
+                disabled={isSubmitting || selectedProducts.length === 0}
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Request'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-              <div className="space-y-2">
-                <Label>Delivery Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {deliveryDate ? format(deliveryDate, 'PPP') : 'Select delivery date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={deliveryDate}
-                      onSelect={setDeliveryDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Additional Notes</Label>
-                <Textarea
-                  placeholder="Any additional information..."
-                  value={response}
-                  onChange={(e) => setResponse(e.target.value)}
-                />
-              </div>
-
-              <div className="flex space-x-2">
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => setSelectedPO(null)}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  className="flex-1"
-                  onClick={() => handlePOResponse(selectedPO.id)}
-                >
-                  Submit Response
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Quantity Response Dialog */}
+      <Dialog open={showQuantityResponseDialog} onOpenChange={setShowQuantityResponseDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Respond to Quantity Request</DialogTitle>
+            <DialogDescription>
+              {selectedQuantityRequest?.productName} - Requested: {selectedQuantityRequest?.requestedQuantity}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Available Quantity</Label>
+              <Input
+                type="number"
+                min="0"
+                value={quantityResponse.quantity}
+                onChange={(e) => setQuantityResponse(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+                placeholder="Enter available quantity"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={quantityResponse.notes}
+                onChange={(e) => setQuantityResponse(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Additional notes or reason for rejection..."
+              />
+            </div>
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => {
+                  setShowQuantityResponseDialog(false);
+                  setSelectedQuantityRequest(null);
+                  setQuantityResponse({ quantity: 0, notes: '' });
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive"
+                className="flex-1"
+                onClick={handleRejectQuantityRequest}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Rejecting...' : 'Reject'}
+              </Button>
+              <Button 
+                className="flex-1"
+                onClick={handleQuantityResponse}
+                disabled={isSubmitting || quantityResponse.quantity <= 0}
+              >
+                {isSubmitting ? 'Approving...' : 'Approve'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Product Dialog */}
       <Dialog open={showAddProduct} onOpenChange={setShowAddProduct}>
@@ -607,30 +707,17 @@ export default function SupplierDashboard() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="price">Price *</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={productForm.price}
-                  onChange={(e) => setProductForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stock">Initial Stock</Label>
-                <Input
-                  id="stock"
-                  type="number"
-                  min="0"
-                  value={productForm.stock}
-                  onChange={(e) => setProductForm(prev => ({ ...prev, stock: parseInt(e.target.value) || 0 }))}
-                  placeholder="0"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="price">Price *</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                min="0"
+                value={productForm.price}
+                onChange={(e) => setProductForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                placeholder="0.00"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="sku">SKU</Label>
@@ -701,30 +788,17 @@ export default function SupplierDashboard() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-price">Price *</Label>
-                <Input
-                  id="edit-price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={productForm.price}
-                  onChange={(e) => setProductForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-stock">Stock</Label>
-                <Input
-                  id="edit-stock"
-                  type="number"
-                  min="0"
-                  value={productForm.stock}
-                  onChange={(e) => setProductForm(prev => ({ ...prev, stock: parseInt(e.target.value) || 0 }))}
-                  placeholder="0"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-price">Price *</Label>
+              <Input
+                id="edit-price"
+                type="number"
+                step="0.01"
+                min="0"
+                value={productForm.price}
+                onChange={(e) => setProductForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                placeholder="0.00"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-sku">SKU</Label>
@@ -778,15 +852,9 @@ export default function SupplierDashboard() {
                   <p className="text-sm">{selectedProduct.category}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Price</Label>
-                  <p className="text-sm font-medium">${selectedProduct.price}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Stock</Label>
-                  <p className="text-sm">{selectedProduct.stock}</p>
-                </div>
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Price</Label>
+                <p className="text-sm font-medium">${selectedProduct.price}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

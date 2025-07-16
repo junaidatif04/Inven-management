@@ -9,6 +9,8 @@ export interface DashboardStats {
   activeSuppliers: number;
   monthlyOrderGrowth: number;
   inventoryTurnover: number;
+  pendingDisplayRequests?: number;
+  pendingQuantityRequests?: number;
 }
 
 // Analytics Interfaces

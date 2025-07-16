@@ -8,20 +8,25 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Package, 
   TruckIcon as Truck, 
   Plus, 
   Minus, 
+  Eye,
 
-  PackageCheck,
-  PackageX
+  PackageX,
+  Check,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllInventoryItems, adjustStock, getLowStockItems } from '@/services/inventoryService';
 import { getAllShipments, subscribeToShipments, Shipment } from '@/services/shipmentService';
+import { getAllDisplayRequests, reviewDisplayRequest, createQuantityRequest } from '@/services/displayRequestService';
 import { InventoryItem } from '@/types/inventory';
+import { DisplayRequest } from '@/types/displayRequest';
 
 export default function WarehouseDashboard() {
   const { user } = useAuth();
@@ -37,18 +42,17 @@ export default function WarehouseDashboard() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
+  const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showQuantityRequestDialog, setShowQuantityRequestDialog] = useState(false);
+  const [selectedDisplayRequest, setSelectedDisplayRequest] = useState<DisplayRequest | null>(null);
+  const [quantityRequestForm, setQuantityRequestForm] = useState({ quantity: 0, requestedQuantity: 0, notes: '', urgency: 'medium' });
   
   // Computed stats from real data
   const quickStats = {
     totalItems: inventoryItems.reduce((sum, item) => sum + item.quantity, 0),
     lowStock: lowStockItems.length,
-    recentUpdates: inventoryItems.filter(item => {
-      const updatedAt = item.lastUpdated?.toDate ? item.lastUpdated.toDate() : new Date(item.lastUpdated || 0);
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      return updatedAt > yesterday;
-    }).length,
+    pendingDisplayRequests: displayRequests.filter(dr => dr.status === 'pending').length,
     pendingShipments: shipments.filter(s => s.status === 'pending' || s.status === 'processing').length
   };
   
@@ -69,15 +73,17 @@ export default function WarehouseDashboard() {
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
-      const [inventoryData, lowStockData, shipmentsData] = await Promise.all([
+      const [inventoryData, lowStockData, shipmentsData, displayRequestsData] = await Promise.all([
         getAllInventoryItems(),
         getLowStockItems(),
-        getAllShipments()
+        getAllShipments(),
+        getAllDisplayRequests()
       ]);
       
       setInventoryItems(inventoryData);
       setLowStockItems(lowStockData);
       setShipments(shipmentsData);
+      setDisplayRequests(displayRequestsData);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       toast.error('Failed to load dashboard data');
@@ -128,6 +134,66 @@ export default function WarehouseDashboard() {
 
   const handleNewShipment = () => {
     navigate('/dashboard/warehouse-management');
+  };
+
+  const handleApproveDisplayRequest = async (requestId: string) => {
+    if (!user?.id) return;
+    
+    try {
+      await reviewDisplayRequest(requestId, 'accepted', user.id, user.displayName || user.email || 'Warehouse Staff');
+      toast.success('Display request approved');
+      
+      // Reload display requests
+      const displayRequestsData = await getAllDisplayRequests();
+      setDisplayRequests(displayRequestsData);
+    } catch (error) {
+      console.error('Error approving display request:', error);
+      toast.error('Failed to approve display request');
+    }
+  };
+
+  const handleRejectDisplayRequest = async (requestId: string, reason: string) => {
+    if (!user?.id) return;
+    
+    try {
+      await reviewDisplayRequest(requestId, 'rejected', user.id, user.displayName || user.email || 'Warehouse Staff', reason);
+      toast.success('Display request rejected');
+      
+      // Reload display requests
+      const displayRequestsData = await getAllDisplayRequests();
+      setDisplayRequests(displayRequestsData);
+    } catch (error) {
+      console.error('Error rejecting display request:', error);
+      toast.error('Failed to reject display request');
+    }
+  };
+
+  const handleCreateQuantityRequest = async () => {
+    if (!selectedDisplayRequest || !user?.id || quantityRequestForm.quantity <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
+    try {
+      await createQuantityRequest({
+        displayRequestId: selectedDisplayRequest.id,
+        productId: selectedDisplayRequest.productId,
+        productName: selectedDisplayRequest.productName,
+        supplierId: selectedDisplayRequest.supplierId,
+        supplierName: selectedDisplayRequest.supplierName,
+        supplierEmail: selectedDisplayRequest.supplierEmail,
+        requestedBy: user.id,
+        requesterName: user.displayName || user.email || 'Warehouse Staff'
+      }, user.id, user.displayName || user.email || 'Warehouse Staff');
+      
+      toast.success('Quantity request sent to supplier');
+      setShowQuantityRequestDialog(false);
+      setSelectedDisplayRequest(null);
+      setQuantityRequestForm({ quantity: 0, requestedQuantity: 0, notes: '', urgency: 'medium' });
+    } catch (error) {
+      console.error('Error creating quantity request:', error);
+      toast.error('Failed to create quantity request');
+    }
   };
 
   const getStatusBadgeVariant = (status: string) => {
@@ -198,26 +264,26 @@ export default function WarehouseDashboard() {
                 <PackageX className="h-4 w-4 text-yellow-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">{quickStats.lowStock}</div>
-                <p className="text-xs text-muted-foreground">Need restocking</p>
+                <div className="text-2xl font-bold">{quickStats.lowStock}</div>
+                <p className="text-xs text-muted-foreground">Need attention</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Recent Updates</CardTitle>
-                <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Display Requests</CardTitle>
+                <Eye className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{quickStats.recentUpdates}</div>
-                <p className="text-xs text-muted-foreground">Last 24 hours</p>
+                <div className="text-2xl font-bold">{quickStats.pendingDisplayRequests}</div>
+                <p className="text-xs text-muted-foreground">Pending review</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Pending Shipments</CardTitle>
-                <Truck className="h-4 w-4 text-muted-foreground" />
+                <Truck className="h-4 w-4 text-orange-500" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{quickStats.pendingShipments}</div>
@@ -225,6 +291,86 @@ export default function WarehouseDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Display Requests Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Display Requests</CardTitle>
+              <CardDescription>
+                Review and manage display requests from suppliers
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-4">
+                  {isLoading ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Loading display requests...
+                    </div>
+                  ) : displayRequests.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No display requests found
+                    </div>
+                  ) : (
+                    displayRequests.map((request) => (
+                      <div key={request.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <h4 className="font-medium">{request.productName}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Supplier: {request.supplierName}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Requested: {formatDate(request.createdAt)}
+                            </p>
+                          </div>
+                          <Badge variant={request.status === 'pending' ? 'secondary' : request.status === 'accepted' ? 'default' : 'destructive'}>
+                            {request.status}
+                          </Badge>
+                        </div>
+                        
+
+                        
+                        {request.status === 'pending' && (
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleApproveDisplayRequest(request.id)}
+                              className="flex-1"
+                            >
+                              <Check className="mr-2 h-4 w-4" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRejectDisplayRequest(request.id, 'Rejected by warehouse staff')}
+                              className="flex-1"
+                            >
+                              <X className="mr-2 h-4 w-4" />
+                              Reject
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setSelectedDisplayRequest(request);
+                                setShowQuantityRequestDialog(true);
+                              }}
+                              className="flex-1"
+                            >
+                              <Package className="mr-2 h-4 w-4" />
+                              Request Quantity
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
 
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Stock Update Panel */}
@@ -398,6 +544,62 @@ export default function WarehouseDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Quantity Request Dialog */}
+      <Dialog open={showQuantityRequestDialog} onOpenChange={setShowQuantityRequestDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Quantity Request</DialogTitle>
+            <DialogDescription>
+              Request specific quantities for {selectedDisplayRequest?.productName}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateQuantityRequest} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="requestedQuantity">Requested Quantity</Label>
+              <Input
+                id="requestedQuantity"
+                type="number"
+                placeholder="Enter quantity needed"
+                value={quantityRequestForm.requestedQuantity}
+                onChange={(e) => setQuantityRequestForm(prev => ({ ...prev, requestedQuantity: parseInt(e.target.value) || 0 }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="urgency">Urgency Level</Label>
+              <Select value={quantityRequestForm.urgency} onValueChange={(value) => setQuantityRequestForm(prev => ({ ...prev, urgency: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select urgency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Input
+                id="notes"
+                placeholder="Additional notes or requirements"
+                value={quantityRequestForm.notes}
+                onChange={(e) => setQuantityRequestForm(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowQuantityRequestDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Create Request
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

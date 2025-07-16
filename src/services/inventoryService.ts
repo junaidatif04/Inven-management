@@ -54,6 +54,8 @@ export const createInventoryItem = async (item: CreateInventoryItem, userId: str
     const docRef = await addDoc(collection(db, 'inventory'), {
       ...item,
       status,
+      isPublished: item.isPublished || false, // Default to not published
+      supplier: item.supplier || item.supplierName || '', // Backward compatibility
       createdAt: serverTimestamp(),
       lastUpdated: serverTimestamp(),
       updatedBy: userId
@@ -203,6 +205,82 @@ export const adjustStock = async (
     await batch.commit();
   } catch (error) {
     console.error('Error adjusting stock:', error);
+    throw error;
+  }
+};
+
+// New functions for the proposed workflow
+export const getPublishedInventoryItems = async (): Promise<InventoryItem[]> => {
+  try {
+    const q = query(
+      collection(db, 'inventory'),
+      where('isPublished', '==', true),
+      where('status', 'in', ['in_stock', 'low_stock']),
+      orderBy('name')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as InventoryItem[];
+  } catch (error) {
+    console.error('Error fetching published inventory items:', error);
+    throw error;
+  }
+};
+
+export const getUnpublishedInventoryItems = async (): Promise<InventoryItem[]> => {
+  try {
+    const q = query(
+      collection(db, 'inventory'),
+      where('isPublished', '==', false),
+      orderBy('name')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as InventoryItem[];
+  } catch (error) {
+    console.error('Error fetching unpublished inventory items:', error);
+    throw error;
+  }
+};
+
+export const publishInventoryItem = async (itemId: string, userId: string): Promise<void> => {
+  try {
+    await updateInventoryItem({ id: itemId, isPublished: true }, userId);
+  } catch (error) {
+    console.error('Error publishing inventory item:', error);
+    throw error;
+  }
+};
+
+export const unpublishInventoryItem = async (itemId: string, userId: string): Promise<void> => {
+  try {
+    await updateInventoryItem({ id: itemId, isPublished: false }, userId);
+  } catch (error) {
+    console.error('Error unpublishing inventory item:', error);
+    throw error;
+  }
+};
+
+export const getInStockPublishedItems = async (): Promise<InventoryItem[]> => {
+  try {
+    const q = query(
+      collection(db, 'inventory'),
+      where('isPublished', '==', true),
+      where('quantity', '>', 0),
+      orderBy('quantity'),
+      orderBy('name')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as InventoryItem[];
+  } catch (error) {
+    console.error('Error fetching in-stock published items:', error);
     throw error;
   }
 };

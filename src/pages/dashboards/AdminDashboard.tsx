@@ -53,8 +53,6 @@ export default function AdminDashboard() {
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [lowStockItemsData, setLowStockItemsData] = useState<any[]>([]);
   const [systemLogs, setSystemLogs] = useState<any[]>([]);
-  const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
-  const [quantityRequests, setQuantityRequests] = useState<QuantityRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -98,11 +96,8 @@ export default function AdminDashboard() {
       const suppliers: Supplier[] = await getAllSuppliers();
       
       // Load display requests and quantity requests
-      const displayRequests = await getAllDisplayRequests();
-      const quantityRequests = await getAllQuantityRequests();
-      
-      setDisplayRequests(displayRequests);
-      setQuantityRequests(quantityRequests);
+      const displayRequestsData = await getAllDisplayRequests();
+      const quantityRequestsData = await getAllQuantityRequests();
 
       // Calculate real inventory value
       const totalInventoryValue = inventoryItems.reduce((sum, item) =>
@@ -156,8 +151,8 @@ export default function AdminDashboard() {
       const activeSuppliers = suppliers.filter(s => s.status === 'active').length;
       
       // Calculate display and quantity request stats
-      const pendingDisplayRequests = displayRequests.filter((req: DisplayRequest) => req.status === 'pending').length;
-      const pendingQuantityRequests = quantityRequests.filter((req: QuantityRequest) => req.status === 'pending').length;
+      const pendingDisplayRequests = displayRequestsData.filter((req: DisplayRequest) => req.status === 'pending').length;
+      const pendingQuantityRequests = quantityRequestsData.filter((req: QuantityRequest) => req.status === 'pending').length;
 
       const newStats: DashboardStats = {
         totalInventoryValue,

@@ -58,26 +58,27 @@ service cloud.firestore {
       // Anyone can create access requests
       allow create: if true;
       
-      // Users can read their own requests, admins can read all
+      // Users can read their own requests, admins and warehouse staff can read all
       allow read: if isAuthenticated() && (
         resource.data.email == request.auth.token.email ||
-        isAdmin()
+        isAdmin() ||
+        hasWarehouseAccess()
       );
-      
-      // Admins can read all access requests (for notifications and management)
-      allow read: if isAdmin();
       
       // Only admins can update/delete access requests
       allow update, delete: if isAdmin();
     }
     
-    // Inventory collection - warehouse and admin access
+    // Inventory collection - warehouse, admin, and supplier access
     match /inventory/{itemId} {
       // All authenticated users can read inventory
       allow read: if isAuthenticated();
       
-      // Only warehouse staff and admins can modify inventory
+      // Warehouse staff and admins can modify inventory
       allow create, update, delete: if hasWarehouseAccess();
+      
+      // Suppliers can create and update inventory items (for quantity request responses)
+      allow create, update: if isAuthenticated() && getUserRole(request.auth.uid) == 'supplier';
     }
     
     // Orders collection - role-based access
@@ -221,13 +222,16 @@ service cloud.firestore {
       allow create, update, delete: if hasWarehouseAccess();
     }
     
-    // Stock movements collection - warehouse and admin access
+    // Stock movements collection - warehouse, admin, and supplier access
     match /stockMovements/{movementId} {
       // All authenticated users can read stock movements
       allow read: if isAuthenticated();
       
-      // Only warehouse staff and admins can create stock movements
+      // Warehouse staff and admins can create stock movements
       allow create, update, delete: if hasWarehouseAccess();
+      
+      // Suppliers can create stock movements (for quantity request responses)
+      allow create: if isAuthenticated() && getUserRole(request.auth.uid) == 'supplier';
     }
     
     // Display requests collection - supplier and warehouse access
@@ -256,12 +260,14 @@ service cloud.firestore {
     // Quantity requests collection - supplier and warehouse access
     match /quantityRequests/{requestId} {
       // Suppliers can read their own requests, warehouse staff and admins can read all
+      // Also allow requesters to read their own requests
       allow read: if isAuthenticated() && (
         resource.data.supplierId == request.auth.uid ||
+        resource.data.requestedBy == request.auth.uid ||
         hasWarehouseAccess()
       );
       
-      // Warehouse staff can create quantity requests
+      // Warehouse staff and admins can create quantity requests
       allow create: if hasWarehouseAccess();
       
       // Suppliers can update quantity requests (respond), warehouse staff can update status
@@ -270,8 +276,8 @@ service cloud.firestore {
         hasWarehouseAccess()
       );
       
-      // Admins can delete quantity requests
-      allow delete: if isAdmin();
+      // Admins and warehouse staff can delete quantity requests
+      allow delete: if hasWarehouseAccess();
     }
     
     // Customer orders collection - end user access

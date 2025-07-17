@@ -29,7 +29,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { 
-  Plus, 
   Search, 
   Edit, 
   Trash2, 
@@ -37,7 +36,6 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
-  RotateCcw,
   Upload,
   X,
   Image as ImageIcon
@@ -47,10 +45,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { InventoryItem, CreateInventoryItem } from '@/types/inventory';
 import {
   getAllInventoryItems,
-  createInventoryItem,
   updateInventoryItem,
-  deleteInventoryItem,
-  adjustStock
+  deleteInventoryItem
 } from '@/services/inventoryService';
 import { uploadImage, deleteImage } from '@/services/imageUploadService';
 import { getAllUsers } from '@/services/userService';
@@ -67,10 +63,8 @@ export default function InventoryPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   
   // Dialog states
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isStockDialogOpen, setIsStockDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   
   // Form states
@@ -93,12 +87,7 @@ export default function InventoryPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   
-  const [stockAdjustment, setStockAdjustment] = useState({
-    type: 'in' as 'in' | 'out' | 'adjustment',
-    quantity: 0,
-    reason: '',
-    notes: ''
-  });
+
 
   useEffect(() => {
     loadInventoryItems();
@@ -169,28 +158,7 @@ export default function InventoryPage() {
     setFilteredItems(filtered);
   };
 
-  const handleCreateItem = async () => {
-    try {
-      if (!user) return;
-      
-      let finalFormData = { ...formData };
-      
-      // Upload image if selected
-      if (selectedImage) {
-        const uploadResult = await uploadImage(selectedImage, 'inventory');
-        finalFormData.imageUrl = uploadResult.url;
-        finalFormData.imagePath = uploadResult.path;
-      }
-      
-      await createInventoryItem(finalFormData, user.id);
-      toast.success('Item created successfully');
-      setIsCreateDialogOpen(false);
-      resetForm();
-      loadInventoryItems();
-    } catch (error) {
-      toast.error('Failed to create item');
-    }
-  };
+
 
   const handleEditItem = async () => {
     try {
@@ -238,27 +206,7 @@ export default function InventoryPage() {
     }
   };
 
-  const handleStockAdjustment = async () => {
-    try {
-      if (!user || !selectedItem) return;
-      
-      await adjustStock(
-        selectedItem.id,
-        stockAdjustment.quantity,
-        stockAdjustment.type,
-        stockAdjustment.reason,
-        user.id,
-        stockAdjustment.notes
-      );
-      
-      toast.success('Stock adjusted successfully');
-      setIsStockDialogOpen(false);
-      setStockAdjustment({ type: 'in', quantity: 0, reason: '', notes: '' });
-      loadInventoryItems();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to adjust stock');
-    }
-  };
+
 
   const resetForm = () => {
     setFormData({
@@ -300,10 +248,7 @@ export default function InventoryPage() {
     setIsEditDialogOpen(true);
   };
 
-  const openStockDialog = (item: InventoryItem) => {
-    setSelectedItem(item);
-    setIsStockDialogOpen(true);
-  };
+
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -364,10 +309,9 @@ export default function InventoryPage() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-200 dark:to-slate-400 bg-clip-text text-transparent">Inventory Management</h1>
           <p className="text-slate-600 dark:text-slate-400 font-medium">Manage your inventory items and stock levels</p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-elegant">
-           <Plus className="h-4 w-4 mr-2" />
-           Add Item
-         </Button>
+        <div className="text-right">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Items are automatically added when suppliers approve requests</p>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -481,10 +425,9 @@ export default function InventoryPage() {
                 }
               </p>
               {items.length === 0 && (
-                <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-elegant">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add First Item
-                </Button>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                  Items will appear here when suppliers approve quantity requests
+                </p>
               )}
             </div>
           ) : (
@@ -530,14 +473,6 @@ export default function InventoryPage() {
                           variant="outline"
                           size="sm"
                           className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
-                          onClick={() => openStockDialog(item)}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
                           onClick={() => openEditDialog(item)}
                         >
                           <Edit className="h-4 w-4" />
@@ -564,181 +499,7 @@ export default function InventoryPage() {
         </CardContent>
       </Card>
 
-      {/* Create Item Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Add New Inventory Item</DialogTitle>
-            <DialogDescription>
-              Create a new inventory item with all necessary details.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Item Name</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter item name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sku">SKU</Label>
-              <Input
-                id="sku"
-                value={formData.sku}
-                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                placeholder="Enter SKU"
-              />
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Enter item description"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Input
-                id="category"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="Enter category"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="supplier">Supplier</Label>
-              <Select
-                value={formData.supplier}
-                onValueChange={(value) => setFormData({ ...formData, supplier: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={suppliers.length === 0 ? "No suppliers available" : "Select a supplier"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.length === 0 ? (
-                    <SelectItem value="no-suppliers" disabled>
-                      No suppliers available
-                    </SelectItem>
-                  ) : (
-                    suppliers.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.name}>
-                        {supplier.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Initial Quantity</Label>
-              <Input
-                id="quantity"
-                type="number"
-                value={formData.quantity}
-                onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="unitPrice">Unit Price ($)</Label>
-              <Input
-                id="unitPrice"
-                type="number"
-                step="0.01"
-                value={formData.unitPrice}
-                onChange={(e) => setFormData({ ...formData, unitPrice: parseFloat(e.target.value) || 0 })}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="minStockLevel">Min Stock Level</Label>
-              <Input
-                id="minStockLevel"
-                type="number"
-                value={formData.minStockLevel}
-                onChange={(e) => setFormData({ ...formData, minStockLevel: parseInt(e.target.value) || 0 })}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="maxStockLevel">Max Stock Level</Label>
-              <Input
-                id="maxStockLevel"
-                type="number"
-                value={formData.maxStockLevel}
-                onChange={(e) => setFormData({ ...formData, maxStockLevel: parseInt(e.target.value) || 0 })}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                placeholder="Enter storage location"
-              />
-            </div>
-            
-            {/* Image Upload Section */}
-            <div className="space-y-2 col-span-2">
-              <Label>Item Image (Optional)</Label>
-              <div className="space-y-4">
-                {imagePreview ? (
-                  <div className="relative">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="w-32 h-32 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
-                    />
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
-                      onClick={handleRemoveImage}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center">
-                    <ImageIcon className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Upload an image for this item</p>
-                    <Upload className="h-4 w-4 inline mr-1" />
-                    <label htmlFor="image-upload" className="text-blue-600 hover:text-blue-700 cursor-pointer text-sm font-medium">
-                      Choose file
-                    </label>
-                    <input
-                      id="image-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageSelect}
-                      className="hidden"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleCreateItem}
-              disabled={suppliers.length === 0 || !formData.supplier}
-            >
-              Create Item
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
 
       {/* Edit Item Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -923,84 +684,7 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Stock Adjustment Dialog */}
-      <Dialog open={isStockDialogOpen} onOpenChange={setIsStockDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adjust Stock - {selectedItem?.name}</DialogTitle>
-            <DialogDescription>
-              Current stock: {selectedItem?.quantity} units
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="stock-type">Adjustment Type</Label>
-              <Select
-                value={stockAdjustment.type}
-                onValueChange={(value: 'in' | 'out' | 'adjustment') =>
-                  setStockAdjustment({ ...stockAdjustment, type: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="in">Stock In (+)</SelectItem>
-                  <SelectItem value="out">Stock Out (-)</SelectItem>
-                  <SelectItem value="adjustment">Direct Adjustment</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="stock-quantity">
-                {stockAdjustment.type === 'adjustment' ? 'New Quantity' : 'Quantity'}
-              </Label>
-              <Input
-                id="stock-quantity"
-                type="number"
-                value={stockAdjustment.quantity}
-                onChange={(e) => setStockAdjustment({
-                  ...stockAdjustment,
-                  quantity: parseInt(e.target.value) || 0
-                })}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="stock-reason">Reason</Label>
-              <Input
-                id="stock-reason"
-                value={stockAdjustment.reason}
-                onChange={(e) => setStockAdjustment({
-                  ...stockAdjustment,
-                  reason: e.target.value
-                })}
-                placeholder="Enter reason for adjustment"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="stock-notes">Notes (Optional)</Label>
-              <Textarea
-                id="stock-notes"
-                value={stockAdjustment.notes}
-                onChange={(e) => setStockAdjustment({
-                  ...stockAdjustment,
-                  notes: e.target.value
-                })}
-                placeholder="Additional notes..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsStockDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleStockAdjustment}>
-              Adjust Stock
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
     </div>
   );
 }

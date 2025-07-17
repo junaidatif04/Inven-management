@@ -81,7 +81,7 @@ export default function AdminCatalogRequestsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Authentication guard
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'warehouse_staff')) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -197,7 +197,7 @@ export default function AdminCatalogRequestsPage() {
       const supplier = suppliers.find(s => s.id === selectedProduct.supplierId);
       
       const requestData: CreateQuantityRequest = {
-        displayRequestId: '', // Not needed for direct quantity requests
+        // displayRequestId omitted for direct quantity requests
         productId: selectedProduct.id!,
         productName: selectedProduct.name,
         supplierId: selectedProduct.supplierId!,

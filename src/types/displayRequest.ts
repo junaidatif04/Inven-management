@@ -34,7 +34,7 @@ export interface CreateDisplayRequest {
 
 export interface QuantityRequest {
   id: string;
-  displayRequestId: string;
+  displayRequestId?: string; // Optional for direct quantity requests
   productId: string;
   productName: string;
   supplierId: string;
@@ -54,7 +54,7 @@ export interface QuantityRequest {
 }
 
 export interface CreateQuantityRequest {
-  displayRequestId: string;
+  displayRequestId?: string; // Optional for direct quantity requests
   productId: string;
   productName: string;
   supplierId: string;

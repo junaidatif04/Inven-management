@@ -62,7 +62,12 @@ export default function SupplierDashboard() {
   const [showDisplayRequestDialog, setShowDisplayRequestDialog] = useState(false);
   const [showQuantityResponseDialog, setShowQuantityResponseDialog] = useState(false);
   const [selectedQuantityRequest, setSelectedQuantityRequest] = useState<QuantityRequest | null>(null);
-  const [quantityResponse, setQuantityResponse] = useState({ quantity: 0, notes: '' });
+  const [quantityResponseForm, setQuantityResponseForm] = useState({
+    status: '',
+    approvedQuantity: '',
+    rejectionReason: '',
+    notes: ''
+  });
 
   useEffect(() => {
     if (!user?.id || typeof user.id !== 'string') {
@@ -264,65 +269,70 @@ export default function SupplierDashboard() {
   };
 
   const handleQuantityResponse = async () => {
-    if (!selectedQuantityRequest || quantityResponse.quantity <= 0 || !user?.id) {
-      toast.error('Please enter a valid quantity');
+    if (!selectedQuantityRequest) return;
+
+    // Validation
+    if (!quantityResponseForm.status) {
+      toast.error('Please select a response type');
       return;
     }
 
+    if (quantityResponseForm.status === 'approved_partial') {
+      const approvedQty = parseInt(quantityResponseForm.approvedQuantity);
+      if (!quantityResponseForm.approvedQuantity || approvedQty <= 0) {
+        toast.error('Please enter a valid approved quantity');
+        return;
+      }
+      if (approvedQty > selectedQuantityRequest.requestedQuantity) {
+        toast.error('Approved quantity cannot exceed requested quantity');
+        return;
+      }
+    }
+
+    if (quantityResponseForm.status === 'rejected' && !quantityResponseForm.rejectionReason.trim()) {
+      toast.error('Please provide a rejection reason');
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
       const response: QuantityResponse = {
         quantityRequestId: selectedQuantityRequest.id,
-        status: 'approved_full',
-        approvedQuantity: quantityResponse.quantity,
-        notes: quantityResponse.notes
+        status: quantityResponseForm.status as 'approved_full' | 'approved_partial' | 'rejected',
+        approvedQuantity: quantityResponseForm.status === 'approved_full' 
+          ? selectedQuantityRequest.requestedQuantity 
+          : quantityResponseForm.status === 'approved_partial' 
+            ? parseInt(quantityResponseForm.approvedQuantity) 
+            : undefined,
+        rejectionReason: quantityResponseForm.status === 'rejected' ? quantityResponseForm.rejectionReason : undefined,
+        notes: quantityResponseForm.notes || undefined
       };
+
+      await respondToQuantityRequest(selectedQuantityRequest.id, response, user?.id || '');
       
-      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id);
-      toast.success('Quantity response submitted successfully');
+      const statusText = quantityResponseForm.status === 'approved_full' ? 'approved' : 
+                        quantityResponseForm.status === 'approved_partial' ? 'partially approved' : 'rejected';
+      toast.success(`Quantity request ${statusText} successfully`);
       
       setShowQuantityResponseDialog(false);
       setSelectedQuantityRequest(null);
-      setQuantityResponse({ quantity: 0, notes: '' });
+      setQuantityResponseForm({
+        status: '',
+        approvedQuantity: '',
+        rejectionReason: '',
+        notes: ''
+      });
       
       // Quantity requests will be updated automatically via real-time subscription
     } catch (error) {
-      console.error('Error submitting quantity response:', error);
-      toast.error('Failed to submit quantity response');
+      console.error('Error responding to quantity request:', error);
+      toast.error('Failed to respond to quantity request');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleRejectQuantityRequest = async () => {
-    if (!selectedQuantityRequest || !quantityResponse.notes.trim() || !user?.id) {
-      toast.error('Please provide a reason for rejection');
-      return;
-    }
 
-    try {
-      setIsSubmitting(true);
-      const response: QuantityResponse = {
-        quantityRequestId: selectedQuantityRequest.id,
-        status: 'rejected',
-        rejectionReason: quantityResponse.notes
-      };
-      
-      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id);
-      toast.success('Quantity request rejected');
-      
-      setShowQuantityResponseDialog(false);
-      setSelectedQuantityRequest(null);
-      setQuantityResponse({ quantity: 0, notes: '' });
-      
-      // Quantity requests will be updated automatically via real-time subscription
-    } catch (error) {
-      console.error('Error rejecting quantity request:', error);
-      toast.error('Failed to reject quantity request');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status.toLowerCase()) {
@@ -534,7 +544,12 @@ export default function SupplierDashboard() {
                               className="w-full"
                               onClick={() => {
                                 setSelectedQuantityRequest(request);
-                                setQuantityResponse({ quantity: request.requestedQuantity, notes: '' });
+                                setQuantityResponseForm({
+                                  status: '',
+                                  approvedQuantity: '',
+                                  rejectionReason: '',
+                                  notes: ''
+                                });
                                 setShowQuantityResponseDialog(true);
                               }}
                             >
@@ -624,49 +639,78 @@ export default function SupplierDashboard() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Available Quantity</Label>
-              <Input
-                type="number"
-                min="0"
-                value={quantityResponse.quantity}
-                onChange={(e) => setQuantityResponse(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
-                placeholder="Enter available quantity"
-              />
+              <Label>Response Type</Label>
+              <Select 
+                value={quantityResponseForm.status} 
+                onValueChange={(value: 'approved_full' | 'approved_partial' | 'rejected') => 
+                  setQuantityResponseForm(prev => ({ ...prev, status: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select response type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="approved_full">Approve Full</SelectItem>
+                  <SelectItem value="approved_partial">Approve Partial</SelectItem>
+                  <SelectItem value="rejected">Reject</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            
+            {quantityResponseForm.status === 'approved_partial' && (
+              <div className="space-y-2">
+                <Label>Approved Quantity</Label>
+                <Input
+                  type="number"
+                  placeholder="Enter quantity you can supply"
+                  value={quantityResponseForm.approvedQuantity}
+                  onChange={(e) => setQuantityResponseForm(prev => ({ ...prev, approvedQuantity: e.target.value }))}
+                />
+              </div>
+            )}
+            
+            {quantityResponseForm.status === 'rejected' && (
+              <div className="space-y-2">
+                <Label>Rejection Reason *</Label>
+                <Textarea
+                  placeholder="Please provide a reason for rejection..."
+                  value={quantityResponseForm.rejectionReason}
+                  onChange={(e) => setQuantityResponseForm(prev => ({ ...prev, rejectionReason: e.target.value }))}
+                />
+              </div>
+            )}
+            
             <div className="space-y-2">
-              <Label>Notes</Label>
+              <Label>Additional Notes (Optional)</Label>
               <Textarea
-                value={quantityResponse.notes}
-                onChange={(e) => setQuantityResponse(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Additional notes or reason for rejection..."
+                placeholder="Any additional notes..."
+                value={quantityResponseForm.notes}
+                onChange={(e) => setQuantityResponseForm(prev => ({ ...prev, notes: e.target.value }))}
               />
             </div>
+            
             <div className="flex space-x-2">
               <Button 
                 variant="outline" 
                 className="flex-1"
                 onClick={() => {
                   setShowQuantityResponseDialog(false);
-                  setSelectedQuantityRequest(null);
-                  setQuantityResponse({ quantity: 0, notes: '' });
+                  setQuantityResponseForm({
+                    status: '',
+                    approvedQuantity: '',
+                    rejectionReason: '',
+                    notes: ''
+                  });
                 }}
               >
                 Cancel
               </Button>
               <Button 
-                variant="destructive"
-                className="flex-1"
-                onClick={handleRejectQuantityRequest}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Rejecting...' : 'Reject'}
-              </Button>
-              <Button 
                 className="flex-1"
                 onClick={handleQuantityResponse}
-                disabled={isSubmitting || quantityResponse.quantity <= 0}
+                disabled={!quantityResponseForm.status}
               >
-                {isSubmitting ? 'Approving...' : 'Approve'}
+                Submit Response
               </Button>
             </div>
           </div>

@@ -240,9 +240,16 @@ export default function ProductManagementPage() {
       return;
     }
     
-    if ((quantityResponseForm.status === 'approved_partial') && (!quantityResponseForm.approvedQuantity || parseInt(quantityResponseForm.approvedQuantity) <= 0)) {
-      toast.error('Please enter a valid approved quantity');
-      return;
+    if (quantityResponseForm.status === 'approved_partial') {
+      const approvedQty = parseInt(quantityResponseForm.approvedQuantity);
+      if (!quantityResponseForm.approvedQuantity || approvedQty <= 0) {
+        toast.error('Please enter a valid approved quantity');
+        return;
+      }
+      if (approvedQty > selectedQuantityRequest.requestedQuantity) {
+        toast.error('Approved quantity cannot exceed requested quantity');
+        return;
+      }
     }
     
     try {
@@ -417,8 +424,7 @@ export default function ProductManagementPage() {
         name: editingProduct.name,
         category: editingProduct.category,
         price: editingProduct.price,
-        description: editingProduct.description,
-        images: editingProduct.images
+        description: editingProduct.description
       });
     }
   };
@@ -989,6 +995,9 @@ export default function ProductManagementPage() {
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
+                      Requested Quantity: {request.requestedQuantity}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
                       Requested by: {request.requesterName}
                     </p>
                     <p className="text-sm text-muted-foreground">
@@ -1050,7 +1059,7 @@ export default function ProductManagementPage() {
           <DialogHeader>
             <DialogTitle>Respond to Quantity Request</DialogTitle>
             <DialogDescription>
-              {selectedQuantityRequest?.productName}
+              {selectedQuantityRequest?.productName} - Requested: {selectedQuantityRequest?.requestedQuantity}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

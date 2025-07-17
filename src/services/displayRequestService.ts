@@ -30,7 +30,7 @@ export type {
   CreateQuantityRequest,
   QuantityResponse 
 };
-import { createInventoryItem } from './inventoryService';
+import { createInventoryItem, findExistingInventoryItem, addStockToExistingItem } from './inventoryService';
 import { CreateInventoryItem } from '@/types/inventory';
 
 const DISPLAY_REQUESTS_COLLECTION = 'displayRequests';
@@ -145,6 +145,7 @@ export const reviewDisplayRequest = async (
           supplierEmail: data.supplierEmail,
           requestedBy: reviewerId,
           requesterName: reviewerName,
+          requestedQuantity: 1, // Default quantity for display requests
           status: 'pending',
           requestedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
@@ -241,42 +242,86 @@ export const respondToQuantityRequest = async (
       updatedAt: serverTimestamp()
     });
     
-    // If approved (full or partial), create inventory item
+    await batch.commit();
+    
+    // If approved (full or partial), create inventory item after batch commit
     if ((response.status === 'approved_full' || response.status === 'approved_partial') && response.approvedQuantity) {
       const quantityRequest = await getDoc(quantityRequestRef);
       if (quantityRequest.exists()) {
         const qrData = quantityRequest.data() as QuantityRequest;
         
-        // Get display request data for product details
-        const displayRequestRef = doc(db, DISPLAY_REQUESTS_COLLECTION, qrData.displayRequestId);
-        const displayRequest = await getDoc(displayRequestRef);
+        let inventoryData: CreateInventoryItem;
         
-        if (displayRequest.exists()) {
-          const drData = displayRequest.data() as DisplayRequest;
+        if (qrData.displayRequestId && typeof qrData.displayRequestId === 'string') {
+          // Get display request data for product details
+          const displayRequestRef = doc(db, DISPLAY_REQUESTS_COLLECTION, qrData.displayRequestId);
+          const displayRequest = await getDoc(displayRequestRef);
           
-          // Create inventory item
-          const inventoryData: CreateInventoryItem = {
-            name: drData.productName,
-            description: drData.productDescription || '',
-            sku: drData.productSku || '',
+          if (displayRequest.exists()) {
+            const drData = displayRequest.data() as DisplayRequest;
+            
+            inventoryData = {
+              name: drData.productName,
+              description: drData.productDescription || '',
+              sku: drData.productSku || '',
+              category: 'Supplier Product', // Default category
+              quantity: response.approvedQuantity,
+              minStockLevel: Math.max(1, Math.floor(response.approvedQuantity * 0.1)), // 10% of initial stock
+              maxStockLevel: response.approvedQuantity * 2, // 200% of initial stock
+              unitPrice: drData.productPrice,
+              supplierId: drData.supplierId,
+              supplierName: drData.supplierName,
+              imageUrl: drData.productImageUrl || undefined,
+              location: 'Main Warehouse', // Default location
+              isPublished: true // Automatically publish approved items
+            };
+          } else {
+            throw new Error('Display request not found');
+          }
+        } else {
+          // Direct quantity request - use quantity request data
+          inventoryData = {
+            name: qrData.productName,
+            description: '', // No description available for direct requests
+            sku: qrData.productId, // Use productId as SKU
             category: 'Supplier Product', // Default category
             quantity: response.approvedQuantity,
             minStockLevel: Math.max(1, Math.floor(response.approvedQuantity * 0.1)), // 10% of initial stock
             maxStockLevel: response.approvedQuantity * 2, // 200% of initial stock
-            unitPrice: drData.productPrice,
-            supplierId: drData.supplierId,
-            supplierName: drData.supplierName,
-            imageUrl: drData.productImageUrl,
+            unitPrice: 0, // Price not available for direct requests
+            supplierId: qrData.supplierId,
+            supplierName: qrData.supplierName,
+            imageUrl: undefined,
             location: 'Main Warehouse', // Default location
-            isPublished: false // Not published by default
+            isPublished: true // Automatically publish approved items
           };
-          
-          await createInventoryItem(inventoryData, userId);
+        }
+        
+        // Check if an inventory item already exists for this product and supplier
+        const existingItem = await findExistingInventoryItem(
+          inventoryData.name,
+          inventoryData.supplierId!,
+          inventoryData.sku
+        );
+        
+        if (existingItem) {
+          // Add stock to existing item instead of creating a new one
+          console.log('Found existing inventory item, adding stock:', existingItem.id);
+          await addStockToExistingItem(
+            existingItem.id,
+            response.approvedQuantity,
+            userId,
+            `Stock replenishment from approved quantity request (Request ID: ${response.quantityRequestId})`
+          );
+          console.log('Successfully added stock to existing inventory item:', existingItem.id);
+        } else {
+          // Create new inventory item if none exists
+          console.log('Creating new inventory item with data:', inventoryData);
+          const inventoryItemId = await createInventoryItem(inventoryData, userId);
+          console.log('Successfully created inventory item with ID:', inventoryItemId);
         }
       }
     }
-    
-    await batch.commit();
   } catch (error) {
     console.error('Error responding to quantity request:', error);
     throw new Error('Failed to respond to quantity request');

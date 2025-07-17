@@ -48,10 +48,12 @@ export const getInventoryItem = async (id: string): Promise<InventoryItem | null
 
 export const createInventoryItem = async (item: CreateInventoryItem, userId: string): Promise<string> => {
   try {
+    console.log('createInventoryItem called with:', { item, userId });
+    
     const status = item.quantity <= 0 ? 'out_of_stock' : 
                   item.quantity <= item.minStockLevel ? 'low_stock' : 'in_stock';
     
-    const docRef = await addDoc(collection(db, 'inventory'), {
+    const inventoryItemData = {
       ...item,
       status,
       isPublished: item.isPublished || false, // Default to not published
@@ -59,7 +61,11 @@ export const createInventoryItem = async (item: CreateInventoryItem, userId: str
       createdAt: serverTimestamp(),
       lastUpdated: serverTimestamp(),
       updatedBy: userId
-    });
+    };
+    
+    console.log('Creating inventory item with data:', inventoryItemData);
+    
+    const docRef = await addDoc(collection(db, 'inventory'), inventoryItemData);
     
     // Create initial stock movement record
     await addDoc(collection(db, 'stockMovements'), {
@@ -73,6 +79,7 @@ export const createInventoryItem = async (item: CreateInventoryItem, userId: str
       notes: 'Item created with initial stock'
     });
     
+    console.log('Successfully created inventory item with ID:', docRef.id);
     return docRef.id;
   } catch (error) {
     console.error('Error creating inventory item:', error);
@@ -320,6 +327,58 @@ export const searchInventoryItems = async (searchTerm: string): Promise<Inventor
     );
   } catch (error) {
     console.error('Error searching inventory items:', error);
+    throw error;
+  }
+};
+
+// Find existing inventory item by supplier and product details
+export const findExistingInventoryItem = async (
+  productName: string,
+  supplierId: string,
+  sku?: string
+): Promise<InventoryItem | null> => {
+  try {
+    const q = query(
+      collection(db, 'inventory'),
+      where('supplierId', '==', supplierId)
+    );
+    const querySnapshot = await getDocs(q);
+    
+    // Find exact match by name and optionally SKU
+    for (const doc of querySnapshot.docs) {
+      const item = { id: doc.id, ...doc.data() } as InventoryItem;
+      
+      // Check for exact name match
+      if (item.name.toLowerCase() === productName.toLowerCase()) {
+        // If SKU is provided, also check SKU match
+        if (sku && item.sku && item.sku.toLowerCase() === sku.toLowerCase()) {
+          return item;
+        }
+        // If no SKU provided or SKU matches, return the item
+        if (!sku || !item.sku) {
+          return item;
+        }
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error finding existing inventory item:', error);
+    throw error;
+  }
+};
+
+// Add stock to existing inventory item
+export const addStockToExistingItem = async (
+  itemId: string,
+  additionalQuantity: number,
+  userId: string,
+  reason: string = 'Stock replenishment from approved request'
+): Promise<void> => {
+  try {
+    await adjustStock(itemId, additionalQuantity, 'in', reason, userId);
+  } catch (error) {
+    console.error('Error adding stock to existing item:', error);
     throw error;
   }
 };

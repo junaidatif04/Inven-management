@@ -21,7 +21,7 @@ export interface Product {
   category: string;
   price: number;
   stock?: number; // Legacy field - suppliers don't track stock anymore
-  status: 'proposed' | 'display_requested' | 'approved' | 'rejected' | 'discontinued';
+  status: 'draft' | 'proposed' | 'display_requested' | 'approved' | 'rejected' | 'discontinued';
   description?: string;
   sku?: string;
   imageUrl?: string;
@@ -51,7 +51,7 @@ export interface UpdateProduct {
   name?: string;
   category?: string;
   price?: number;
-  status?: 'proposed' | 'display_requested' | 'approved' | 'rejected' | 'discontinued';
+  status?: 'draft' | 'proposed' | 'display_requested' | 'approved' | 'rejected' | 'discontinued';
   description?: string;
   sku?: string;
   imageUrl?: string;
@@ -120,6 +120,25 @@ export const getAllProducts = async (): Promise<Product[]> => {
   }
 };
 
+// Get only proposed products for admin/warehouse staff
+export const getProposedProducts = async (): Promise<Product[]> => {
+  try {
+    const q = query(
+      collection(db, PRODUCTS_COLLECTION),
+      where('status', '==', 'proposed'),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Product[];
+  } catch (error) {
+    console.error('Error fetching proposed products:', error);
+    throw new Error('Failed to fetch proposed products');
+  }
+};
+
 export const getProductsBySupplier = async (supplierId: string): Promise<Product[]> => {
   try {
     const q = query(
@@ -162,7 +181,7 @@ export const createProduct = async (productData: CreateProduct): Promise<string>
     
     const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), {
       ...productData,
-      status: 'proposed', // All new products start as proposed
+      status: 'draft', // All new products start as draft
       createdAt: now,
       updatedAt: now
     });
@@ -432,6 +451,25 @@ export const subscribeToProducts = (callback: (products: Product[]) => void): ((
   });
 };
 
+// Subscribe to only proposed products for admin/warehouse staff
+export const subscribeToProposedProducts = (callback: (products: Product[]) => void): (() => void) => {
+  const q = query(
+    collection(db, PRODUCTS_COLLECTION),
+    where('status', '==', 'proposed'),
+    orderBy('createdAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    const products = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Product[];
+    callback(products);
+  }, (error) => {
+    console.error('Error in proposed products subscription:', error);
+  });
+};
+
 export const subscribeToProductsBySupplier = (supplierId: string, callback: (products: Product[]) => void): (() => void) => {
   // Return empty unsubscribe function if supplierId is invalid
   if (!supplierId || typeof supplierId !== 'string') {
@@ -536,5 +574,45 @@ export const updateProductStatus = async (productId: string, status: Product['st
   } catch (error) {
     console.error('Error updating product status:', error);
     throw new Error('Failed to update product status');
+  }
+};
+
+// Function to propose a draft product
+export const proposeProduct = async (productId: string): Promise<void> => {
+  try {
+    await updateProduct(productId, { status: 'proposed' });
+  } catch (error) {
+    console.error('Error proposing product:', error);
+    throw new Error('Failed to propose product');
+  }
+};
+
+// Function to convert a proposed product back to draft
+export const convertToDraft = async (productId: string): Promise<void> => {
+  try {
+    await updateProduct(productId, { status: 'draft' });
+  } catch (error) {
+    console.error('Error converting product to draft:', error);
+    throw new Error('Failed to convert product to draft');
+  }
+};
+
+// Get draft products by supplier
+export const getDraftProductsBySupplier = async (supplierId: string): Promise<Product[]> => {
+  try {
+    const q = query(
+      collection(db, PRODUCTS_COLLECTION),
+      where('supplierId', '==', supplierId),
+      where('status', '==', 'draft'),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Product[];
+  } catch (error) {
+    console.error('Error fetching draft products by supplier:', error);
+    throw new Error('Failed to fetch draft products');
   }
 };

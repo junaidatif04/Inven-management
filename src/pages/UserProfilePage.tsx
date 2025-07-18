@@ -15,12 +15,15 @@ import { submitAccessRequest } from '@/services/accessRequestService';
 import { sendRequestConfirmationEmail } from '@/services/emailService';
 import { deleteUser, updateUser } from '@/services/userService';
 import { getSupplierByEmail, updateSupplier } from '@/services/supplierService';
+import { getOrdersByUser } from '@/services/orderService';
+import { getProposedProductsBySupplier } from '@/services/productService';
+import { getQuantityRequestsBySupplier, getQuantityRequestsByRequester } from '@/services/displayRequestService';
 import { Supplier } from '@/types/inventory';
 import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2, Edit } from 'lucide-react';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 
 export default function UserProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,7 +41,18 @@ export default function UserProfilePage() {
   const [supplierData, setSupplierData] = useState<Supplier | null>(null);
   const [isEditingSupplier, setIsEditingSupplier] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState({ name: '' });
+  const [profileForm, setProfileForm] = useState({ 
+    name: '', 
+    phone: '', 
+    address: '' 
+  });
+  const [hasActiveOrders, setHasActiveOrders] = useState(false);
+  const [checkingOrders, setCheckingOrders] = useState(false);
+  const [hasActiveProposedProducts, setHasActiveProposedProducts] = useState(false);
+  const [hasActiveQuantityRequests, setHasActiveQuantityRequests] = useState(false);
+  const [checkingSupplierActivities, setCheckingSupplierActivities] = useState(false);
+  const [hasActiveWarehouseRequests, setHasActiveWarehouseRequests] = useState(false);
+  const [checkingWarehouseActivities, setCheckingWarehouseActivities] = useState(false);
   const [supplierForm, setSupplierForm] = useState({
     companyName: '',
     contactPerson: '',
@@ -52,8 +66,22 @@ export default function UserProfilePage() {
       // Load supplier data if user is a supplier
       if (user.role === 'supplier') {
         loadSupplierData();
+        checkSupplierActivities();
       }
-      setProfileForm({ name: user.name || '' });
+      // Check for active orders if user is an internal user
+      if (user.role === 'internal_user') {
+        checkActiveOrders();
+      }
+      // Check for active quantity requests if user is warehouse staff
+      if (user.role === 'warehouse_staff') {
+        checkWarehouseActivities();
+      }
+      // Update profile form with latest user data
+      setProfileForm({ 
+        name: user.name || '', 
+        phone: user.phone || '', 
+        address: user.address || '' 
+      });
     }
   }, [user]);
 
@@ -74,6 +102,85 @@ export default function UserProfilePage() {
       }
     } catch (error) {
       console.error('Error loading supplier data:', error);
+    }
+  };
+
+  const checkActiveOrders = async () => {
+    if (!user?.id || user.role !== 'internal_user') return;
+    
+    console.log('Checking active orders for user:', user.id, 'role:', user.role);
+    setCheckingOrders(true);
+    try {
+      const orders = await getOrdersByUser(user.id);
+      console.log('All orders:', orders);
+      // Check for orders that are not delivered, cancelled, or rejected
+      const activeOrders = orders.filter(order => 
+        !['delivered', 'cancelled', 'rejected'].includes(order.status)
+      );
+      console.log('Active orders:', activeOrders);
+      setHasActiveOrders(activeOrders.length > 0);
+      console.log('Final state - hasActiveOrders:', activeOrders.length > 0);
+    } catch (error) {
+      console.error('Error checking active orders:', error);
+      // On error, assume no active orders to not block the user unnecessarily
+      setHasActiveOrders(false);
+    } finally {
+      setCheckingOrders(false);
+    }
+  };
+
+  const checkSupplierActivities = async () => {
+    if (!user?.id) return;
+    
+    console.log('Checking supplier activities for user:', user.id, 'role:', user.role);
+    setCheckingSupplierActivities(true);
+    try {
+      // Check for active proposed products
+      const proposedProducts = await getProposedProductsBySupplier(user.id);
+      console.log('Proposed products:', proposedProducts);
+      const activeProposedProducts = proposedProducts.filter(product => 
+        product.status === 'proposed'
+      );
+      console.log('Active proposed products:', activeProposedProducts);
+      setHasActiveProposedProducts(activeProposedProducts.length > 0);
+
+      // Check for active quantity requests
+      const quantityRequests = await getQuantityRequestsBySupplier(user.id);
+      console.log('Quantity requests:', quantityRequests);
+      const activeQuantityRequests = quantityRequests.filter(request => 
+        request.status === 'pending'
+      );
+      console.log('Active quantity requests:', activeQuantityRequests);
+      setHasActiveQuantityRequests(activeQuantityRequests.length > 0);
+      
+      console.log('Final state - hasActiveProposedProducts:', activeProposedProducts.length > 0, 'hasActiveQuantityRequests:', activeQuantityRequests.length > 0);
+    } catch (error) {
+      console.error('Error checking supplier activities:', error);
+      // On error, assume no active activities to not block the user unnecessarily
+      setHasActiveProposedProducts(false);
+      setHasActiveQuantityRequests(false);
+    } finally {
+      setCheckingSupplierActivities(false);
+    }
+  };
+
+  const checkWarehouseActivities = async () => {
+    if (!user?.id || user.role !== 'warehouse_staff') return;
+    
+    setCheckingWarehouseActivities(true);
+    try {
+      // Check for active quantity requests made by warehouse staff
+      const quantityRequests = await getQuantityRequestsByRequester(user.id);
+      const activeRequests = quantityRequests.filter(request => 
+        request.status === 'pending'
+      );
+      setHasActiveWarehouseRequests(activeRequests.length > 0);
+    } catch (error) {
+      console.error('Error checking warehouse activities:', error);
+      // On error, assume no active activities to not block the user unnecessarily
+      setHasActiveWarehouseRequests(false);
+    } finally {
+      setCheckingWarehouseActivities(false);
     }
   };
 
@@ -106,8 +213,14 @@ export default function UserProfilePage() {
     try {
       await updateUser({
         id: user.id,
-        name: profileForm.name
+        name: profileForm.name,
+        phone: profileForm.phone,
+        address: profileForm.address
       });
+      
+      // Refresh user data to show changes immediately
+      await refreshUser();
+      
       toast.success('Profile updated successfully');
       setIsEditingProfile(false);
     } catch (error) {
@@ -165,6 +278,25 @@ export default function UserProfilePage() {
   const handleRequestSubmit = async () => {
     if (!requestedRole) {
       toast.error('Please select a role');
+      return;
+    }
+
+    // Check for restrictions based on current user role
+    if (user.role === 'internal_user' && hasActiveOrders) {
+      toast.error('Cannot request role access while you have active orders. Please wait for all orders to be completed, cancelled, or rejected.');
+      return;
+    }
+    
+    if (user.role === 'supplier' && (hasActiveProposedProducts || hasActiveQuantityRequests)) {
+      const restrictions = [];
+      if (hasActiveProposedProducts) restrictions.push('proposed products');
+      if (hasActiveQuantityRequests) restrictions.push('pending quantity requests');
+      toast.error(`Cannot request role access while you have active ${restrictions.join(' and ')}. Please resolve these first.`);
+      return;
+    }
+    
+    if (user.role === 'warehouse_staff' && hasActiveWarehouseRequests) {
+      toast.error('Cannot request role access while you have active quantity requests. Please wait for all requests to be resolved.');
       return;
     }
 
@@ -233,6 +365,29 @@ export default function UserProfilePage() {
 
   const handleDeleteAccount = async () => {
     if (!user) return;
+    
+    console.log('Delete account attempt - User role:', user.role);
+    console.log('State values - hasActiveOrders:', hasActiveOrders, 'hasActiveProposedProducts:', hasActiveProposedProducts, 'hasActiveQuantityRequests:', hasActiveQuantityRequests, 'hasActiveWarehouseRequests:', hasActiveWarehouseRequests);
+    
+    // Check for restrictions based on user role
+    if (user.role === 'internal_user' && hasActiveOrders) {
+      toast.error('Cannot delete account while you have active orders. Please wait for all orders to be completed, cancelled, or rejected.');
+      return;
+    }
+    
+    if (user.role === 'supplier' && (hasActiveProposedProducts || hasActiveQuantityRequests)) {
+      const restrictions = [];
+      if (hasActiveProposedProducts) restrictions.push('proposed products');
+      if (hasActiveQuantityRequests) restrictions.push('pending quantity requests');
+      console.log('Supplier deletion blocked due to:', restrictions);
+      toast.error(`Cannot delete account while you have active ${restrictions.join(' and ')}. Please resolve these first.`);
+      return;
+    }
+    
+    if (user.role === 'warehouse_staff' && hasActiveWarehouseRequests) {
+      toast.error('Cannot delete account while you have active quantity requests. Please wait for all requests to be resolved.');
+      return;
+    }
     
     setIsSubmitting(true);
     
@@ -322,6 +477,26 @@ export default function UserProfilePage() {
                         placeholder="Enter your name"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="profilePhone">Phone Number</Label>
+                      <Input
+                        id="profilePhone"
+                        type="tel"
+                        value={profileForm.phone}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
+                        placeholder="Enter your phone number"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="profileAddress">Address</Label>
+                      <Textarea
+                        id="profileAddress"
+                        value={profileForm.address}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
+                        placeholder="Enter your address"
+                        rows={3}
+                      />
+                    </div>
                     <div className="flex gap-2">
                       <Button onClick={handleUpdateProfile} disabled={isSubmitting}>
                         {isSubmitting ? 'Saving...' : 'Save Changes'}
@@ -340,6 +515,11 @@ export default function UserProfilePage() {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Email</p>
                       <p className="text-sm">{user.email}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Email cannot be changed</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Phone Number</p>
+                      <p className="text-sm">{user.phone || 'Not provided'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Role</p>
@@ -348,6 +528,10 @@ export default function UserProfilePage() {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Member Since</p>
                       <p className="text-sm">{user.createdAt ? new Date(user.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="text-sm font-medium text-muted-foreground">Address</p>
+                      <p className="text-sm">{user.address || 'Not provided'}</p>
                     </div>
                   </div>
                 )}
@@ -469,6 +653,21 @@ export default function UserProfilePage() {
 
               {user.role === 'supplier' && <Separator />}
 
+              {/* Activity Restrictions Warning */}
+              {((user.role === 'internal_user' && hasActiveOrders) || 
+                (user.role === 'supplier' && (hasActiveProposedProducts || hasActiveQuantityRequests)) ||
+                (user.role === 'warehouse_staff' && hasActiveWarehouseRequests)) && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Important:</strong> You have active {user.role === 'internal_user' ? 'orders' : user.role === 'supplier' ? 'proposed products or quantity requests' : 'warehouse requests'}. 
+                    Role access requests and account deletion are temporarily disabled. 
+                    {user.role === 'internal_user' && 'Please wait until all your orders are completed, cancelled, or rejected.'}
+                    {user.role === 'supplier' && 'Please remove or delete all your active proposed products and clear out any active quantity requests.'}
+                    {user.role === 'warehouse_staff' && 'Please complete or resolve all pending requests.'}
+                  </p>
+                </div>
+              )}
+
               {/* Request Access Section */}
               {user.role !== 'admin' && (
                 <div className="space-y-4">
@@ -480,8 +679,17 @@ export default function UserProfilePage() {
                   <div className="flex flex-col sm:flex-row gap-4">
                     <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
                       <DialogTrigger asChild>
-                        <Button>
-                          Request Role Access
+                        <Button 
+                          disabled={
+                            (user.role === 'internal_user' && (hasActiveOrders || checkingOrders)) ||
+                            (user.role === 'supplier' && (hasActiveProposedProducts || hasActiveQuantityRequests || checkingSupplierActivities)) ||
+                            (user.role === 'warehouse_staff' && (hasActiveWarehouseRequests || checkingWarehouseActivities))
+                          }
+                        >
+                          {checkingOrders ? 'Checking Orders...' :
+                           checkingSupplierActivities ? 'Checking Activities...' :
+                           checkingWarehouseActivities ? 'Checking Requests...' :
+                           'Request Role Access'}
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </DialogTrigger>
@@ -640,11 +848,27 @@ export default function UserProfilePage() {
                 </div>
               )}
                 
-              <div className="flex flex-col sm:flex-row gap-4">
+              {/* Delete Account Section */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-destructive">Delete Account</h4>
+                <p className="text-sm text-muted-foreground">
+                  Permanently delete your account and all associated data. This action cannot be undone.
+                </p>
+              
                 <Dialog open={isDeleteAccountDialogOpen} onOpenChange={setIsDeleteAccountDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="destructive">
-                      Delete Account
+                    <Button 
+                      variant="destructive"
+                      disabled={
+                        (user.role === 'internal_user' && (hasActiveOrders || checkingOrders)) ||
+                        (user.role === 'supplier' && (hasActiveProposedProducts || hasActiveQuantityRequests || checkingSupplierActivities)) ||
+                        (user.role === 'warehouse_staff' && (hasActiveWarehouseRequests || checkingWarehouseActivities))
+                      }
+                    >
+                      {checkingOrders ? 'Checking Orders...' :
+                       checkingSupplierActivities ? 'Checking Activities...' :
+                       checkingWarehouseActivities ? 'Checking Requests...' :
+                       'Delete Account'}
                       <Trash2 className="ml-2 h-4 w-4" />
                     </Button>
                   </DialogTrigger>

@@ -192,7 +192,11 @@ export const updateOrderStatus = async (
       status,
       updatedAt: serverTimestamp(),
       ...(status === 'approved' && { approvedBy: userId }),
-      ...(status === 'cancelled' && cancellationReason && { cancellationReason })
+      ...(status === 'cancelled' && cancellationReason && { 
+        cancellationReason,
+        cancelledBy: userId,
+        cancelledAt: serverTimestamp()
+      })
     };
 
     await updateDoc(doc(db, 'orders', id), updateData);

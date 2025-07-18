@@ -99,6 +99,15 @@ service cloud.firestore {
       
       // Warehouse staff and admins can update/delete orders (same permissions)
       allow update, delete: if hasWarehouseAccess();
+      
+      // Internal users can cancel their own orders if they are in pending status
+      allow update: if isAuthenticated() && 
+        getUserRole(request.auth.uid) == 'internal_user' &&
+        resource.data.userId == request.auth.uid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'cancelled' &&
+        // Only allow updates to status, cancellationReason, cancelledBy, cancelledAt, and updatedAt fields
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancellationReason', 'cancelledBy', 'cancelledAt', 'updatedAt']);
     }
     
     // Suppliers collection - warehouse, admin, and supplier access

@@ -18,9 +18,10 @@ import {
   X,
   Trash2
 } from 'lucide-react';
-import { toast } from 'sonner';
-import { getAllProducts, Product } from '@/services/productService';
-import { getAllUsers } from '@/services/userService';
+import { toast } from 'sonner';import {
+  getProposedProducts,
+  Product
+} from '../services/productService';import { getAllUsers } from '@/services/userService';
 import { User } from '@/services/authService';
 import { getAllAccessRequests, AccessRequest } from '@/services/accessRequestService';
 import {
@@ -60,7 +61,6 @@ export default function AdminCatalogRequestsPage() {
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('catalog');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedSupplier, setSelectedSupplier] = useState('All');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
@@ -99,7 +99,7 @@ export default function AdminCatalogRequestsPage() {
         
         // Load products, users, and access requests
         const [productsData, users, accessRequests] = await Promise.all([
-          getAllProducts(),
+          getProposedProducts(),
           getAllUsers(),
           getAllAccessRequests()
         ]);
@@ -172,16 +172,17 @@ export default function AdminCatalogRequestsPage() {
     }
   };
 
-  const categories = ['All', ...Array.from(new Set(products.map(p => p.category)))];
-  const supplierNames = ['All', ...suppliers.map(s => s.name)];
+
+
+  // Get unique supplier names for filter
+  const supplierNames = ['All', ...Array.from(new Set(products.map(p => p.supplierName))).sort()];
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
     const matchesSupplier = selectedSupplier === 'All' || product.supplierName === selectedSupplier;
-    return matchesSearch && matchesCategory && matchesSupplier;
+    return matchesSearch && matchesSupplier;
   });
 
   const handleRequestQuantity = async () => {
@@ -284,7 +285,7 @@ export default function AdminCatalogRequestsPage() {
       {/* Search and Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex space-x-4">
+          <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -295,25 +296,13 @@ export default function AdminCatalogRequestsPage() {
               />
             </div>
             <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filter by supplier" />
               </SelectTrigger>
               <SelectContent>
-                {supplierNames.map(supplier => (
+                {supplierNames.map((supplier) => (
                   <SelectItem key={supplier} value={supplier}>
                     {supplier}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category}>
-                    {category}
                   </SelectItem>
                 ))}
               </SelectContent>

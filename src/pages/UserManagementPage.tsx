@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
 
 import { 
   Dialog, 
@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/select';
 import { 
   Search, 
-  Edit, 
   Trash2, 
   Users, 
   Shield,
@@ -43,11 +42,9 @@ import { User, UserRole } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   getAllUsers,
-  updateUser,
   adminDeleteUser,
   updateUserRole,
-  getUserStats,
-  UpdateUser
+  getUserStats
 } from '@/services/userService';
 
 export default function UserManagementPage() {
@@ -66,16 +63,8 @@ export default function UserManagementPage() {
   });
   
   // Dialog states
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  
-  // Form state
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: '' as UserRole
-  });
 
   useEffect(() => {
     loadUsers();
@@ -126,27 +115,7 @@ export default function UserManagementPage() {
     setFilteredUsers(filtered);
   };
 
-  const handleEditUser = async () => {
-    try {
-      if (!selectedUser) return;
-      
-      const updateData: UpdateUser = {
-        id: selectedUser.id,
-        name: formData.name,
-        email: formData.email,
-        role: formData.role
-      };
-      
-      await updateUser(updateData);
-      toast.success('User updated successfully');
-      setIsEditDialogOpen(false);
-      resetForm();
-      loadUsers();
-      loadStats();
-    } catch (error) {
-      toast.error('Failed to update user');
-    }
-  };
+
 
   const handleDeleteUser = async () => {
     try {
@@ -194,23 +163,7 @@ export default function UserManagementPage() {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      email: '',
-      role: '' as UserRole
-    });
-  };
 
-  const openEditDialog = (user: User) => {
-    setSelectedUser(user);
-    setFormData({
-      name: user.name,
-      email: user.email,
-      role: user.role
-    });
-    setIsEditDialogOpen(true);
-  };
 
 
 
@@ -403,14 +356,6 @@ export default function UserManagementPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openEditDialog(user)}
-                          disabled={user.id === currentUser?.id}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
                           onClick={() => {
                             setSelectedUser(user);
                             setIsDeleteDialogOpen(true);
@@ -429,60 +374,7 @@ export default function UserManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Edit User Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>
-              Update user information and role.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Name</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter user name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-email">Email</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="Enter email address"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-role">Role</Label>
-              <Select value={formData.role} onValueChange={(value: UserRole) => setFormData({ ...formData, role: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="warehouse_staff">Warehouse Staff</SelectItem>
-                  <SelectItem value="supplier">Supplier</SelectItem>
-                  <SelectItem value="internal_user">Internal User</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleEditUser}>
-              Update User
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
 
       {/* Delete User Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

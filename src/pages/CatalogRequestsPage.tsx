@@ -26,7 +26,7 @@ import {
   getCatalogRequestsByUser,
   subscribeToCatalogRequests
 } from '@/services/catalogRequestService';
-import { getAllProducts } from '@/services/productService';
+import { getProposedProducts } from '@/services/productService';
 import { getAllInventoryItems } from '@/services/inventoryService';
 
 // Default product image
@@ -80,7 +80,7 @@ export default function CatalogRequestsPage() {
         
         // Load products and inventory items
         const [productsData, inventoryData] = await Promise.all([
-          getAllProducts(),
+          getProposedProducts(),
           getAllInventoryItems()
         ]);
         

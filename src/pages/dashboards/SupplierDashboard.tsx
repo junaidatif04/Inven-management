@@ -17,33 +17,38 @@ import {
   Trash2,
   Eye,
   Send,
-  Clock
+  Clock,
+  ArrowDown
 } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
+import {
   subscribeToProductsBySupplier,
   createProduct,
   updateProduct,
   deleteProduct,
-  CreateProduct,
-  UpdateProduct
+  proposeProduct,
+  convertToDraft,
+  getDraftProductsBySupplier,
+  CreateProduct
 } from '@/services/productService';
 import ProductImageUpload from '@/components/ProductImageUpload';
-import { createDisplayRequest, getDisplayRequestsBySupplier, subscribeToQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/displayRequestService';
+import { subscribeToQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/displayRequestService';
 import type { Product } from '@/services/productService';
-import { DisplayRequest, QuantityRequest, QuantityResponse, CreateDisplayRequest } from '@/types/displayRequest';
+import { QuantityRequest, QuantityResponse } from '@/types/displayRequest';
 
 
 
 export default function SupplierDashboard() {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [draftProducts, setDraftProducts] = useState<Product[]>([]);
 
-  const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
+
   const [quantityRequests, setQuantityRequests] = useState<QuantityRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'drafts' | 'proposed'>('drafts');
 
   
   // Product CRUD states
@@ -56,12 +61,10 @@ export default function SupplierDashboard() {
     category: '',
     price: '',
     description: '',
-    sku: '',
     imageUrl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-  const [showDisplayRequestDialog, setShowDisplayRequestDialog] = useState(false);
+
   const [showQuantityResponseDialog, setShowQuantityResponseDialog] = useState(false);
   const [selectedQuantityRequest, setSelectedQuantityRequest] = useState<QuantityRequest | null>(null);
   const [quantityResponseForm, setQuantityResponseForm] = useState({
@@ -81,12 +84,16 @@ export default function SupplierDashboard() {
     let unsubscribeProducts: (() => void) | null = null;
     let unsubscribeQuantityRequests: (() => void) | null = null;
 
-    const loadDisplayRequests = async () => {
+
+
+    const loadDraftProducts = async () => {
       try {
-        const displayRequestsData = await getDisplayRequestsBySupplier(user.id);
-        setDisplayRequests(displayRequestsData);
+        if (user?.id) {
+          const draftProductsData = await getDraftProductsBySupplier(user.id);
+          setDraftProducts(draftProductsData);
+        }
       } catch (error) {
-        console.error('Error loading display requests:', error);
+        console.error('Error loading draft products:', error);
       }
     };
 
@@ -101,7 +108,7 @@ export default function SupplierDashboard() {
         setQuantityRequests(quantityRequestsData);
       });
 
-      loadDisplayRequests();
+      loadDraftProducts();
     } catch (error) {
       console.error('Error setting up subscriptions in SupplierDashboard:', error);
       setLoading(false);
@@ -126,7 +133,6 @@ export default function SupplierDashboard() {
       category: '',
       price: '',
       description: '',
-      sku: '',
       imageUrl: ''
     });
   };
@@ -143,7 +149,6 @@ export default function SupplierDashboard() {
       category: product.category,
       price: product.price.toString(),
       description: product.description || '',
-      sku: product.sku || '',
       imageUrl: product.imageUrl || ''
     });
     setShowEditProduct(true);
@@ -167,7 +172,6 @@ export default function SupplierDashboard() {
         category: productForm.category,
         price: parseFloat(productForm.price),
         description: productForm.description,
-        sku: productForm.sku,
         imageUrl: productForm.imageUrl,
         supplierId: user.id,
         supplierName: user.displayName || user.email || 'Unknown Supplier',
@@ -175,9 +179,12 @@ export default function SupplierDashboard() {
       };
 
       await createProduct(productData);
-      toast.success('Product added to your catalog');
+      toast.success('Product created as draft. You can propose it when ready.');
       setShowAddProduct(false);
       resetProductForm();
+      // Reload draft products
+      const draftProductsData = await getDraftProductsBySupplier(user.id);
+      setDraftProducts(draftProductsData);
     } catch (error) {
       console.error('Error creating product:', error);
       toast.error('Failed to create product');
@@ -194,16 +201,15 @@ export default function SupplierDashboard() {
 
     setIsSubmitting(true);
     try {
-      const updates: UpdateProduct = {
+      const updateData = {
         name: productForm.name,
         category: productForm.category,
         price: parseFloat(productForm.price),
         description: productForm.description,
-        sku: productForm.sku,
         imageUrl: productForm.imageUrl
       };
 
-      await updateProduct(selectedProduct.id, updates);
+      await updateProduct(selectedProduct.id, updateData);
       toast.success('Product updated successfully');
       setShowEditProduct(false);
       setSelectedProduct(null);
@@ -221,58 +227,52 @@ export default function SupplierDashboard() {
       return;
     }
 
+    if (!user?.id) return;
+
     try {
       await deleteProduct(productId);
       toast.success('Product deleted successfully');
+      // Reload draft products if it was a draft
+      const draftProductsData = await getDraftProductsBySupplier(user.id);
+      setDraftProducts(draftProductsData);
     } catch (error) {
       console.error('Error deleting product:', error);
       toast.error('Failed to delete product');
     }
   };
 
-  // Display Request Functions
-  const handleSubmitDisplayRequest = async () => {
-    if (!user?.id || selectedProducts.length === 0) {
-      toast.error('Please select at least one product');
-      return;
-    }
-
+  const handleProposeProduct = async (productId: string) => {
     try {
-      setIsSubmitting(true);
-      
-      // Create display requests for each selected product
-      for (const productId of selectedProducts) {
-        const product = products.find(p => p.id === productId);
-        if (product) {
-          const requestData: CreateDisplayRequest = {
-            productId: product.id,
-            productName: product.name,
-            productDescription: product.description || '',
-            productSku: product.sku || `SKU-${product.id.slice(-8)}`,
-            productPrice: product.price,
-            productImageUrl: product.imageUrl || '',
-            supplierId: user.id,
-            supplierName: user.displayName || user.email || 'Unknown Supplier',
-            supplierEmail: user.email || ''
-          };
-          await createDisplayRequest(requestData);
-        }
+      await proposeProduct(productId);
+      toast.success('Product proposed successfully! It will now appear in the admin/warehouse staff product catalog.');
+      // Reload both draft and proposed products
+      if (user?.id) {
+        const draftProductsData = await getDraftProductsBySupplier(user.id);
+        setDraftProducts(draftProductsData);
       }
-      
-      toast.success('Product proposals submitted successfully');
-      setSelectedProducts([]);
-      setShowDisplayRequestDialog(false);
-      
-      // Reload product proposals (quantity requests update via subscription)
-      const displayRequestsData = await getDisplayRequestsBySupplier(user.id);
-      setDisplayRequests(displayRequestsData);
     } catch (error) {
-      console.error('Error submitting product proposal:', error);
-      toast.error('Failed to submit product proposal');
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error proposing product:', error);
+      toast.error('Failed to propose product');
     }
   };
+
+  const handleConvertToDraft = async (productId: string) => {
+    try {
+      await convertToDraft(productId);
+      toast.success('Product converted to draft successfully! It is no longer visible to admin/warehouse staff.');
+      // Reload both draft and proposed products
+      if (user?.id) {
+        const draftProductsData = await getDraftProductsBySupplier(user.id);
+        setDraftProducts(draftProductsData);
+      }
+    } catch (error) {
+      console.error('Error converting product to draft:', error);
+      toast.error('Failed to convert product to draft');
+    }
+  };
+
+  // Display Request Functions
+
 
   const handleQuantityResponse = async () => {
     if (!selectedQuantityRequest) return;
@@ -365,9 +365,9 @@ export default function SupplierDashboard() {
   };
 
   const supplierStats = {
-    totalProducts: products.length,
+    totalProducts: products.length + draftProducts.length,
+    draftProducts: draftProducts.length,
     proposedProducts: products.filter(p => p.status === 'proposed').length,
-    displayRequests: displayRequests.length,
     pendingQuantityRequests: quantityRequests.filter(qr => qr.status === 'pending').length
   };
 
@@ -381,14 +381,6 @@ export default function SupplierDashboard() {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button 
-            variant="outline" 
-            onClick={() => setShowDisplayRequestDialog(true)}
-            disabled={products.filter(p => p.status === 'proposed').length === 0}
-          >
-            <Send className="mr-2 h-4 w-4" />
-            Propose Products
-          </Button>
           <Button onClick={handleAddProduct}>
             <Plus className="mr-2 h-4 w-4" />
             Add Product
@@ -402,12 +394,12 @@ export default function SupplierDashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Proposed Products</CardTitle>
-                <Package className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Draft Products</CardTitle>
+                <Package className="h-4 w-4 text-orange-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{supplierStats.proposedProducts}</div>
-                <p className="text-xs text-muted-foreground">Ready for proposal</p>
+                <div className="text-2xl font-bold text-orange-600">{supplierStats.draftProducts}</div>
+                <p className="text-xs text-muted-foreground">Ready to propose</p>
               </CardContent>
             </Card>
 
@@ -417,8 +409,8 @@ export default function SupplierDashboard() {
                 <Send className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{supplierStats.displayRequests}</div>
-                <p className="text-xs text-muted-foreground">Submitted</p>
+                <div className="text-2xl font-bold">{supplierStats.proposedProducts}</div>
+                <p className="text-xs text-muted-foreground">Proposed</p>
               </CardContent>
             </Card>
 
@@ -455,49 +447,132 @@ export default function SupplierDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Tab Navigation */}
+                <div className="flex space-x-1 mb-4 p-1 bg-muted rounded-lg">
+                  <button
+                    onClick={() => setActiveTab('drafts')}
+                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      activeTab === 'drafts'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Drafts ({draftProducts.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('proposed')}
+                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      activeTab === 'proposed'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Proposed ({products.filter(p => p.status === 'proposed').length})
+                  </button>
+                </div>
+
                 <ScrollArea className="h-[400px]">
                   <div className="space-y-4">
                     {loading ? (
                       <div className="text-center py-8 text-muted-foreground">
                         Loading products...
                       </div>
-                    ) : products.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No products found
-                      </div>
-                    ) : (
-                      products.map((product) => (
-                        <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <p className="font-medium text-sm">{product.name}</p>
-                              <Badge variant={getStatusBadgeVariant(product.status)}>
-                                {product.status}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground">{product.category} • {product.id}</p>
-                            <div className="flex items-center space-x-4 text-xs">
-                              <span className="font-medium">${product.price}</span>
-                            </div>
-                          </div>
-                          <div className="flex space-x-1">
-                            <Button size="sm" variant="outline" onClick={() => handleViewProduct(product)}>
-                              <Eye className="h-3 w-3" />
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => handleDeleteProduct(product.id, product.name)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
+                    ) : activeTab === 'drafts' ? (
+                      draftProducts.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No draft products found
                         </div>
-                      ))
+                      ) : (
+                        draftProducts.map((product) => (
+                          <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <p className="font-medium text-sm">{product.name}</p>
+                                <Badge variant="outline">
+                                  {product.status}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{product.category} • {product.id}</p>
+                              <div className="flex items-center space-x-4 text-xs">
+                                <span className="font-medium">${product.price}</span>
+                              </div>
+                            </div>
+                            <div className="flex space-x-1">
+                              <Button 
+                                size="sm" 
+                                variant="default" 
+                                onClick={() => handleProposeProduct(product.id)}
+                                className="bg-blue-600 hover:bg-blue-700"
+                              >
+                                <Send className="h-3 w-3 mr-1" />
+                                Propose
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleViewProduct(product)}>
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => handleDeleteProduct(product.id, product.name)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )
+                    ) : (
+                      products.filter(p => p.status === 'proposed').length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No proposed products found
+                        </div>
+                      ) : (
+                        products.filter(p => p.status === 'proposed').map((product) => (
+                          <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <p className="font-medium text-sm">{product.name}</p>
+                                <Badge variant={getStatusBadgeVariant(product.status)}>
+                                  {product.status}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{product.category} • {product.id}</p>
+                              <div className="flex items-center space-x-4 text-xs">
+                                <span className="font-medium">${product.price}</span>
+                              </div>
+                            </div>
+                            <div className="flex space-x-1">
+                              <Button 
+                                size="sm" 
+                                variant="default" 
+                                onClick={() => handleConvertToDraft(product.id)}
+                                className="bg-orange-600 hover:bg-orange-700"
+                              >
+                                <ArrowDown className="h-3 w-3 mr-1" />
+                                To Draft
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleViewProduct(product)}>
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => handleDeleteProduct(product.id, product.name)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )
                     )}
                   </div>
                 </ScrollArea>
@@ -574,65 +649,7 @@ export default function SupplierDashboard() {
         </div>
       </div>
 
-      {/* Display Request Dialog */}
-      <Dialog open={showDisplayRequestDialog} onOpenChange={setShowDisplayRequestDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Propose Products</DialogTitle>
-            <DialogDescription>
-              Select products to propose for display
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Select Products</Label>
-              <ScrollArea className="h-[200px] border rounded p-2">
-                <div className="space-y-2">
-                  {products.filter(p => p.status === 'proposed').map((product) => (
-                    <div key={product.id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={product.id}
-                        checked={selectedProducts.includes(product.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedProducts(prev => [...prev, product.id]);
-                          } else {
-                            setSelectedProducts(prev => prev.filter(id => id !== product.id));
-                          }
-                        }}
-                        className="rounded"
-                      />
-                      <label htmlFor={product.id} className="text-sm cursor-pointer flex-1">
-                        {product.name} - ${product.price}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-            <div className="flex space-x-2">
-              <Button 
-                variant="outline" 
-                className="flex-1"
-                onClick={() => {
-                  setShowDisplayRequestDialog(false);
-                  setSelectedProducts([]);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button 
-                className="flex-1"
-                onClick={handleSubmitDisplayRequest}
-                disabled={isSubmitting || selectedProducts.length === 0}
-              >
-                {isSubmitting ? 'Submitting...' : 'Submit Proposal'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
 
       {/* Quantity Response Dialog */}
       <Dialog open={showQuantityResponseDialog} onOpenChange={setShowQuantityResponseDialog}>
@@ -734,81 +751,62 @@ export default function SupplierDashboard() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Product Name *</Label>
+              <Label>Product Name</Label>
               <Input
-                id="name"
+                placeholder="Enter product name"
                 value={productForm.name}
                 onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Enter product name"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Product Image</Label>
-              <ProductImageUpload
-                currentImageUrl={productForm.imageUrl}
-                productName={productForm.name || 'New Product'}
-                mode="add"
-                onImageUpdate={(imageUrl) => setProductForm(prev => ({ ...prev, imageUrl }))}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={productForm.category} onValueChange={(value) => setProductForm(prev => ({ ...prev, category: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Electronics">Electronics</SelectItem>
+                    <SelectItem value="Accessories">Accessories</SelectItem>
+                    <SelectItem value="Furniture">Furniture</SelectItem>
+                    <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Price ($)</Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={productForm.price}
+                  onChange={(e) => setProductForm(prev => ({ ...prev, price: e.target.value }))}
+                />
+              </div>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="category">Category *</Label>
-              <Select value={productForm.category} onValueChange={(value) => setProductForm(prev => ({ ...prev, category: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Electronics">Electronics</SelectItem>
-                  <SelectItem value="Clothing">Clothing</SelectItem>
-                  <SelectItem value="Food & Beverage">Food & Beverage</SelectItem>
-                  <SelectItem value="Home & Garden">Home & Garden</SelectItem>
-                  <SelectItem value="Sports & Outdoors">Sports & Outdoors</SelectItem>
-                  <SelectItem value="Books">Books</SelectItem>
-                  <SelectItem value="Automotive">Automotive</SelectItem>
-                  <SelectItem value="Health & Beauty">Health & Beauty</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="price">Price *</Label>
-              <Input
-                id="price"
-                type="number"
-                step="0.01"
-                min="0"
-                value={productForm.price}
-                onChange={(e) => setProductForm(prev => ({ ...prev, price: e.target.value }))}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sku">SKU</Label>
-              <Input
-                id="sku"
-                value={productForm.sku}
-                onChange={(e) => setProductForm(prev => ({ ...prev, sku: e.target.value }))}
-                placeholder="Product SKU (optional)"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label>Description</Label>
               <Textarea
-                id="description"
+                placeholder="Product description..."
                 value={productForm.description}
                 onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Product description (optional)"
-                rows={3}
               />
             </div>
-            <div className="flex space-x-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowAddProduct(false)}>
-                Cancel
-              </Button>
-              <Button className="flex-1" onClick={handleCreateProduct} disabled={isSubmitting}>
-                {isSubmitting ? 'Creating...' : 'Create Product'}
-              </Button>
-            </div>
+            
+            <ProductImageUpload
+              mode="add"
+              currentImageUrl={productForm.imageUrl}
+              productName={productForm.name}
+              onImageUpdate={(imageUrl) => setProductForm(prev => ({ ...prev, imageUrl }))}
+            />
+            
+            <Button 
+              onClick={handleCreateProduct} 
+              className="w-full"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Creating...' : 'Add Product'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -824,80 +822,66 @@ export default function SupplierDashboard() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Product Name *</Label>
+              <Label>Product Name</Label>
               <Input
-                id="edit-name"
                 value={productForm.name}
                 onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Enter product name"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Product Image</Label>
-              <ProductImageUpload
-                currentImageUrl={productForm.imageUrl}
-                productName={productForm.name || 'Product'}
-                productId={selectedProduct?.id}
-                mode="update"
-                onImageUpdate={(imageUrl) => setProductForm(prev => ({ ...prev, imageUrl }))}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={productForm.category} onValueChange={(value) => setProductForm(prev => ({ ...prev, category: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Electronics">Electronics</SelectItem>
+                    <SelectItem value="Accessories">Accessories</SelectItem>
+                    <SelectItem value="Furniture">Furniture</SelectItem>
+                    <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Price ($)</Label>
+                <Input
+                  type="number"
+                  value={productForm.price}
+                  onChange={(e) => setProductForm(prev => ({ ...prev, price: e.target.value }))}
+                />
+              </div>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="edit-category">Category *</Label>
-              <Select value={productForm.category} onValueChange={(value) => setProductForm(prev => ({ ...prev, category: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Electronics">Electronics</SelectItem>
-                  <SelectItem value="Clothing">Clothing</SelectItem>
-                  <SelectItem value="Food & Beverage">Food & Beverage</SelectItem>
-                  <SelectItem value="Home & Garden">Home & Garden</SelectItem>
-                  <SelectItem value="Sports & Outdoors">Sports & Outdoors</SelectItem>
-                  <SelectItem value="Books">Books</SelectItem>
-                  <SelectItem value="Automotive">Automotive</SelectItem>
-                  <SelectItem value="Health & Beauty">Health & Beauty</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-price">Price *</Label>
-              <Input
-                id="edit-price"
-                type="number"
-                step="0.01"
-                min="0"
-                value={productForm.price}
-                onChange={(e) => setProductForm(prev => ({ ...prev, price: e.target.value }))}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-sku">SKU</Label>
-              <Input
-                id="edit-sku"
-                value={productForm.sku}
-                onChange={(e) => setProductForm(prev => ({ ...prev, sku: e.target.value }))}
-                placeholder="Product SKU (optional)"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
+              <Label>Description</Label>
               <Textarea
-                id="edit-description"
                 value={productForm.description}
                 onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Product description (optional)"
-                rows={3}
               />
             </div>
+            
+            <ProductImageUpload
+              mode="update"
+              currentImageUrl={productForm.imageUrl}
+              productName={productForm.name}
+              productId={selectedProduct?.id}
+              onImageUpdate={(imageUrl) => setProductForm(prev => ({ ...prev, imageUrl }))}
+            />
+            
             <div className="flex space-x-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowEditProduct(false)}>
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => setShowEditProduct(false)}
+              >
                 Cancel
               </Button>
-              <Button className="flex-1" onClick={handleUpdateProduct} disabled={isSubmitting}>
-                {isSubmitting ? 'Updating...' : 'Update Product'}
+              <Button 
+                className="flex-1"
+                onClick={handleUpdateProduct}
+              >
+                Save Changes
               </Button>
             </div>
           </div>

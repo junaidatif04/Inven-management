@@ -5,27 +5,33 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Package, 
-  TruckIcon as Truck, 
   Plus, 
   Minus, 
   Eye,
-
   PackageX,
-
+  Clock,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Hourglass
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAllInventoryItems, adjustStock, getLowStockItems } from '@/services/inventoryService';
-import { getAllShipments, subscribeToShipments, Shipment } from '@/services/shipmentService';
-import { getAllDisplayRequests, createQuantityRequest } from '@/services/displayRequestService';
-import { InventoryItem } from '@/types/inventory';
-import { DisplayRequest } from '@/types/displayRequest';
+import { getAllInventoryItems, adjustStock, getLowStockItems, getStockMovements } from '@/services/inventoryService';
+import { createQuantityRequest, getQuantityRequestsByRequester } from '@/services/displayRequestService';
+import { CreateQuantityRequest, QuantityRequest } from '@/types/displayRequest';
+import { subscribeToProposedProducts } from '@/services/productService';
+import { InventoryItem, StockMovement } from '@/types/inventory';
+
 
 export default function WarehouseDashboard() {
   const { user } = useAuth();
@@ -38,51 +44,52 @@ export default function WarehouseDashboard() {
   });
   
   // Real-time data states
-  const [shipments, setShipments] = useState<Shipment[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
-  const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
+  const [proposedProducts, setProposedProducts] = useState<any[]>([]);
+  const [recentStockMovements, setRecentStockMovements] = useState<StockMovement[]>([]);
+  const [myQuantityRequests, setMyQuantityRequests] = useState<QuantityRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showQuantityRequestDialog, setShowQuantityRequestDialog] = useState(false);
-  const [selectedDisplayRequest, setSelectedDisplayRequest] = useState<DisplayRequest | null>(null);
-  const [quantityRequestForm, setQuantityRequestForm] = useState({ quantity: 0, requestedQuantity: 0, notes: '', urgency: 'medium' });
+
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [quantityRequestForm, setQuantityRequestForm] = useState({ quantity: 1, notes: '' });
+  const [showQuantityDialog, setShowQuantityDialog] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   
   // Computed stats from real data
   const quickStats = {
     totalItems: inventoryItems.reduce((sum, item) => sum + item.quantity, 0),
     lowStock: lowStockItems.length,
-    pendingDisplayRequests: displayRequests.filter(dr => dr.status === 'pending').length,
-    pendingShipments: shipments.filter(s => s.status === 'pending' || s.status === 'processing').length
+    proposedProducts: proposedProducts.length
   };
-  
-  const incomingShipments = shipments.filter(s => s.type === 'incoming');
-  const outgoingShipments = shipments.filter(s => s.type === 'outgoing');
   
   useEffect(() => {
     loadInitialData();
     
-    // Set up real-time subscription for shipments
-    const unsubscribe = subscribeToShipments((updatedShipments) => {
-      setShipments(updatedShipments);
+    // Set up real-time subscriptions
+    const unsubscribeProposedProducts = subscribeToProposedProducts((updatedProposedProducts) => {
+      setProposedProducts(updatedProposedProducts);
     });
     
-    return () => unsubscribe();
+    return () => {
+      unsubscribeProposedProducts();
+    };
   }, []);
   
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
-      const [inventoryData, lowStockData, shipmentsData, displayRequestsData] = await Promise.all([
+      const [inventoryData, lowStockData, stockMovements, quantityRequests] = await Promise.all([
         getAllInventoryItems(),
         getLowStockItems(),
-        getAllShipments(),
-        getAllDisplayRequests()
+        getStockMovements(),
+        user?.id ? getQuantityRequestsByRequester(user.id) : Promise.resolve([])
       ]);
       
       setInventoryItems(inventoryData);
       setLowStockItems(lowStockData);
-      setShipments(shipmentsData);
-      setDisplayRequests(displayRequestsData);
+      setRecentStockMovements(stockMovements.slice(0, 10)); // Show only recent 10 movements
+      setMyQuantityRequests(quantityRequests.slice(0, 5)); // Show only recent 5 requests
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       toast.error('Failed to load dashboard data');
@@ -119,13 +126,15 @@ export default function WarehouseDashboard() {
         notes: ''
       });
       
-      // Refresh inventory data
-      const [inventoryData, lowStockData] = await Promise.all([
+      // Refresh inventory and stock movements data
+      const [inventoryData, lowStockData, stockMovements] = await Promise.all([
         getAllInventoryItems(),
-        getLowStockItems()
+        getLowStockItems(),
+        getStockMovements()
       ]);
       setInventoryItems(inventoryData);
       setLowStockItems(lowStockData);
+      setRecentStockMovements(stockMovements.slice(0, 10));
     } catch (error: any) {
       toast.error(error.message || 'Failed to update stock');
     }
@@ -137,63 +146,88 @@ export default function WarehouseDashboard() {
 
 
 
-  const handleCreateQuantityRequest = async () => {
-    if (!selectedDisplayRequest || !user?.id || quantityRequestForm.quantity <= 0) {
+  const handleRequestQuantity = async () => {
+    if (!selectedProduct || !user?.id || quantityRequestForm.quantity <= 0) {
       toast.error('Please enter a valid quantity');
       return;
     }
 
     try {
-      await createQuantityRequest({
-        displayRequestId: selectedDisplayRequest.id,
-        productId: selectedDisplayRequest.productId,
-        productName: selectedDisplayRequest.productName,
-        supplierId: selectedDisplayRequest.supplierId,
-        supplierName: selectedDisplayRequest.supplierName,
-        supplierEmail: selectedDisplayRequest.supplierEmail,
+      setSubmitting(true);
+      
+      const requestData: CreateQuantityRequest = {
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        supplierId: selectedProduct.supplierId,
+        supplierName: selectedProduct.supplierName,
+        supplierEmail: selectedProduct.supplierEmail,
         requestedBy: user.id,
         requesterName: user.displayName || user.email || 'Warehouse Staff',
-        requestedQuantity: quantityRequestForm.requestedQuantity
-      }, user.id, user.displayName || user.email || 'Warehouse Staff');
+        requestedQuantity: quantityRequestForm.quantity
+      };
+
+      await createQuantityRequest(requestData, user.id, user.displayName || user.email || 'Warehouse Staff');
+      
+      // Reset form
+      setQuantityRequestForm({ quantity: 1, notes: '' });
+      setShowQuantityDialog(false);
+      setSelectedProduct(null);
+      
+      // Refresh quantity requests data
+      if (user?.id) {
+        const updatedRequests = await getQuantityRequestsByRequester(user.id);
+        setMyQuantityRequests(updatedRequests.slice(0, 5));
+      }
       
       toast.success('Quantity request sent to supplier');
-      setShowQuantityRequestDialog(false);
-      setSelectedDisplayRequest(null);
-      setQuantityRequestForm({ quantity: 0, requestedQuantity: 0, notes: '', urgency: 'medium' });
+      
     } catch (error) {
       console.error('Error creating quantity request:', error);
       toast.error('Failed to create quantity request');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'arriving_today':
-      case 'ready_to_ship':
-      case 'delivered':
-        return 'default';
-      case 'in_transit':
-      case 'processing':
-        return 'secondary';
-      case 'cancelled':
-        return 'destructive';
-      case 'pending':
-        return 'outline';
-      default:
-        return 'outline';
-    }
-  };
-  
-  const formatStatusText = (status: string) => {
-    return status.split('_').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-  };
-  
   const formatDate = (date: any) => {
     if (!date) return 'N/A';
     const dateObj = date.toDate ? date.toDate() : new Date(date);
     return dateObj.toLocaleDateString();
+  };
+
+  const formatDateTime = (date: any) => {
+    if (!date) return 'N/A';
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    return dateObj.toLocaleString();
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'approved_full': return 'bg-green-100 text-green-800';
+      case 'approved_partial': return 'bg-blue-100 text-blue-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return <Hourglass className="h-3 w-3" />;
+      case 'approved_full': return <CheckCircle className="h-3 w-3" />;
+      case 'approved_partial': return <CheckCircle className="h-3 w-3" />;
+      case 'rejected': return <XCircle className="h-3 w-3" />;
+      default: return <Clock className="h-3 w-3" />;
+    }
+  };
+
+  const getMovementIcon = (type: string) => {
+    switch (type) {
+      case 'in': return <TrendingUp className="h-4 w-4 text-green-500" />;
+      case 'out': return <TrendingDown className="h-4 w-4 text-red-500" />;
+      case 'adjustment': return <Package className="h-4 w-4 text-blue-500" />;
+      default: return <Package className="h-4 w-4" />;
+    }
   };
 
   return (
@@ -205,18 +239,20 @@ export default function WarehouseDashboard() {
             Manage inventory and track shipments
           </p>
         </div>
-        <div className="flex space-x-2">
-          <Button onClick={handleNewShipment}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Shipment
-          </Button>
-        </div>
+        {user?.role !== 'warehouse_staff' && (
+          <div className="flex space-x-2">
+            <Button onClick={handleNewShipment}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Shipment
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="space-y-6 pb-6">
           {/* Quick Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Items</CardTitle>
@@ -241,101 +277,30 @@ export default function WarehouseDashboard() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Display Requests</CardTitle>
-                <Eye className="h-4 w-4 text-blue-500" />
+                <CardTitle className="text-sm font-medium">Proposed Products</CardTitle>
+                <Package className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{quickStats.pendingDisplayRequests}</div>
-                <p className="text-xs text-muted-foreground">Pending review</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Shipments</CardTitle>
-                <Truck className="h-4 w-4 text-orange-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{quickStats.pendingShipments}</div>
-                <p className="text-xs text-muted-foreground">Awaiting processing</p>
+                <div className="text-2xl font-bold">{quickStats.proposedProducts}</div>
+                <p className="text-xs text-muted-foreground">Available to order</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Display Requests Management */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Display Requests</CardTitle>
-              <CardDescription>
-                Review and manage display requests from suppliers
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-4">
-                  {isLoading ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Loading display requests...
-                    </div>
-                  ) : displayRequests.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No display requests found
-                    </div>
-                  ) : (
-                    displayRequests.map((request) => (
-                      <div key={request.id} className="border rounded-lg p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-1">
-                            <h4 className="font-medium">{request.productName}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              Supplier: {request.supplierName}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Requested: {formatDate(request.createdAt)}
-                            </p>
-                          </div>
-                          <Badge variant={request.status === 'pending' ? 'secondary' : request.status === 'accepted' ? 'default' : 'destructive'}>
-                            {request.status}
-                          </Badge>
-                        </div>
-                        
 
-                        
-                        {request.status === 'pending' && (
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                setSelectedDisplayRequest(request);
-                                setShowQuantityRequestDialog(true);
-                              }}
-                              className="flex-1"
-                            >
-                              <Package className="mr-2 h-4 w-4" />
-                              Request Quantity
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Stock Update Panel */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Stock Update</CardTitle>
-                <CardDescription>
-                  Add or remove items from inventory
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleStockUpdate} className="space-y-4">
+            {/* Stock Update Panel - Hidden for warehouse staff */}
+            {user?.role !== 'warehouse_staff' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Quick Stock Update</CardTitle>
+                  <CardDescription>
+                    Add or remove items from inventory
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleStockUpdate} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="productId">Product</Label>
                     <Select value={stockForm.productId} onValueChange={(value) => setStockForm(prev => ({ ...prev, productId: value }))}>
@@ -404,94 +369,237 @@ export default function WarehouseDashboard() {
                 </form>
               </CardContent>
             </Card>
+            )}
 
-            {/* Shipments */}
+            {/* Proposed Products */}
             <Card>
               <CardHeader>
-                <CardTitle>Shipments</CardTitle>
+                <CardTitle>Proposed Products</CardTitle>
                 <CardDescription>
-                  Track incoming and outgoing shipments
+                  Request quantities from suppliers
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="incoming" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="incoming">Incoming</TabsTrigger>
-                    <TabsTrigger value="outgoing">Outgoing</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="incoming" className="space-y-4">
-                    <ScrollArea className="h-[300px]">
-                      <div className="space-y-3">
-                        {isLoading ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            Loading shipments...
-                          </div>
-                        ) : incomingShipments.length === 0 ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            No incoming shipments
-                          </div>
-                        ) : (
-                          incomingShipments.map((shipment) => (
-                            <div key={shipment.id} className="flex items-center justify-between p-3 border rounded-lg">
-                              <div className="space-y-1">
-                                <div className="flex items-center space-x-2">
-                                  <p className="font-medium text-sm">{shipment.trackingNumber}</p>
-                                  <Badge variant={getStatusBadgeVariant(shipment.status)}>
-                                    {formatStatusText(shipment.status)}
-                                  </Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground">{shipment.supplier || 'Unknown Supplier'}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {shipment.items} items • ETA: {formatDate(shipment.eta)}
-                                </p>
-                              </div>
-                              <Button size="sm" variant="outline">
-                                Track
-                              </Button>
-                            </div>
-                          ))
-                        )}
+                <ScrollArea className="h-[400px]">
+                  <div className="space-y-4">
+                    {isLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Loading proposed products...
                       </div>
-                    </ScrollArea>
-                  </TabsContent>
-
-                  <TabsContent value="outgoing" className="space-y-4">
-                    <ScrollArea className="h-[300px]">
-                      <div className="space-y-3">
-                        {isLoading ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            Loading shipments...
-                          </div>
-                        ) : outgoingShipments.length === 0 ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            No outgoing shipments
-                          </div>
-                        ) : (
-                          outgoingShipments.map((shipment) => (
-                            <div key={shipment.id} className="flex items-center justify-between p-3 border rounded-lg">
-                              <div className="space-y-1">
-                                <div className="flex items-center space-x-2">
-                                  <p className="font-medium text-sm">{shipment.trackingNumber}</p>
-                                  <Badge variant={getStatusBadgeVariant(shipment.status)}>
-                                    {formatStatusText(shipment.status)}
-                                  </Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground">{shipment.destination || 'Unknown Destination'}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {shipment.items} items • {shipment.requestedBy || 'Unknown'}
-                                </p>
-                              </div>
-                              <Button size="sm" variant="outline">
-                                Process
-                              </Button>
-                            </div>
-                          ))
-                        )}
+                    ) : proposedProducts.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No proposed products found
                       </div>
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
+                    ) : (
+                      proposedProducts.map((product) => (
+                        <div key={product.id} className="border rounded-lg p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <h4 className="font-medium">{product.name}</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Supplier: {product.supplierName || 'Unknown Supplier'}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                Price: ${product.price?.toFixed(2) || 'N/A'}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                Proposed: {formatDate(product.createdAt)}
+                              </p>
+                            </div>
+                            <Badge variant="secondary">
+                              Proposed
+                            </Badge>
+                          </div>
+                          
+                          {product.description && (
+                            <p className="text-sm text-muted-foreground">
+                              {product.description}
+                            </p>
+                          )}
+                          
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => {
+                                setSelectedProduct(product);
+                                setShowQuantityDialog(true);
+                              }}
+                              className="flex-1"
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Request Quantity
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => navigate('/dashboard/product-management')}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              Review
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Additional Dashboard Sections */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            {/* Recent Stock Movements */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Recent Stock Movements
+                </CardTitle>
+                <CardDescription>
+                  Latest inventory changes
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-3">
+                    {isLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Loading movements...
+                      </div>
+                    ) : recentStockMovements.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No recent movements
+                      </div>
+                    ) : (
+                      recentStockMovements.map((movement) => (
+                        <div key={movement.id} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {getMovementIcon(movement.type)}
+                              <span className="font-medium text-sm">{movement.itemName}</span>
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {movement.type === 'in' ? '+' : movement.type === 'out' ? '-' : '±'}{movement.quantity}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{movement.reason}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateTime(movement.timestamp)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+
+            {/* My Quantity Requests */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  My Quantity Requests
+                </CardTitle>
+                <CardDescription>
+                  Track your recent requests
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-3">
+                    {isLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Loading requests...
+                      </div>
+                    ) : myQuantityRequests.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No requests found
+                      </div>
+                    ) : (
+                      myQuantityRequests.map((request) => (
+                        <div key={request.id} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm">{request.productName}</span>
+                            <Badge className={`text-xs flex items-center gap-1 ${getStatusColor(request.status)}`}>
+                              {getStatusIcon(request.status)}
+                              {request.status.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Qty: {request.requestedQuantity}</span>
+                            <span>{request.supplierName}</span>
+                          </div>
+                          {request.approvedQuantity && (
+                            <p className="text-xs text-green-600">
+                              Approved: {request.approvedQuantity} units
+                            </p>
+                          )}
+                          {request.rejectionReason && (
+                            <p className="text-xs text-red-600">
+                              Reason: {request.rejectionReason}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateTime(request.requestedAt)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+
+            {/* Low Stock Alerts */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                  Low Stock Alerts
+                </CardTitle>
+                <CardDescription>
+                  Items requiring attention
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-3">
+                    {isLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Loading alerts...
+                      </div>
+                    ) : lowStockItems.length === 0 ? (
+                      <div className="text-center py-8 text-green-600">
+                        <CheckCircle className="h-8 w-8 mx-auto mb-2" />
+                        All items well stocked!
+                      </div>
+                    ) : (
+                      lowStockItems.map((item) => (
+                        <div key={item.id} className="border rounded-lg p-3 space-y-2 border-yellow-200 bg-yellow-50">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm">{item.name}</span>
+                            <Badge variant="destructive" className="text-xs">
+                              {item.quantity} left
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Min: {item.minStockLevel}</span>
+                            <span>SKU: {item.sku}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Supplier: {item.supplierName || 'N/A'}</span>
+                            <span className="text-yellow-700 font-medium">
+                              Need: {Math.max(0, item.minStockLevel - item.quantity)} units
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>
@@ -499,58 +607,61 @@ export default function WarehouseDashboard() {
       </div>
 
       {/* Quantity Request Dialog */}
-      <Dialog open={showQuantityRequestDialog} onOpenChange={setShowQuantityRequestDialog}>
-        <DialogContent>
+      <Dialog open={showQuantityDialog} onOpenChange={setShowQuantityDialog}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Quantity Request</DialogTitle>
+            <DialogTitle>Request Quantity</DialogTitle>
             <DialogDescription>
-              Request specific quantities for {selectedDisplayRequest?.productName}
+              Request a specific quantity of {selectedProduct?.name} from {selectedProduct?.supplierName}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateQuantityRequest} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="requestedQuantity">Requested Quantity</Label>
+              <Label htmlFor="quantity">Quantity</Label>
               <Input
-                id="requestedQuantity"
+                id="quantity"
                 type="number"
-                placeholder="Enter quantity needed"
-                value={quantityRequestForm.requestedQuantity}
-                onChange={(e) => setQuantityRequestForm(prev => ({ ...prev, requestedQuantity: parseInt(e.target.value) || 0 }))}
-                required
+                min="1"
+                value={quantityRequestForm.quantity}
+                onChange={(e) => setQuantityRequestForm(prev => ({
+                  ...prev,
+                  quantity: parseInt(e.target.value) || 1
+                }))}
+                placeholder="Enter quantity"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="urgency">Urgency Level</Label>
-              <Select value={quantityRequestForm.urgency} onValueChange={(value) => setQuantityRequestForm(prev => ({ ...prev, urgency: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select urgency" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Notes (Optional)</Label>
-              <Input
+              <Textarea
                 id="notes"
-                placeholder="Additional notes or requirements"
                 value={quantityRequestForm.notes}
-                onChange={(e) => setQuantityRequestForm(prev => ({ ...prev, notes: e.target.value }))}
+                onChange={(e) => setQuantityRequestForm(prev => ({
+                  ...prev,
+                  notes: e.target.value
+                }))}
+                placeholder="Add any additional notes..."
+                rows={3}
               />
             </div>
             <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => setShowQuantityRequestDialog(false)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowQuantityDialog(false);
+                  setSelectedProduct(null);
+                  setQuantityRequestForm({ quantity: 1, notes: '' });
+                }}
+              >
                 Cancel
               </Button>
-              <Button type="submit">
-                Create Request
+              <Button
+                onClick={handleRequestQuantity}
+                disabled={submitting || quantityRequestForm.quantity <= 0}
+              >
+                {submitting ? 'Sending...' : 'Send Request'}
               </Button>
             </div>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

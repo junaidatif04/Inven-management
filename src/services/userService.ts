@@ -21,6 +21,8 @@ export interface UpdateUser {
   name?: string;
   email?: string;
   role?: UserRole;
+  phone?: string;
+  address?: string;
 }
 
 // User Management CRUD Operations

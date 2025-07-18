@@ -26,6 +26,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import {
   Search,
   ShoppingCart,
   Package,
@@ -38,11 +49,12 @@ import {
   DollarSign,
   AlertCircle,
   CheckCircle2,
-  XCircle
+  XCircle,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { subscribeToOrdersByUser, Order } from '@/services/orderService';
+import { subscribeToOrdersByUser, Order, updateOrderStatus } from '@/services/orderService';
 
 export default function MyOrdersPage() {
   const { user } = useAuth();
@@ -54,6 +66,10 @@ export default function MyOrdersPage() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -101,6 +117,36 @@ export default function MyOrdersPage() {
   const openOrderDetail = (order: Order) => {
     setSelectedOrder(order);
     setIsOrderDetailOpen(true);
+  };
+
+  const openCancelDialog = (order: Order) => {
+    setOrderToCancel(order);
+    setIsCancelDialogOpen(true);
+  };
+
+  const handleCancelOrder = async () => {
+    if (!orderToCancel || !user?.id || !cancellationReason.trim()) {
+      toast.error('Please provide a cancellation reason');
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      await updateOrderStatus(orderToCancel.id, 'cancelled', user.id, cancellationReason);
+      toast.success('Order cancelled successfully');
+      setIsCancelDialogOpen(false);
+      setCancellationReason('');
+      setOrderToCancel(null);
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      toast.error('Failed to cancel order');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const canCancelOrder = (order: Order) => {
+    return order.status === 'pending';
   };
 
   const getStatusIcon = (status: string) => {
@@ -358,14 +404,27 @@ export default function MyOrdersPage() {
                     <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
                     <TableCell>{formatDate(order.createdAt)}</TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openOrderDetail(order)}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Details
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openOrderDetail(order)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
+                        </Button>
+                        {canCancelOrder(order) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openCancelDialog(order)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -497,10 +556,74 @@ export default function MyOrdersPage() {
                   </CardContent>
                 </Card>
               )}
+              
+              {/* Cancel Order Action */}
+              {canCancelOrder(selectedOrder) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg text-red-600">Cancel Order</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      You can cancel this order since it's still pending. Once cancelled, this action cannot be undone.
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsOrderDetailOpen(false);
+                        openCancelDialog(selectedOrder);
+                      }}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel This Order
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Order Dialog */}
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel order {orderToCancel?.orderNumber}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Reason for cancellation *</label>
+              <Textarea
+                placeholder="Please provide a reason for cancelling this order..."
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setCancellationReason('');
+              setOrderToCancel(null);
+            }}>
+              Keep Order
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelOrder}
+              disabled={isCancelling || !cancellationReason.trim()}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

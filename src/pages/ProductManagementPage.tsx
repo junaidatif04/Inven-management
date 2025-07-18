@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 
 
+
 import { Textarea } from '@/components/ui/textarea';
 import { NavigationHeader } from '@/components/NavigationHeader';
 import ProductImageUpload from '@/components/ProductImageUpload';
@@ -25,7 +26,8 @@ import {
   CheckCircle,
   XCircle,
   Inbox,
-  Trash2
+  Trash2,
+  ArrowDown
 } from 'lucide-react';
 
 import { toast } from 'sonner';
@@ -36,14 +38,18 @@ import {
   CreateProduct, 
 
 
-  getAllProducts,
+  getProposedProducts,
   getProductsBySupplier,
   createProduct,
   updateProduct,
   getAllPurchaseOrders,
   getPurchaseOrdersBySupplier,
+  convertToDraft,
+  getDraftProductsBySupplier,
+  proposeProduct,
 
-  subscribeToProducts,
+
+  subscribeToProposedProducts,
   subscribeToProductsBySupplier,
   subscribeToPurchaseOrders,
   subscribeToPurchaseOrdersBySupplier
@@ -51,9 +57,9 @@ import {
 import {
   DisplayRequest,
   QuantityRequest,
-  CreateDisplayRequest,
+
   QuantityResponse,
-  createDisplayRequest,
+
   getDisplayRequestsBySupplier,
   getQuantityRequestsBySupplier,
   respondToQuantityRequest,
@@ -64,7 +70,6 @@ import {
 
 const sections = [
   { id: 'products', name: 'Product Catalog', icon: Package },
-  { id: 'requested-products', name: 'Proposed Products', icon: Send },
   { id: 'received-requests', name: 'Received Requests', icon: Inbox }
 ];
 
@@ -76,10 +81,13 @@ export default function ProductManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [draftProducts, setDraftProducts] = useState<Product[]>([]);
   const [, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
   const [quantityRequests, setQuantityRequests] = useState<QuantityRequest[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'proposed'>('all');
+
 
   const [selectedQuantityRequest, setSelectedQuantityRequest] = useState<QuantityRequest | null>(null);
 
@@ -119,7 +127,7 @@ export default function ProductManagementPage() {
         setPurchaseOrders(updatedOrders);
       });
     } else {
-      unsubscribeProducts = subscribeToProducts((updatedProducts) => {
+      unsubscribeProducts = subscribeToProposedProducts((updatedProducts) => {
         setProducts(updatedProducts);
       });
       unsubscribePOs = subscribeToPurchaseOrders((updatedOrders) => {
@@ -134,29 +142,33 @@ export default function ProductManagementPage() {
   }, [user]);
 
   const loadData = async () => {
-    if (!user) return;
+    if (!user || !user.id) return;
     
+
     try {
       let productsData: Product[];
       let ordersData: PurchaseOrder[];
       let displayRequestsData: DisplayRequest[] = [];
       let quantityRequestsData: QuantityRequest[] = [];
+      let draftProductsData: Product[] = [];
       
       if (user.role === 'supplier') {
-        [productsData, ordersData, displayRequestsData, quantityRequestsData] = await Promise.all([
+        [productsData, ordersData, displayRequestsData, quantityRequestsData, draftProductsData] = await Promise.all([
           getProductsBySupplier(user.id),
           getPurchaseOrdersBySupplier(user.id),
           getDisplayRequestsBySupplier(user.id),
-          getQuantityRequestsBySupplier(user.id)
+          getQuantityRequestsBySupplier(user.id),
+          getDraftProductsBySupplier(user.id)
         ]);
       } else {
         [productsData, ordersData] = await Promise.all([
-          getAllProducts(),
+          getProposedProducts(),
           getAllPurchaseOrders()
         ]);
       }
       
       setProducts(productsData);
+      setDraftProducts(draftProductsData);
       setPurchaseOrders(ordersData);
       setDisplayRequests(displayRequestsData);
       setQuantityRequests(quantityRequestsData);
@@ -196,33 +208,7 @@ export default function ProductManagementPage() {
 
 
 
-  const handleCreateDisplayRequest = async (product: Product) => {
-    if (!user) return;
-    
-    try {
-      const requestData: CreateDisplayRequest = {
-        productId: product.id,
-        productName: product.name,
-        productDescription: product.description || '',
-        productSku: product.sku || `SKU-${product.id.slice(-8)}`, // Generate SKU if missing
-        productPrice: product.price,
-        productImageUrl: product.imageUrl || '',
-        supplierId: user.id,
-        supplierName: user.displayName || user.email || 'Unknown Supplier',
-        supplierEmail: user.email || ''
-      };
-      
-      await createDisplayRequest(requestData);
-      toast.success('Product proposal submitted successfully');
 
-    // Reload product proposals
-      const updatedDisplayRequests = await getDisplayRequestsBySupplier(user.id);
-      setDisplayRequests(updatedDisplayRequests);
-    } catch (error) {
-      console.error('Error creating product proposal:', error);
-    toast.error('Failed to create product proposal');
-    }
-  };
 
   const handleQuantityResponse = async () => {
     if (!selectedQuantityRequest || !user) return;
@@ -259,7 +245,7 @@ export default function ProductManagementPage() {
         notes: quantityResponseForm.notes || undefined
       };
       
-      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id);
+      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id!);
       toast.success('Response submitted successfully');
       
       // Reset form and close dialog
@@ -273,19 +259,17 @@ export default function ProductManagementPage() {
       setSelectedQuantityRequest(null);
       
       // Reload quantity requests
-      const updatedQuantityRequests = await getQuantityRequestsBySupplier(user.id);
+      const updatedQuantityRequests = await getQuantityRequestsBySupplier(user.id!);
       setQuantityRequests(updatedQuantityRequests);
     } catch (error) {
       toast.error('Failed to submit response');
     }
   };
 
-  const getDisplayRequestForProduct = (productId: string) => {
-    return displayRequests.find(req => req.productId === productId && req.status === 'pending');
-  };
+
 
   const handleDeleteDisplayRequest = async (requestId: string) => {
-    if (!user) return;
+    if (!user || !user.id) return;
     
     try {
       await deleteDisplayRequest(requestId, user.id);
@@ -301,7 +285,7 @@ export default function ProductManagementPage() {
   };
 
   const handleCreateProduct = async () => {
-    if (!newProductForm.name || !newProductForm.category || !newProductForm.price || !user) {
+    if (!newProductForm.name || !newProductForm.category || !newProductForm.price || !user || !user.id) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -347,6 +331,36 @@ export default function ProductManagementPage() {
     }
   };
 
+  const handleConvertToDraft = async (productId: string) => {
+    if (!user || !user.id) return;
+    
+    try {
+      await convertToDraft(productId);
+      toast.success('Product has been converted to draft status');
+      
+      // Reload data to reflect the change
+      await loadData();
+    } catch (error: any) {
+      console.error('Error converting product to draft:', error);
+      toast.error(error.message || 'Failed to convert product to draft');
+    }
+  };
+
+  const handleProposeProduct = async (productId: string) => {
+    if (!user || !user.id) return;
+    
+    try {
+      await proposeProduct(productId);
+      toast.success('Product has been proposed for approval');
+      
+      // Reload data to reflect the change
+      await loadData();
+    } catch (error: any) {
+      console.error('Error proposing product:', error);
+      toast.error(error.message || 'Failed to propose product');
+    }
+  };
+
   const handleEditProduct = (product: any) => {
     setEditingProduct({
       ...product,
@@ -388,365 +402,351 @@ export default function ProductManagementPage() {
     return sections.find(s => s.id === activeSection)?.name || '';
   };
 
-  const renderProducts = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Product Catalog</h2>
-          <p className="text-sm text-muted-foreground">
-            Manage your products and inventory
-          </p>
-        </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Product
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add New Product</DialogTitle>
-              <DialogDescription>
-                Add a new product to your catalog
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Product Name</Label>
-                <Input
-                  placeholder="Enter product name"
-                  value={newProductForm.name}
-                  onChange={(e) => setNewProductForm(prev => ({ ...prev, name: e.target.value }))}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Category</Label>
-                  <Select value={newProductForm.category} onValueChange={(value) => setNewProductForm(prev => ({ ...prev, category: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Electronics">Electronics</SelectItem>
-                      <SelectItem value="Accessories">Accessories</SelectItem>
-                      <SelectItem value="Furniture">Furniture</SelectItem>
-                      <SelectItem value="Office Supplies">Office Supplies</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Price ($)</Label>
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    value={newProductForm.price}
-                    onChange={(e) => setNewProductForm(prev => ({ ...prev, price: e.target.value }))}
-                  />
-                </div>
-              </div>
+  const renderProducts = () => {
+    // Combine draft and proposed products for supplier view
+    const allSupplierProducts = user?.role === 'supplier' 
+      ? [...draftProducts, ...products.filter(p => p.status === 'proposed')]
+      : products;
 
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea
-                  placeholder="Product description..."
-                  value={newProductForm.description}
-                  onChange={(e) => setNewProductForm(prev => ({ ...prev, description: e.target.value }))}
-                />
-              </div>
-              
-              <ProductImageUpload
-                mode="add"
-                currentImageUrl={newProductForm.imageUrl}
-                productName={newProductForm.name}
-                onImageUpdate={(imageUrl) => setNewProductForm(prev => ({ ...prev, imageUrl }))}
-              />
-              
-              <Button 
-                onClick={handleCreateProduct} 
-                className="w-full"
-                disabled={isSubmitting || isUploadingImage}
-              >
-                {isUploadingImage ? 'Uploading Image...' : isSubmitting ? 'Creating...' : 'Add Product'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+    // Filter products based on status filter
+    const getFilteredProducts = () => {
+      if (user?.role === 'supplier') {
+        switch (statusFilter) {
+          case 'draft':
+            return draftProducts.filter(product =>
+              product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              product.category.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+          case 'proposed':
+            return products.filter(p => p.status === 'proposed').filter(product =>
+              product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              product.category.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+          case 'all':
+          default:
+            return allSupplierProducts.filter(product =>
+              product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              product.category.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+      }
+      return filteredProducts;
+    };
 
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products by name or category..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
+    const displayProducts = getFilteredProducts();
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">
+              {user?.role === 'supplier' ? 'Your Product Catalog' : 'Product Catalog'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Manage your products and inventory
+            </p>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Products Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredProducts.map((product) => (
-          <Card key={product.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                {/* Product Image */}
-                <div className="w-full h-32 bg-muted rounded-md overflow-hidden">
-                  {product.imageUrl ? (
-                    <img 
-                      src={product.imageUrl} 
-                      alt={product.name}
-                      className="w-full h-full object-cover"
+          {user?.role === 'supplier' && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Product
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add New Product</DialogTitle>
+                  <DialogDescription>
+                    Add a new product to your catalog
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Product Name</Label>
+                    <Input
+                      placeholder="Enter product name"
+                      value={newProductForm.name}
+                      onChange={(e) => setNewProductForm(prev => ({ ...prev, name: e.target.value }))}
                     />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <Package className="h-8 w-8 mx-auto mb-2" />
-                        <p className="text-xs">No image</p>
-                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Category</Label>
+                      <Select value={newProductForm.category} onValueChange={(value) => setNewProductForm(prev => ({ ...prev, category: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Electronics">Electronics</SelectItem>
+                          <SelectItem value="Accessories">Accessories</SelectItem>
+                          <SelectItem value="Furniture">Furniture</SelectItem>
+                          <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  )}
-                </div>
-                
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <h3 className="font-semibold">{product.name}</h3>
-                    <p className="text-sm text-muted-foreground">{product.category}</p>
-                    <p className="text-sm text-muted-foreground">ID: {product.id}</p>
-                  </div>
-                  <Badge variant={getStatusBadgeVariant(product.status)}>
-                    {product.status}
-                  </Badge>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Price:</span>
-                    <span className="font-bold">${product.price}</span>
+                    <div className="space-y-2">
+                      <Label>Price ($)</Label>
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={newProductForm.price}
+                        onChange={(e) => setNewProductForm(prev => ({ ...prev, price: e.target.value }))}
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Updated:</span>
-                    <span className="text-sm">{formatDate(product.updatedAt)}</span>
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Textarea
+                      placeholder="Product description..."
+                      value={newProductForm.description}
+                      onChange={(e) => setNewProductForm(prev => ({ ...prev, description: e.target.value }))}
+                    />
                   </div>
+                  
+                  <ProductImageUpload
+                    mode="add"
+                    currentImageUrl={newProductForm.imageUrl}
+                    productName={newProductForm.name}
+                    onImageUpdate={(imageUrl) => setNewProductForm(prev => ({ ...prev, imageUrl }))}
+                  />
+                  
+                  <Button 
+                    onClick={handleCreateProduct} 
+                    className="w-full"
+                    disabled={isSubmitting || isUploadingImage}
+                  >
+                    {isUploadingImage ? 'Uploading Image...' : isSubmitting ? 'Creating...' : 'Add Product'}
+                  </Button>
                 </div>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
 
-                <div className="flex space-x-2">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="flex-1"
-                        onClick={() => setSelectedProduct(product)}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                    </DialogTrigger>
-                    {selectedProduct && (
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>Product Details</DialogTitle>
-                          <DialogDescription>
-                            {selectedProduct.name} - {selectedProduct.id}
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          {/* Product Image */}
-                          <div className="w-full h-48 bg-muted rounded-md overflow-hidden">
-                            {selectedProduct.imageUrl ? (
-                              <img 
-                                src={selectedProduct.imageUrl} 
-                                alt={selectedProduct.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                <div className="text-center">
-                                  <Package className="h-12 w-12 mx-auto mb-2" />
-                                  <p className="text-sm">No image available</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label className="text-sm font-medium">Category</Label>
-                              <p className="text-sm">{selectedProduct.category}</p>
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Status</Label>
-                              <Badge variant={getStatusBadgeVariant(selectedProduct.status)} className="mt-1">
-                                {selectedProduct.status}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label className="text-sm font-medium">Price</Label>
-                              <p className="text-sm font-bold">${selectedProduct.price}</p>
-                            </div>
+        {/* Search and Filter */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex space-x-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search products by name or category..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              {user?.role === 'supplier' && (
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | 'draft' | 'proposed')}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Products</SelectItem>
+                    <SelectItem value="draft">Draft Products</SelectItem>
+                    <SelectItem value="proposed">Proposed Products</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-                          </div>
-                          <div>
-                            <Label className="text-sm font-medium">Last Updated</Label>
-                            <p className="text-sm">{formatDate(selectedProduct.updatedAt)}</p>
-                          </div>
-                          <div className="flex space-x-2 pt-4">
-                            <Button 
-                              variant="outline" 
-                              className="flex-1"
-                              onClick={() => handleEditProduct(selectedProduct)}
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </Button>
-
-                          </div>
+        {/* Products Grid */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {displayProducts.map((product) => (
+            <Card key={product.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {/* Product Image */}
+                  <div className="w-full h-32 bg-muted rounded-md overflow-hidden">
+                    {product.imageUrl ? (
+                      <img 
+                        src={product.imageUrl} 
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                        <div className="text-center">
+                          <Package className="h-8 w-8 mx-auto mb-2" />
+                          <p className="text-xs">No image</p>
                         </div>
-                      </DialogContent>
+                      </div>
                     )}
-                  </Dialog>
-                  {user?.role === 'supplier' ? (
-                    <>
-                      {getDisplayRequestForProduct(product.id) ? (
-                        <Button 
-                          size="sm" 
-                          variant="secondary" 
-                          className="flex-1"
-                          disabled
-                        >
-                          <Clock className="h-3 w-3 mr-1" />
-                          Proposed
-                        </Button>
-                      ) : (
-                        <Button 
-                          size="sm" 
-                          variant="default" 
-                          className="flex-1"
-                          onClick={() => handleCreateDisplayRequest(product)}
-                        >
-                          <Send className="h-3 w-3 mr-1" />
-                          Propose
-                        </Button>
-                      )}
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="flex-1"
-                        onClick={() => handleEditProduct(product)}
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                    </>
-                  ) : (
+                  </div>
+                  
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <h3 className="font-semibold">{product.name}</h3>
+                      <p className="text-sm text-muted-foreground">{product.category}</p>
+                      <p className="text-sm text-muted-foreground">ID: {product.id}</p>
+                    </div>
+                    <Badge variant={getStatusBadgeVariant(product.status)}>
+                      {product.status}
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Price:</span>
+                      <span className="font-bold">${product.price}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Updated:</span>
+                      <span className="text-sm">{formatDate(product.updatedAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-2">
                     <Button 
                       size="sm" 
                       variant="outline" 
                       className="flex-1"
-                      onClick={() => handleEditProduct(product)}
+                      onClick={() => setSelectedProduct(product)}
                     >
-                      <Edit className="h-3 w-3 mr-1" />
-                      Edit
+                      <Eye className="h-3 w-3 mr-1" />
+                      View
                     </Button>
-                  )}
+                    
+                    {user?.role === 'supplier' ? (
+                      <>
+                        {product.status === 'draft' ? (
+                          <Button 
+                            size="sm" 
+                            variant="default" 
+                            className="flex-1 bg-blue-600 hover:bg-blue-700"
+                            onClick={() => handleProposeProduct(product.id)}
+                          >
+                            <Send className="h-3 w-3 mr-1" />
+                            Propose
+                          </Button>
+                        ) : product.status === 'proposed' ? (
+                          <Button 
+                            size="sm" 
+                            variant="default" 
+                            className="flex-1 bg-orange-600 hover:bg-orange-700"
+                            onClick={() => handleConvertToDraft(product.id)}
+                          >
+                            <ArrowDown className="h-3 w-3 mr-1" />
+                            To Draft
+                          </Button>
+                        ) : null}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => handleEditProduct(product)}
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {product.status === 'proposed' && (
+                          <Button 
+                            size="sm" 
+                            variant="default" 
+                            className="flex-1 bg-orange-600 hover:bg-orange-700"
+                            onClick={() => handleConvertToDraft(product.id)}
+                          >
+                            <ArrowDown className="h-3 w-3 mr-1" />
+                            To Draft
+                          </Button>
+                        )}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => handleEditProduct(product)}
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
+    );
+  };
 
-      {/* Edit Product Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+
+
+  // Product Details Dialog
+  const renderProductDetailsDialog = () => (
+    selectedProduct && (
+      <Dialog open={!!selectedProduct} onOpenChange={() => setSelectedProduct(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Product</DialogTitle>
+            <DialogTitle>Product Details</DialogTitle>
             <DialogDescription>
-              Update product information
+              {selectedProduct.name} - {selectedProduct.id}
             </DialogDescription>
           </DialogHeader>
-          {editingProduct && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Product Name</Label>
-                <Input
-                  value={editingProduct.name || ''}
-                  onChange={(e) => handleEditFormChange('name', e.target.value)}
+          <div className="space-y-4">
+            {/* Product Image */}
+            <div className="w-full h-48 bg-muted rounded-md overflow-hidden">
+              {selectedProduct.imageUrl ? (
+                <img 
+                  src={selectedProduct.imageUrl} 
+                  alt={selectedProduct.name}
+                  className="w-full h-full object-cover"
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Category</Label>
-                  <Select 
-                    value={editingProduct.category || ''} 
-                    onValueChange={(value) => handleEditFormChange('category', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Electronics">Electronics</SelectItem>
-                      <SelectItem value="Accessories">Accessories</SelectItem>
-                      <SelectItem value="Furniture">Furniture</SelectItem>
-                      <SelectItem value="Office Supplies">Office Supplies</SelectItem>
-                    </SelectContent>
-                  </Select>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                  <div className="text-center">
+                    <Package className="h-12 w-12 mx-auto mb-2" />
+                    <p className="text-sm">No image available</p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Price ($)</Label>
-                  <Input
-                    type="number"
-                    value={editingProduct.price || ''}
-                    onChange={(e) => handleEditFormChange('price', parseFloat(e.target.value))}
-                  />
-                </div>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium">Category</Label>
+                <p className="text-sm">{selectedProduct.category}</p>
               </div>
-
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea
-                  value={editingProduct.description || ''}
-                  onChange={(e) => handleEditFormChange('description', e.target.value)}
-                />
-              </div>
-              
-              <ProductImageUpload
-                mode="update"
-                currentImageUrl={editingProduct.imageUrl || ''}
-                productName={editingProduct.name || ''}
-                productId={editingProduct.id}
-                onImageUpdate={(imageUrl) => handleEditFormChange('imageUrl', imageUrl)}
-              />
-              
-              <div className="flex space-x-2">
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => setIsEditDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  className="flex-1"
-                  onClick={handleSaveEdit}
-                >
-                  Save Changes
-                </Button>
+              <div>
+                <Label className="text-sm font-medium">Status</Label>
+                <Badge variant={getStatusBadgeVariant(selectedProduct.status)} className="mt-1">
+                  {selectedProduct.status}
+                </Badge>
               </div>
             </div>
-          )}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium">Price</Label>
+                <p className="text-sm font-bold">${selectedProduct.price}</p>
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Last Updated</Label>
+              <p className="text-sm">{formatDate(selectedProduct.updatedAt)}</p>
+            </div>
+            <div className="flex space-x-2 pt-4">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => handleEditProduct(selectedProduct)}
+              >
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
-    </div>
+    )
   );
 
   const renderProposedProducts = () => (
@@ -1033,6 +1033,91 @@ export default function ProductManagementPage() {
           {activeSection === 'received-requests' && renderReceivedRequests()}
         </div>
       </div>
+
+      {/* Product Details Dialog */}
+      {renderProductDetailsDialog()}
+
+      {/* Edit Product Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+            <DialogDescription>
+              Update product information
+            </DialogDescription>
+          </DialogHeader>
+          {editingProduct && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Product Name</Label>
+                <Input
+                  value={editingProduct.name || ''}
+                  onChange={(e) => handleEditFormChange('name', e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select 
+                    value={editingProduct.category || ''} 
+                    onValueChange={(value) => handleEditFormChange('category', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Electronics">Electronics</SelectItem>
+                      <SelectItem value="Accessories">Accessories</SelectItem>
+                      <SelectItem value="Furniture">Furniture</SelectItem>
+                      <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Price ($)</Label>
+                  <Input
+                    type="number"
+                    value={editingProduct.price || ''}
+                    onChange={(e) => handleEditFormChange('price', parseFloat(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Textarea
+                  value={editingProduct.description || ''}
+                  onChange={(e) => handleEditFormChange('description', e.target.value)}
+                />
+              </div>
+              
+              <ProductImageUpload
+                mode="update"
+                currentImageUrl={editingProduct.imageUrl || ''}
+                productName={editingProduct.name || ''}
+                productId={editingProduct.id}
+                onImageUpdate={(imageUrl) => handleEditFormChange('imageUrl', imageUrl)}
+              />
+              
+              <div className="flex space-x-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => setIsEditDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={handleSaveEdit}
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

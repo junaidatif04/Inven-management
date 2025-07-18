@@ -205,6 +205,25 @@ export const getQuantityRequestsBySupplier = async (supplierId: string): Promise
   }
 };
 
+// Get quantity requests by requester (warehouse staff)
+export const getQuantityRequestsByRequester = async (requesterId: string): Promise<QuantityRequest[]> => {
+  try {
+    const q = query(
+      collection(db, QUANTITY_REQUESTS_COLLECTION),
+      where('requestedBy', '==', requesterId),
+      orderBy('requestedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as QuantityRequest[];
+  } catch (error) {
+    console.error('Error fetching requester quantity requests:', error);
+    throw new Error('Failed to fetch requester quantity requests');
+  }
+};
+
 export const getPendingQuantityRequests = async (): Promise<QuantityRequest[]> => {
   try {
     const q = query(
@@ -633,6 +652,49 @@ export const deleteDisplayRequest = async (requestId: string, supplierId: string
     console.error('Error deleting display request:', error);
     throw new Error('Failed to delete display request');
   }
+};
+
+// Real-time subscription for display requests
+export const subscribeToDisplayRequests = (
+  callback: (requests: DisplayRequest[]) => void
+): (() => void) => {
+  const q = query(
+    collection(db, DISPLAY_REQUESTS_COLLECTION),
+    orderBy('requestedAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    const requests = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as DisplayRequest[];
+    callback(requests);
+  }, (error) => {
+    console.error('Error in display requests subscription:', error);
+    callback([]);
+  });
+};
+
+// Real-time subscription for pending display requests
+export const subscribeToPendingDisplayRequests = (
+  callback: (requests: DisplayRequest[]) => void
+): (() => void) => {
+  const q = query(
+    collection(db, DISPLAY_REQUESTS_COLLECTION),
+    where('status', '==', 'pending'),
+    orderBy('requestedAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    const requests = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as DisplayRequest[];
+    callback(requests);
+  }, (error) => {
+    console.error('Error in pending display requests subscription:', error);
+    callback([]);
+  });
 };
 
 // Delete quantity request (cancel first if active, then delete)

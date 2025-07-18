@@ -8,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventory &amp; Supply Chain Management System</title>
     
-    <!-- Start Single Page Apps for GitHub Pages fallback -->
+    <!-- SPA fallback script for GitHub Pages (rafgraph/spa-github-pages) -->
     <script type="text/javascript">
       (function(l) {
         if (l.search[1] === '/') {
@@ -25,13 +25,16 @@
         }
       }(window.location));
     </script>
-    <!-- End SPA GitHub Pages fallback -->
+    <!-- End SPA fallback script -->
   </head>
   <body>
     <div id="root"></div>
-    <!-- %BASE_URL% ensures this script tag becomes
-         "/src/main.tsx" in dev and
-         "/Inven-management/src/main.tsx" on GH Pages -->
-    <script type="module" src="%BASE_URL%src/main.tsx"></script>
+    <!--
+      Entry point for your app.
+      Use a relative path so Vite can resolve it at build time,
+      and it will automatically prepend your `base` (e.g. "/Inven-management/")
+      when generating the final HTML for GitHub Pages.
+    -->
+    <script type="module" src="src/main.tsx"></script>
   </body>
 </html>

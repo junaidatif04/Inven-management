@@ -23,37 +23,37 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAdminActionLogs = exports.deleteUserFromAuth = void 0;
-const functions = __importStar(require("firebase-functions"));
+exports.getAdminActionLogs = exports.checkEmailExists = exports.deleteUserFromAuth = void 0;
+const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 // Cloud Function to delete a user from Firebase Authentication
 // This can only be called by authenticated admin users
-exports.deleteUserFromAuth = functions.https.onCall(async (data, context) => {
+exports.deleteUserFromAuth = (0, https_1.onCall)(async (request) => {
     // Check if the request is authenticated
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'The function must be called while authenticated.');
     }
-    const { userId, adminId } = data;
-    const callerId = context.auth.uid;
+    const { userId, adminId } = request.data;
+    const callerId = request.auth.uid;
     // Verify that the caller is the admin making the request
     if (callerId !== adminId) {
-        throw new functions.https.HttpsError('permission-denied', 'You can only delete users as yourself.');
+        throw new https_1.HttpsError('permission-denied', 'You can only delete users as yourself.');
     }
     try {
         // Get the admin user's data from Firestore to verify they have admin role
         const adminDoc = await admin.firestore().collection('users').doc(adminId).get();
         if (!adminDoc.exists) {
-            throw new functions.https.HttpsError('not-found', 'Admin user not found in database.');
+            throw new https_1.HttpsError('not-found', 'Admin user not found in database.');
         }
         const adminData = adminDoc.data();
         if ((adminData === null || adminData === void 0 ? void 0 : adminData.role) !== 'admin') {
-            throw new functions.https.HttpsError('permission-denied', 'Only admin users can delete other users.');
+            throw new https_1.HttpsError('permission-denied', 'Only admin users can delete other users.');
         }
         // Prevent admin from deleting themselves
         if (userId === adminId) {
-            throw new functions.https.HttpsError('invalid-argument', 'Admins cannot delete their own account through this method. Use the profile page instead.');
+            throw new https_1.HttpsError('invalid-argument', 'Admins cannot delete their own account through this method. Use the profile page instead.');
         }
         // Delete the user from Firebase Authentication
         await admin.auth().deleteUser(userId);
@@ -75,7 +75,7 @@ exports.deleteUserFromAuth = functions.https.onCall(async (data, context) => {
     catch (error) {
         console.error('Error deleting user:', error);
         // If it's already a HttpsError, re-throw it
-        if (error instanceof functions.https.HttpsError) {
+        if (error instanceof https_1.HttpsError) {
             throw error;
         }
         // Handle specific Firebase Auth errors
@@ -90,29 +90,58 @@ exports.deleteUserFromAuth = functions.https.onCall(async (data, context) => {
                     };
                 }
                 catch (firestoreError) {
-                    throw new functions.https.HttpsError('internal', 'User not found in Authentication and failed to delete from Firestore');
+                    throw new https_1.HttpsError('internal', 'User not found in Authentication and failed to delete from Firestore');
                 }
             }
         }
-        throw new functions.https.HttpsError('internal', 'An error occurred while deleting the user');
+        throw new https_1.HttpsError('internal', 'An error occurred while deleting the user');
+    }
+});
+// Cloud Function to check if an email exists in the system
+// This is used during signup to prevent duplicate accounts
+exports.checkEmailExists = (0, https_1.onCall)(async (request) => {
+    const { email } = request.data;
+    // Validate email parameter
+    if (!email || typeof email !== 'string') {
+        throw new https_1.HttpsError('invalid-argument', 'Email is required and must be a string.');
+    }
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        throw new https_1.HttpsError('invalid-argument', 'Invalid email format.');
+    }
+    try {
+        // Query Firestore to check if email exists
+        const usersSnapshot = await admin.firestore()
+            .collection('users')
+            .where('email', '==', email.toLowerCase())
+            .limit(1)
+            .get();
+        return {
+            exists: !usersSnapshot.empty
+        };
+    }
+    catch (error) {
+        console.error('Error checking email existence:', error);
+        throw new https_1.HttpsError('internal', 'An error occurred while checking email existence');
     }
 });
 // Cloud Function to get admin action logs
-exports.getAdminActionLogs = functions.https.onCall(async (data, context) => {
+exports.getAdminActionLogs = (0, https_1.onCall)(async (request) => {
     // Check if the request is authenticated
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'The function must be called while authenticated.');
     }
-    const callerId = context.auth.uid;
+    const callerId = request.auth.uid;
     try {
         // Verify that the caller is an admin
         const adminDoc = await admin.firestore().collection('users').doc(callerId).get();
         if (!adminDoc.exists) {
-            throw new functions.https.HttpsError('not-found', 'User not found in database.');
+            throw new https_1.HttpsError('not-found', 'User not found in database.');
         }
         const adminData = adminDoc.data();
         if ((adminData === null || adminData === void 0 ? void 0 : adminData.role) !== 'admin') {
-            throw new functions.https.HttpsError('permission-denied', 'Only admin users can view action logs.');
+            throw new https_1.HttpsError('permission-denied', 'Only admin users can view action logs.');
         }
         // Get the last 100 admin actions
         const logsSnapshot = await admin.firestore()
@@ -125,10 +154,10 @@ exports.getAdminActionLogs = functions.https.onCall(async (data, context) => {
     }
     catch (error) {
         console.error('Error fetching admin logs:', error);
-        if (error instanceof functions.https.HttpsError) {
+        if (error instanceof https_1.HttpsError) {
             throw error;
         }
-        throw new functions.https.HttpsError('internal', 'An error occurred while fetching admin logs');
+        throw new https_1.HttpsError('internal', 'An error occurred while fetching admin logs');
     }
 });
 //# sourceMappingURL=index.js.map

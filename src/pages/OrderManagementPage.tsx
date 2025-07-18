@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 import {
   Table,
@@ -25,20 +26,31 @@ import {
   CheckCircle,
   Clock,
   RefreshCw,
-  Eye
+  Eye,
+  Edit3,
+  Truck,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Order, getAllOrders, updateOrderStatus, subscribeToOrders } from '@/services/orderService';
+import { useAuth } from '@/contexts/AuthContext';
+import OrderStatusDialog from '@/components/OrderStatusDialog';
 
 export default function OrderManagementPage() {
-
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  
+  // Status dialog state
+  const [statusDialog, setStatusDialog] = useState({
+    open: false,
+    order: null as Order | null
+  });
 
   useEffect(() => {
     loadOrders();
@@ -54,7 +66,7 @@ export default function OrderManagementPage() {
 
   useEffect(() => {
     filterOrders();
-  }, [orders, searchTerm, filterStatus]);
+  }, [orders, searchTerm, filterStatus, loading]);
 
   const loadOrders = async () => {
     try {
@@ -69,6 +81,12 @@ export default function OrderManagementPage() {
   };
 
   const filterOrders = () => {
+    // Don't filter while loading to prevent showing empty state
+    if (loading) {
+      setFilteredOrders([]);
+      return;
+    }
+    
     let filtered = orders;
     
     // Apply search filter
@@ -88,13 +106,28 @@ export default function OrderManagementPage() {
     setFilteredOrders(filtered);
   };
 
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
+  const handleStatusUpdate = async (orderId: string, newStatus: Order['status'], cancellationReason?: string) => {
+    if (!user) {
+      toast.error('User not authenticated');
+      return;
+    }
+    
     try {
-      await updateOrderStatus(orderId, newStatus as Order['status']);
+      await updateOrderStatus(orderId, newStatus, user.id, cancellationReason);
       toast.success('Order status updated successfully');
     } catch (error) {
-      toast.error('Failed to update order status');
+      console.error('Error updating order status:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update order status');
+      throw error; // Re-throw to handle in dialog
     }
+  };
+
+  const openStatusDialog = (order: Order) => {
+    setStatusDialog({ open: true, order });
+  };
+
+  const closeStatusDialog = () => {
+    setStatusDialog({ open: false, order: null });
   };
 
   const refreshData = async () => {
@@ -123,6 +156,26 @@ export default function OrderManagementPage() {
     if (!date) return 'N/A';
     const dateObj = date.toDate ? date.toDate() : new Date(date);
     return dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
+  };
+
+  const getStatusBadge = (status: Order['status']) => {
+    const statusConfig = {
+      pending: { label: 'Pending', variant: 'secondary' as const, icon: Clock },
+      approved: { label: 'Approved', variant: 'default' as const, icon: CheckCircle },
+      shipped: { label: 'Shipped', variant: 'outline' as const, icon: Truck },
+      delivered: { label: 'Delivered', variant: 'default' as const, icon: Package },
+      cancelled: { label: 'Cancelled', variant: 'destructive' as const, icon: X },
+    };
+    
+    const config = statusConfig[status];
+    const Icon = config.icon;
+    
+    return (
+      <Badge variant={config.variant} className="flex items-center space-x-1">
+        <Icon className="h-3 w-3" />
+        <span>{config.label}</span>
+      </Badge>
+    );
   };
 
   // Calculate stats
@@ -160,7 +213,13 @@ export default function OrderManagementPage() {
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="text-2xl font-bold">
+              {loading ? (
+                <RefreshCw className="h-5 w-5 animate-spin" />
+              ) : (
+                stats.total
+              )}
+            </div>
           </CardContent>
         </Card>
         
@@ -170,7 +229,13 @@ export default function OrderManagementPage() {
             <Clock className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+            <div className="text-2xl font-bold text-yellow-600">
+              {loading ? (
+                <RefreshCw className="h-5 w-5 animate-spin" />
+              ) : (
+                stats.pending
+              )}
+            </div>
           </CardContent>
         </Card>
         
@@ -180,7 +245,13 @@ export default function OrderManagementPage() {
             <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
+            <div className="text-2xl font-bold text-green-600">
+              {loading ? (
+                <RefreshCw className="h-5 w-5 animate-spin" />
+              ) : (
+                stats.approved
+              )}
+            </div>
           </CardContent>
         </Card>
         
@@ -190,7 +261,13 @@ export default function OrderManagementPage() {
             <Package className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {loading ? (
+                <RefreshCw className="h-5 w-5 animate-spin" />
+              ) : (
+                formatCurrency(stats.totalValue)
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -239,7 +316,15 @@ export default function OrderManagementPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredOrders.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-8">
+              <RefreshCw className="h-12 w-12 text-muted-foreground mx-auto mb-4 animate-spin" />
+              <h3 className="text-lg font-semibold mb-2">Loading orders...</h3>
+              <p className="text-muted-foreground">
+                Please wait while we fetch the latest orders.
+              </p>
+            </div>
+          ) : filteredOrders.length === 0 ? (
             <div className="text-center py-8">
               <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No orders found</h3>
@@ -267,29 +352,25 @@ export default function OrderManagementPage() {
                     <TableCell>{order.supplierName}</TableCell>
                     <TableCell>{order.requestedBy}</TableCell>
                     <TableCell>
-                      <Select
-                        value={order.status}
-                        onValueChange={(newStatus) => handleStatusChange(order.id, newStatus)}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="approved">Approved</SelectItem>
-                          <SelectItem value="shipped">Shipped</SelectItem>
-                          <SelectItem value="delivered">Delivered</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      {getStatusBadge(order.status)}
                     </TableCell>
                     <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
                     <TableCell>{formatDate(order.orderDate)}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
+                      <div className="flex space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => openStatusDialog(order)}
+                        >
+                          <Edit3 className="h-4 w-4 mr-1" />
+                          Update Status
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -298,6 +379,14 @@ export default function OrderManagementPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Status Update Dialog */}
+      <OrderStatusDialog
+        open={statusDialog.open}
+        onOpenChange={closeStatusDialog}
+        order={statusDialog.order}
+        onStatusUpdate={handleStatusUpdate}
+      />
     </div>
   );
 }

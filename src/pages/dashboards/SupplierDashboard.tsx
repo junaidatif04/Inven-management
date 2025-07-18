@@ -30,6 +30,7 @@ import {
   CreateProduct,
   UpdateProduct
 } from '@/services/productService';
+import ProductImageUpload from '@/components/ProductImageUpload';
 import { createDisplayRequest, getDisplayRequestsBySupplier, subscribeToQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/displayRequestService';
 import type { Product } from '@/services/productService';
 import { DisplayRequest, QuantityRequest, QuantityResponse, CreateDisplayRequest } from '@/types/displayRequest';
@@ -55,7 +56,8 @@ export default function SupplierDashboard() {
     category: '',
     price: '',
     description: '',
-    sku: ''
+    sku: '',
+    imageUrl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
@@ -124,7 +126,8 @@ export default function SupplierDashboard() {
       category: '',
       price: '',
       description: '',
-      sku: ''
+      sku: '',
+      imageUrl: ''
     });
   };
 
@@ -140,7 +143,8 @@ export default function SupplierDashboard() {
       category: product.category,
       price: product.price.toString(),
       description: product.description || '',
-      sku: product.sku || ''
+      sku: product.sku || '',
+      imageUrl: product.imageUrl || ''
     });
     setShowEditProduct(true);
   };
@@ -164,6 +168,7 @@ export default function SupplierDashboard() {
         price: parseFloat(productForm.price),
         description: productForm.description,
         sku: productForm.sku,
+        imageUrl: productForm.imageUrl,
         supplierId: user.id,
         supplierName: user.displayName || user.email || 'Unknown Supplier',
         createdBy: user.id
@@ -194,7 +199,8 @@ export default function SupplierDashboard() {
         category: productForm.category,
         price: parseFloat(productForm.price),
         description: productForm.description,
-        sku: productForm.sku
+        sku: productForm.sku,
+        imageUrl: productForm.imageUrl
       };
 
       await updateProduct(selectedProduct.id, updates);
@@ -253,16 +259,16 @@ export default function SupplierDashboard() {
         }
       }
       
-      toast.success('Display requests submitted successfully');
+      toast.success('Product proposals submitted successfully');
       setSelectedProducts([]);
       setShowDisplayRequestDialog(false);
       
-      // Reload display requests (quantity requests update via subscription)
+      // Reload product proposals (quantity requests update via subscription)
       const displayRequestsData = await getDisplayRequestsBySupplier(user.id);
       setDisplayRequests(displayRequestsData);
     } catch (error) {
-      console.error('Error submitting display request:', error);
-      toast.error('Failed to submit display request');
+      console.error('Error submitting product proposal:', error);
+      toast.error('Failed to submit product proposal');
     } finally {
       setIsSubmitting(false);
     }
@@ -381,7 +387,7 @@ export default function SupplierDashboard() {
             disabled={products.filter(p => p.status === 'proposed').length === 0}
           >
             <Send className="mr-2 h-4 w-4" />
-            Request Display
+            Propose Products
           </Button>
           <Button onClick={handleAddProduct}>
             <Plus className="mr-2 h-4 w-4" />
@@ -401,13 +407,13 @@ export default function SupplierDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{supplierStats.proposedProducts}</div>
-                <p className="text-xs text-muted-foreground">Ready for display request</p>
+                <p className="text-xs text-muted-foreground">Ready for proposal</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Display Requests</CardTitle>
+                <CardTitle className="text-sm font-medium">Product Proposals</CardTitle>
                 <Send className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
@@ -572,9 +578,9 @@ export default function SupplierDashboard() {
       <Dialog open={showDisplayRequestDialog} onOpenChange={setShowDisplayRequestDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Submit Display Request</DialogTitle>
+            <DialogTitle>Propose Products</DialogTitle>
             <DialogDescription>
-              Select products to request for display
+              Select products to propose for display
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -621,7 +627,7 @@ export default function SupplierDashboard() {
                 onClick={handleSubmitDisplayRequest}
                 disabled={isSubmitting || selectedProducts.length === 0}
               >
-                {isSubmitting ? 'Submitting...' : 'Submit Request'}
+                {isSubmitting ? 'Submitting...' : 'Submit Proposal'}
               </Button>
             </div>
           </div>
@@ -737,6 +743,15 @@ export default function SupplierDashboard() {
               />
             </div>
             <div className="space-y-2">
+              <Label>Product Image</Label>
+              <ProductImageUpload
+                currentImageUrl={productForm.imageUrl}
+                productName={productForm.name || 'New Product'}
+                mode="add"
+                onImageUpdate={(imageUrl) => setProductForm(prev => ({ ...prev, imageUrl }))}
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="category">Category *</Label>
               <Select value={productForm.category} onValueChange={(value) => setProductForm(prev => ({ ...prev, category: value }))}>
                 <SelectTrigger>
@@ -815,6 +830,16 @@ export default function SupplierDashboard() {
                 value={productForm.name}
                 onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Enter product name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Product Image</Label>
+              <ProductImageUpload
+                currentImageUrl={productForm.imageUrl}
+                productName={productForm.name || 'Product'}
+                productId={selectedProduct?.id}
+                mode="update"
+                onImageUpdate={(imageUrl) => setProductForm(prev => ({ ...prev, imageUrl }))}
               />
             </div>
             <div className="space-y-2">

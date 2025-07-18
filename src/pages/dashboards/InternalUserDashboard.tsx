@@ -23,8 +23,8 @@ import {
   getOrdersByUser,
   subscribeToOrdersByUser
 } from '@/services/orderService';
-import { getAllProducts, Product } from '@/services/productService';
-import { getAllInventoryItems } from '../../services/inventoryService';
+import { Product } from '@/services/productService';
+import { getInStockPublishedItemsWithAvailability } from '../../services/inventoryService';
 
 
 // Default product image for products without images
@@ -57,23 +57,18 @@ export default function InternalUserDashboard() {
       try {
         setLoading(true);
         
-        // Load products and inventory items
+        // Load only published inventory items that are in stock
         try {
-          const [productsData, inventoryData] = await Promise.all([
-            getAllProducts(),
-            getAllInventoryItems()
-          ]);
+          const publishedInventoryData = await getInStockPublishedItemsWithAvailability();
           
-          // Convert inventory items to product format for unified display
-          const inventoryAsProducts: Product[] = inventoryData.map(item => ({
+          // Convert published inventory items to product format for display
+          const publishedProducts: Product[] = publishedInventoryData.map(item => ({
             id: item.id!,
             name: item.name,
             category: item.category,
-            price: item.unitPrice,
-            stock: item.quantity,
-            status: item.status === 'in_stock' ? 'approved' : 
-                   item.status === 'low_stock' ? 'approved' : 
-                   item.status === 'out_of_stock' ? 'discontinued' : 'discontinued',
+            price: item.salePrice || item.unitPrice, // Use salePrice for customer-facing display
+            stock: item.availableStock || 0,
+            status: 'approved', // All published in-stock items are considered approved
             description: item.description,
             sku: item.sku,
             imageUrl: item.imageUrl,
@@ -86,10 +81,8 @@ export default function InternalUserDashboard() {
             createdBy: item.updatedBy || 'system'
           }));
           
-          // Combine products and inventory items
-          const allProducts = [...productsData, ...inventoryAsProducts];
-          console.log('Loaded products:', productsData.length, 'inventory items:', inventoryData.length, 'total:', allProducts.length);
-          setProducts(allProducts);
+          console.log('Loaded published inventory items:', publishedInventoryData.length);
+          setProducts(publishedProducts);
         } catch (productError) {
           console.error('Error loading products:', productError);
           toast.error('Failed to load products');
@@ -319,8 +312,13 @@ export default function InternalUserDashboard() {
                             </div>
                             <div className="flex items-center space-x-2">
                               <Badge variant={(product.stock || 0) > 0 ? 'default' : 'secondary'}>
-                                {(product.stock || 0) > 0 ? 'In Stock' : 'Out of Stock'}
+                                {(product.stock || 0) > 0 ? `Available: ${product.stock}` : 'Out of Stock'}
                               </Badge>
+                              {product.stock && product.stock > 0 && product.stock <= 5 && (
+                                <Badge variant="outline" className="text-orange-600">
+                                  Low Stock
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         ))}

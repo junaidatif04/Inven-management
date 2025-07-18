@@ -5,6 +5,7 @@ export interface InventoryItem {
   sku: string;
   category: string;
   quantity: number;
+  reservedQuantity?: number; // Quantity reserved by pending orders
   minStockLevel: number;
   maxStockLevel: number;
   unitPrice: number;
@@ -16,6 +17,12 @@ export interface InventoryItem {
   isPublished: boolean; // Whether item is published to end-user catalog
   imageUrl?: string;
   imagePath?: string;
+  // Curation fields for publishing workflow
+  salePrice?: number; // Customer-facing price (required for publishing)
+  customerFacingDescription?: string; // Override description for customers
+  images?: string[]; // Array of image URLs
+  visibilityTags?: string[]; // Tags like "Featured", "On Sale", etc.
+  detailsSaved?: boolean; // Whether curation details have been saved
   lastUpdated: any;
   createdAt: any;
   updatedBy: string;
@@ -27,6 +34,7 @@ export interface CreateInventoryItem {
   sku: string;
   category: string;
   quantity: number;
+  reservedQuantity?: number; // Quantity reserved by pending orders
   minStockLevel: number;
   maxStockLevel: number;
   unitPrice: number;
@@ -37,14 +45,27 @@ export interface CreateInventoryItem {
   isPublished?: boolean; // Whether item is published to end-user catalog
   imageUrl?: string;
   imagePath?: string;
+  // Curation fields for publishing workflow
+  salePrice?: number;
+  customerFacingDescription?: string;
+  images?: string[];
+  visibilityTags?: string[];
+  detailsSaved?: boolean;
 }
 
 export interface UpdateInventoryItem extends Partial<CreateInventoryItem> {
   id: string;
   status?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'discontinued';
+  reservedQuantity?: number; // Quantity reserved by pending orders
   isPublished?: boolean; // Whether item is published to end-user catalog
   imageUrl?: string;
   imagePath?: string;
+  // Curation fields for publishing workflow
+  salePrice?: number;
+  customerFacingDescription?: string;
+  images?: string[];
+  visibilityTags?: string[];
+  detailsSaved?: boolean;
 }
 
 export interface StockMovement {

@@ -173,34 +173,54 @@ export const getActiveSuppliers = async (): Promise<Supplier[]> => {
 
 // Auto-register approved supplier users as suppliers
 export const autoRegisterSupplier = async (user: User): Promise<void> => {
+  console.log('Auto-registering supplier for user:', {
+    email: user.email,
+    role: user.role,
+    name: user.name,
+    companyName: user.companyName
+  });
+  
   if (user.role !== 'supplier') {
+    console.log('User is not a supplier, skipping auto-registration');
     return;
   }
 
-  // Check if supplier already exists
-  const existingSupplier = await getSupplierByEmail(user.email);
-  if (existingSupplier) {
-    // Update existing supplier with latest user data
-    await updateSupplier({
-      id: existingSupplier.id,
-      name: user.name,
+  try {
+    // Check if supplier already exists
+    console.log('Checking for existing supplier with email:', user.email);
+    const existingSupplier = await getSupplierByEmail(user.email);
+    
+    if (existingSupplier) {
+      console.log('Found existing supplier, updating:', existingSupplier.id);
+      // Update existing supplier with latest user data
+      await updateSupplier({
+        id: existingSupplier.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        contactPerson: user.name
+      });
+      console.log('Successfully updated existing supplier');
+      return;
+    }
+
+    // Create new supplier record
+    console.log('No existing supplier found, creating new supplier');
+    const supplierData: CreateSupplier = {
+      name: user.companyName || user.name,
       email: user.email,
       phone: user.phone || '',
+      address: user.address || '',
       contactPerson: user.name
-    });
-    return;
+    };
+    
+    console.log('Creating supplier with data:', supplierData);
+    const supplierId = await createSupplier(supplierData);
+    console.log('Successfully created new supplier with ID:', supplierId);
+  } catch (error) {
+    console.error('Error in autoRegisterSupplier:', error);
+    throw error;
   }
-
-  // Create new supplier record
-  const supplierData: CreateSupplier = {
-    name: user.companyName || user.name,
-    email: user.email,
-    phone: user.phone || '',
-    address: user.address || '',
-    contactPerson: user.name
-  };
-
-  await createSupplier(supplierData);
 };
 
 // Get supplier by email

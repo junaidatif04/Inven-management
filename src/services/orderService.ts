@@ -14,6 +14,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { reserveStock, releaseReservation, confirmStockDeduction, adjustStock } from './inventoryService';
 
 export interface OrderItem {
   productId: string;
@@ -39,6 +40,7 @@ export interface Order {
   userId: string;
   approvedBy?: string;
   notes?: string;
+  cancellationReason?: string;
   priority?: 'low' | 'medium' | 'high';
   deliveryLocation?: string;
   createdAt: any;
@@ -101,6 +103,11 @@ export const getOrder = async (id: string): Promise<Order | null> => {
 
 export const createOrder = async (order: CreateOrder): Promise<string> => {
   try {
+    // Reserve stock for all items in the order
+    for (const item of order.items) {
+      await reserveStock(item.productId, item.quantity, order.userId);
+    }
+
     const docRef = await addDoc(collection(db, 'orders'), {
       ...order,
       createdAt: serverTimestamp(),
@@ -110,6 +117,14 @@ export const createOrder = async (order: CreateOrder): Promise<string> => {
     return docRef.id;
   } catch (error) {
     console.error('Error creating order:', error);
+    // If order creation fails, release any reservations that were made
+    try {
+      for (const item of order.items) {
+        await releaseReservation(item.productId, item.quantity, order.userId);
+      }
+    } catch (releaseError) {
+      console.error('Error releasing reservations after failed order creation:', releaseError);
+    }
     throw error;
   }
 };
@@ -133,20 +148,74 @@ export const updateOrder = async (order: UpdateOrder): Promise<void> => {
   }
 };
 
-export const updateOrderStatus = async (id: string, status: Order['status']): Promise<void> => {
+export const updateOrderStatus = async (
+  id: string, 
+  status: Order['status'], 
+  userId: string, 
+  cancellationReason?: string
+): Promise<void> => {
   try {
-    await updateDoc(doc(db, 'orders', id), {
+    const order = await getOrder(id);
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Validate cancellation reason for cancelled orders
+    if (status === 'cancelled' && !cancellationReason?.trim()) {
+      throw new Error('Cancellation reason is required when cancelling an order');
+    }
+
+    const previousStatus = order.status;
+
+    // Handle stock reservations based on status change
+    if (previousStatus === 'pending' && (status === 'approved' || status === 'shipped' || status === 'delivered')) {
+      // Order approved/shipped/delivered: deduct stock and release reservations
+      for (const item of order.items) {
+        await confirmStockDeduction(item.productId, item.quantity, userId);
+      }
+    } else if (previousStatus === 'pending' && status === 'cancelled') {
+      // Order cancelled: release reservations without deducting stock
+      for (const item of order.items) {
+        await releaseReservation(item.productId, item.quantity, userId);
+      }
+    } else if (previousStatus === 'approved' && (status === 'shipped' || status === 'delivered')) {
+      // Already approved orders moving to shipped/delivered: no inventory changes needed
+      // Stock was already deducted when approved
+    } else if ((previousStatus === 'approved' || previousStatus === 'shipped') && status === 'cancelled') {
+      // Cancelling an already processed order: need to restore stock
+      for (const item of order.items) {
+        await adjustStock(item.productId, item.quantity, 'in', 'Order cancellation - stock restoration', userId);
+      }
+    }
+
+    const updateData: any = {
       status,
-      updatedAt: serverTimestamp()
-    });
+      updatedAt: serverTimestamp(),
+      ...(status === 'approved' && { approvedBy: userId }),
+      ...(status === 'cancelled' && cancellationReason && { cancellationReason })
+    };
+
+    await updateDoc(doc(db, 'orders', id), updateData);
   } catch (error) {
     console.error('Error updating order status:', error);
     throw error;
   }
 };
 
-export const deleteOrder = async (id: string): Promise<void> => {
+export const deleteOrder = async (id: string, userId: string): Promise<void> => {
   try {
+    const order = await getOrder(id);
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Release stock reservations if order is pending
+    if (order.status === 'pending') {
+      for (const item of order.items) {
+        await releaseReservation(item.productId, item.quantity, userId);
+      }
+    }
+
     await deleteDoc(doc(db, 'orders', id));
   } catch (error) {
     console.error('Error deleting order:', error);

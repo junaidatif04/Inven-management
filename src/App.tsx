@@ -18,9 +18,8 @@ import WarehouseDashboard from '@/pages/dashboards/WarehouseDashboard';
 import SupplierDashboard from '@/pages/dashboards/SupplierDashboard';
 import InternalUserDashboard from '@/pages/dashboards/InternalUserDashboard';
 import InventoryPage from '@/pages/InventoryPage';
+
 import OrdersPage from '@/pages/OrdersPage';
-import SuppliersPage from '@/pages/SuppliersPage';
-import ReportsPage from '@/pages/ReportsPage';
 import UserManagementPage from '@/pages/UserManagementPage';
 import UserProfilePage from '@/pages/UserProfilePage';
 import WarehouseManagementPage from '@/pages/WarehouseManagementPage';
@@ -61,9 +60,8 @@ function DashboardRouter() {
       <Routes>
         <Route path="/" element={getDashboardComponent()} />
         <Route path="/inventory" element={<InventoryPage />} />
+
         <Route path="/orders" element={<OrdersPage />} />
-        <Route path="/suppliers" element={<SuppliersPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/user-management" element={<UserManagementPage />} />
         <Route path="/profile" element={<UserProfilePage />} />
         <Route path="/warehouse-management" element={<WarehouseManagementPage />} />

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAllInventoryItems } from '@/services/inventoryService';
+import { getInStockPublishedItemsWithAvailability } from '@/services/inventoryService';
 import { InventoryItem } from '@/types/inventory';
 import { createOrder, OrderItem } from '@/services/orderService';
 import {
@@ -55,6 +55,8 @@ export default function ProductCatalogPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [stockErrors, setStockErrors] = useState<Record<string, string>>({});
+  const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
   
   // Checkout form data
   const [checkoutData, setCheckoutData] = useState({
@@ -70,10 +72,9 @@ export default function ProductCatalogPage() {
   const loadProducts = async () => {
     try {
       setLoading(true);
-      const data = await getAllInventoryItems();
-      // Filter only items that are in stock or low stock (available for ordering)
-      const availableItems = data.filter(item => item.status !== 'discontinued' && item.quantity > 0);
-      setProducts(availableItems);
+      // Only load published items that are in stock
+      const data = await getInStockPublishedItemsWithAvailability();
+      setProducts(data);
     } catch (error) {
       toast.error('Failed to load products');
     } finally {
@@ -92,26 +93,54 @@ export default function ProductCatalogPage() {
   });
 
   const addToCart = (product: InventoryItem) => {
+    const selectedQuantity = selectedQuantities[product.id!] || 1;
+    const availableStock = (product.quantity || 0) - (product.reservedQuantity || 0);
+    const currentCartQuantity = cart.find(item => item.productId === product.id)?.quantity || 0;
+    const totalQuantity = currentCartQuantity + selectedQuantity;
+
+    if (totalQuantity > availableStock) {
+      setStockErrors(prev => ({
+        ...prev,
+        [product.id!]: `Only ${availableStock} items available in stock`
+      }));
+      toast.error(`Only ${availableStock} items available in stock`);
+      return;
+    }
+
+    // Clear any existing error for this item
+    setStockErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[product.id!];
+      return newErrors;
+    });
+
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.productId === product.id);
       if (existingItem) {
         return prevCart.map(item =>
           item.productId === product.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: item.quantity + selectedQuantity }
             : item
         );
       } else {
         return [...prevCart, {
           productId: product.id!,
           name: product.name,
-          price: product.unitPrice,
-          quantity: 1,
+          price: product.salePrice || product.unitPrice,
+          quantity: selectedQuantity,
           category: product.category,
           supplier: product.supplier
         }];
       }
     });
-    toast.success(`${product.name} added to cart`);
+    
+    // Reset the selected quantity for this product
+    setSelectedQuantities(prev => ({
+      ...prev,
+      [product.id!]: 1
+    }));
+    
+    toast.success(`${selectedQuantity} ${product.name}${selectedQuantity > 1 ? 's' : ''} added to cart`);
   };
 
   const updateCartQuantity = (productId: string, newQuantity: number) => {
@@ -119,6 +148,26 @@ export default function ProductCatalogPage() {
       removeFromCart(productId);
       return;
     }
+
+    const product = products.find(product => product.id === productId);
+    const availableStock = (product?.quantity || 0) - (product?.reservedQuantity || 0);
+
+    if (newQuantity > availableStock) {
+      setStockErrors(prev => ({
+        ...prev,
+        [productId]: `Only ${availableStock} items available in stock`
+      }));
+      toast.error(`Only ${availableStock} items available in stock`);
+      return;
+    }
+
+    // Clear any existing error for this item
+    setStockErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[productId];
+      return newErrors;
+    });
+    
     setCart(prevCart =>
       prevCart.map(item =>
         item.productId === productId
@@ -144,12 +193,45 @@ export default function ProductCatalogPage() {
     return cart.reduce((total, item) => total + item.quantity, 0);
   };
 
+  const updateSelectedQuantity = (productId: string, quantity: number) => {
+    const product = products.find(p => p.id === productId);
+    const availableStock = (product?.quantity || 0) - (product?.reservedQuantity || 0);
+    const currentCartQuantity = cart.find(item => item.productId === productId)?.quantity || 0;
+    const maxAllowed = availableStock - currentCartQuantity;
+    
+    const validQuantity = Math.max(1, Math.min(quantity, maxAllowed));
+    setSelectedQuantities(prev => ({
+      ...prev,
+      [productId]: validQuantity
+    }));
+  };
+
+  const getSelectedQuantity = (productId: string) => {
+    return selectedQuantities[productId] || 1;
+  };
+
+  const getMaxSelectableQuantity = (product: InventoryItem) => {
+    const availableStock = (product.quantity || 0) - (product.reservedQuantity || 0);
+    const currentCartQuantity = cart.find(item => item.productId === product.id)?.quantity || 0;
+    return Math.max(0, availableStock - currentCartQuantity);
+  };
+
   const handleCheckout = async () => {
     if (!user || cart.length === 0) return;
 
     if (!checkoutData.deliveryLocation.trim()) {
       toast.error('Please provide a delivery location');
       return;
+    }
+
+    // Final stock validation before order creation
+    for (const item of cart) {
+      const product = products.find(p => p.id === item.productId);
+      const availableStock = (product?.quantity || 0) - (product?.reservedQuantity || 0);
+      if (item.quantity > availableStock) {
+        toast.error(`${item.name}: Only ${availableStock} items available`);
+        return;
+      }
     }
 
     try {
@@ -186,10 +268,13 @@ export default function ProductCatalogPage() {
         priority: 'medium',
         notes: ''
       });
+      setStockErrors({});
       setIsCheckoutOpen(false);
       setIsCartOpen(false);
       
-      toast.success('Order placed successfully!');
+      toast.success('Order placed successfully! Stock has been reserved.');
+      // Reload products to reflect updated available stock
+      loadProducts();
     } catch (error) {
       console.error('Error creating order:', error);
       toast.error('Failed to place order. Please try again.');
@@ -261,10 +346,10 @@ export default function ProductCatalogPage() {
         {filteredProducts.map((product) => (
           <Card key={product.id} className="hover:shadow-lg transition-shadow">
             {/* Product Image */}
-            {product.imageUrl && (
+            {(product.images && product.images.length > 0 ? product.images[0] : product.imageUrl) && (
               <div className="aspect-square w-full overflow-hidden rounded-t-lg">
                 <img
-                  src={product.imageUrl}
+                  src={product.images && product.images.length > 0 ? product.images[0] : product.imageUrl}
                   alt={product.name}
                   className="h-full w-full object-cover"
                   onError={(e) => {
@@ -290,9 +375,9 @@ export default function ProductCatalogPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {product.description && (
+              {(product.customerFacingDescription || product.description) && (
                 <p className="text-sm text-gray-600 line-clamp-3">
-                  {product.description}
+                  {product.customerFacingDescription || product.description}
                 </p>
               )}
               
@@ -300,23 +385,54 @@ export default function ProductCatalogPage() {
                 <div className="flex items-center space-x-2">
                   <DollarSign className="h-4 w-4 text-green-600" />
                   <span className="text-lg font-bold text-green-600">
-                    ${product.unitPrice.toFixed(2)}
+                    ${(product.salePrice || product.unitPrice).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex items-center space-x-1 text-sm text-gray-500">
                   <Package className="h-4 w-4" />
-                  <span>Stock: {product.quantity}</span>
+                  <span>Available: {(product.quantity || 0) - (product.reservedQuantity || 0)}</span>
                 </div>
+              </div>
+              
+              {/* Quantity Selector */}
+              <div className="flex items-center justify-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => updateSelectedQuantity(product.id!, getSelectedQuantity(product.id!) - 1)}
+                  disabled={getSelectedQuantity(product.id!) <= 1}
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <Input
+                  type="number"
+                  min="1"
+                  max={getMaxSelectableQuantity(product)}
+                  value={getSelectedQuantity(product.id!)}
+                  onChange={(e) => updateSelectedQuantity(product.id!, parseInt(e.target.value) || 1)}
+                  className="w-16 text-center"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => updateSelectedQuantity(product.id!, getSelectedQuantity(product.id!) + 1)}
+                  disabled={getSelectedQuantity(product.id!) >= getMaxSelectableQuantity(product)}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
               </div>
               
               <Button
                 onClick={() => addToCart(product)}
                 className="w-full"
-                disabled={product.quantity === 0}
+                disabled={getMaxSelectableQuantity(product) === 0}
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Add to Cart
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Add {getSelectedQuantity(product.id!)} to Cart
               </Button>
+              {stockErrors[product.id!] && (
+                <p className="text-sm text-red-600 mt-1">{stockErrors[product.id!]}</p>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -357,6 +473,9 @@ export default function ProductCatalogPage() {
                       <h4 className="font-medium">{item.name}</h4>
                       <p className="text-sm text-gray-600">{item.supplier}</p>
                       <p className="text-sm font-medium text-green-600">${item.price.toFixed(2)} each</p>
+                      {stockErrors[item.productId] && (
+                        <p className="text-sm text-red-600">{stockErrors[item.productId]}</p>
+                      )}
                     </div>
                     <div className="flex items-center space-x-2">
                       <Button
@@ -366,7 +485,17 @@ export default function ProductCatalogPage() {
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
-                      <span className="w-8 text-center">{item.quantity}</span>
+                      <Input
+                        type="number"
+                        min="1"
+                        max={(() => {
+                          const product = products.find(p => p.id === item.productId);
+                          return (product?.quantity || 0) - (product?.reservedQuantity || 0);
+                        })()}
+                        value={item.quantity}
+                        onChange={(e) => updateCartQuantity(item.productId, parseInt(e.target.value) || 1)}
+                        className="w-20 text-center"
+                      />
                       <Button
                         size="sm"
                         variant="outline"

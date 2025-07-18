@@ -246,9 +246,16 @@ export const respondToQuantityRequest = async (
     
     // If approved (full or partial), create inventory item after batch commit
     if ((response.status === 'approved_full' || response.status === 'approved_partial') && response.approvedQuantity) {
+      console.log('Processing approved quantity request for inventory creation:', {
+        requestId,
+        status: response.status,
+        approvedQuantity: response.approvedQuantity
+      });
+      
       const quantityRequest = await getDoc(quantityRequestRef);
       if (quantityRequest.exists()) {
         const qrData = quantityRequest.data() as QuantityRequest;
+        console.log('Quantity request data:', qrData);
         
         let inventoryData: CreateInventoryItem;
         
@@ -271,9 +278,9 @@ export const respondToQuantityRequest = async (
               unitPrice: drData.productPrice,
               supplierId: drData.supplierId,
               supplierName: drData.supplierName,
-              imageUrl: drData.productImageUrl || undefined,
+              ...(drData.productImageUrl && { imageUrl: drData.productImageUrl }),
               location: 'Main Warehouse', // Default location
-              isPublished: true // Automatically publish approved items
+              isPublished: false // Default to unpublished, requires manual curation
             };
           } else {
             throw new Error('Display request not found');
@@ -291,9 +298,8 @@ export const respondToQuantityRequest = async (
             unitPrice: 0, // Price not available for direct requests
             supplierId: qrData.supplierId,
             supplierName: qrData.supplierName,
-            imageUrl: undefined,
             location: 'Main Warehouse', // Default location
-            isPublished: true // Automatically publish approved items
+            isPublished: false // Default to unpublished, requires manual curation
           };
         }
         
@@ -304,6 +310,12 @@ export const respondToQuantityRequest = async (
           inventoryData.sku
         );
         
+        console.log('Checking for existing inventory item:', {
+          productName: inventoryData.name,
+          supplierId: inventoryData.supplierId,
+          sku: inventoryData.sku
+        });
+        
         if (existingItem) {
           // Add stock to existing item instead of creating a new one
           console.log('Found existing inventory item, adding stock:', existingItem.id);
@@ -311,14 +323,27 @@ export const respondToQuantityRequest = async (
             existingItem.id,
             response.approvedQuantity,
             userId,
-            `Stock replenishment from approved quantity request (Request ID: ${response.quantityRequestId})`
+            `Stock replenishment from approved quantity request (Request ID: ${requestId})`
           );
           console.log('Successfully added stock to existing inventory item:', existingItem.id);
         } else {
           // Create new inventory item if none exists
-          console.log('Creating new inventory item with data:', inventoryData);
-          const inventoryItemId = await createInventoryItem(inventoryData, userId);
-          console.log('Successfully created inventory item with ID:', inventoryItemId);
+          console.log('No existing item found. Creating new inventory item with data:', inventoryData);
+          console.log('User ID for inventory creation:', userId);
+          try {
+            const inventoryItemId = await createInventoryItem(inventoryData, userId);
+            console.log('Successfully created inventory item with ID:', inventoryItemId);
+          } catch (error) {
+            console.error('Error creating inventory item:', error);
+            console.error('Error details:', {
+              errorMessage: error instanceof Error ? error.message : 'Unknown error',
+              errorCode: (error as any)?.code || 'Unknown code',
+              inventoryData,
+              userId,
+              requestId
+            });
+            throw error;
+          }
         }
       }
     }
@@ -347,6 +372,35 @@ export const getDisplayRequest = async (requestId: string): Promise<DisplayReque
   }
 };
 
+// Helper function to check for existing pending quantity requests
+const checkForExistingPendingRequest = async (
+  productId: string,
+  supplierId: string
+): Promise<QuantityRequest | null> => {
+  try {
+    const q = query(
+      collection(db, QUANTITY_REQUESTS_COLLECTION),
+      where('productId', '==', productId),
+      where('supplierId', '==', supplierId),
+      where('status', '==', 'pending')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const existingRequest = querySnapshot.docs[0];
+      return {
+        id: existingRequest.id,
+        ...existingRequest.data()
+      } as QuantityRequest;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error checking for existing pending requests:', error);
+    return null;
+  }
+};
+
 // Create a standalone quantity request (for warehouse to request from suppliers)
 export const createQuantityRequest = async (
   requestData: CreateQuantityRequest,
@@ -354,6 +408,76 @@ export const createQuantityRequest = async (
   userName: string
 ): Promise<string> => {
   try {
+    // Check for existing pending requests for the same product and supplier
+    console.log('Checking for existing pending quantity requests:', {
+      productId: requestData.productId,
+      supplierId: requestData.supplierId
+    });
+    
+    const existingRequest = await checkForExistingPendingRequest(
+      requestData.productId,
+      requestData.supplierId
+    );
+    
+    if (existingRequest) {
+      console.log('Found existing pending request:', existingRequest.id);
+      
+      // Update the existing request with the new quantity (combine quantities)
+      const combinedQuantity = (existingRequest.requestedQuantity || 0) + requestData.requestedQuantity;
+      
+      await updateDoc(doc(db, QUANTITY_REQUESTS_COLLECTION, existingRequest.id), {
+         requestedQuantity: combinedQuantity,
+         updatedAt: serverTimestamp(),
+         // Add a note about the combination
+         notes: `Combined request: Original ${existingRequest.requestedQuantity} + New ${requestData.requestedQuantity} = ${combinedQuantity} units`
+       });
+       
+       // Create notification for the original requester about the combination
+       try {
+         await addDoc(collection(db, 'notifications'), {
+           title: 'Quantity Request Combined',
+           message: `Your quantity request for ${requestData.productName} was combined with another request. Total quantity: ${combinedQuantity} units`,
+           type: 'info',
+           userId: existingRequest.requestedBy,
+           read: false,
+           actionUrl: '/dashboard',
+           createdAt: serverTimestamp(),
+           metadata: {
+             requestId: existingRequest.id,
+             productName: requestData.productName,
+             originalQuantity: existingRequest.requestedQuantity,
+             addedQuantity: requestData.requestedQuantity,
+             totalQuantity: combinedQuantity
+           }
+         });
+         
+         // Also notify the new requester
+         await addDoc(collection(db, 'notifications'), {
+           title: 'Quantity Request Combined',
+           message: `Your quantity request for ${requestData.productName} was combined with an existing request. Total quantity: ${combinedQuantity} units`,
+           type: 'info',
+           userId: userId,
+           read: false,
+           actionUrl: '/dashboard',
+           createdAt: serverTimestamp(),
+           metadata: {
+             requestId: existingRequest.id,
+             productName: requestData.productName,
+             yourQuantity: requestData.requestedQuantity,
+             existingQuantity: existingRequest.requestedQuantity,
+             totalQuantity: combinedQuantity
+           }
+         });
+       } catch (notificationError) {
+         console.error('Error creating combination notifications:', notificationError);
+         // Don't fail the main operation if notifications fail
+       }
+       
+       console.log('Updated existing request with combined quantity:', combinedQuantity);
+       return existingRequest.id;
+    }
+    
+    console.log('No existing pending request found, creating new request');
     const docRef = await addDoc(collection(db, QUANTITY_REQUESTS_COLLECTION), {
       ...requestData,
       requestedBy: userId,

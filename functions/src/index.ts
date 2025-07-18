@@ -1,4 +1,5 @@
 import * as functions from 'firebase-functions';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin SDK
@@ -11,21 +12,21 @@ interface DeleteUserRequest {
 
 // Cloud Function to delete a user from Firebase Authentication
 // This can only be called by authenticated admin users
-export const deleteUserFromAuth = functions.https.onCall(async (data: DeleteUserRequest, context) => {
+export const deleteUserFromAuth = onCall(async (request) => {
   // Check if the request is authenticated
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
+  if (!request.auth) {
+    throw new HttpsError(
       'unauthenticated',
       'The function must be called while authenticated.'
     );
   }
 
-  const { userId, adminId } = data;
-  const callerId = context.auth.uid;
+  const { userId, adminId } = request.data as DeleteUserRequest;
+  const callerId = request.auth.uid;
 
   // Verify that the caller is the admin making the request
   if (callerId !== adminId) {
-    throw new functions.https.HttpsError(
+    throw new HttpsError(
       'permission-denied',
       'You can only delete users as yourself.'
     );
@@ -36,7 +37,7 @@ export const deleteUserFromAuth = functions.https.onCall(async (data: DeleteUser
     const adminDoc = await admin.firestore().collection('users').doc(adminId).get();
     
     if (!adminDoc.exists) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'not-found',
         'Admin user not found in database.'
       );
@@ -44,7 +45,7 @@ export const deleteUserFromAuth = functions.https.onCall(async (data: DeleteUser
 
     const adminData = adminDoc.data();
     if (adminData?.role !== 'admin') {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'permission-denied',
         'Only admin users can delete other users.'
       );
@@ -52,7 +53,7 @@ export const deleteUserFromAuth = functions.https.onCall(async (data: DeleteUser
 
     // Prevent admin from deleting themselves
     if (userId === adminId) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'invalid-argument',
         'Admins cannot delete their own account through this method. Use the profile page instead.'
       );
@@ -82,7 +83,7 @@ export const deleteUserFromAuth = functions.https.onCall(async (data: DeleteUser
     console.error('Error deleting user:', error);
     
     // If it's already a HttpsError, re-throw it
-    if (error instanceof functions.https.HttpsError) {
+    if (error instanceof HttpsError) {
       throw error;
     }
 
@@ -97,7 +98,7 @@ export const deleteUserFromAuth = functions.https.onCall(async (data: DeleteUser
             message: 'User deleted from Firestore (was not found in Authentication)'
           };
         } catch (firestoreError) {
-          throw new functions.https.HttpsError(
+          throw new HttpsError(
             'internal',
             'User not found in Authentication and failed to delete from Firestore'
           );
@@ -105,31 +106,74 @@ export const deleteUserFromAuth = functions.https.onCall(async (data: DeleteUser
       }
     }
 
-    throw new functions.https.HttpsError(
+    throw new HttpsError(
       'internal',
       'An error occurred while deleting the user'
     );
   }
 });
 
+// Cloud Function to check if an email exists in the system
+// This is used during signup to prevent duplicate accounts
+export const checkEmailExists = onCall(async (request) => {
+  const { email } = request.data as { email: string };
+
+  // Validate email parameter
+  if (!email || typeof email !== 'string') {
+    throw new HttpsError(
+      'invalid-argument',
+      'Email is required and must be a string.'
+    );
+  }
+
+  // Basic email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Invalid email format.'
+    );
+  }
+
+  try {
+    // Query Firestore to check if email exists
+    const usersSnapshot = await admin.firestore()
+      .collection('users')
+      .where('email', '==', email.toLowerCase())
+      .limit(1)
+      .get();
+
+    return {
+      exists: !usersSnapshot.empty
+    };
+
+  } catch (error) {
+    console.error('Error checking email existence:', error);
+    throw new HttpsError(
+      'internal',
+      'An error occurred while checking email existence'
+    );
+  }
+});
+
 // Cloud Function to get admin action logs
-export const getAdminActionLogs = functions.https.onCall(async (data, context) => {
+export const getAdminActionLogs = onCall(async (request) => {
   // Check if the request is authenticated
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
+  if (!request.auth) {
+    throw new HttpsError(
       'unauthenticated',
       'The function must be called while authenticated.'
     );
   }
 
-  const callerId = context.auth.uid;
+  const callerId = request.auth.uid;
 
   try {
     // Verify that the caller is an admin
     const adminDoc = await admin.firestore().collection('users').doc(callerId).get();
     
     if (!adminDoc.exists) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'not-found',
         'User not found in database.'
       );
@@ -137,7 +181,7 @@ export const getAdminActionLogs = functions.https.onCall(async (data, context) =
 
     const adminData = adminDoc.data();
     if (adminData?.role !== 'admin') {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'permission-denied',
         'Only admin users can view action logs.'
       );
@@ -160,11 +204,11 @@ export const getAdminActionLogs = functions.https.onCall(async (data, context) =
   } catch (error) {
     console.error('Error fetching admin logs:', error);
     
-    if (error instanceof functions.https.HttpsError) {
+    if (error instanceof HttpsError) {
       throw error;
     }
 
-    throw new functions.https.HttpsError(
+    throw new HttpsError(
       'internal',
       'An error occurred while fetching admin logs'
     );

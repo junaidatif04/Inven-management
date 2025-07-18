@@ -32,12 +32,8 @@ service cloud.firestore {
       // Users can read and update their own profile
       allow read, update: if isAuthenticated() && request.auth.uid == userId;
       
-      // Admins can read all users
-      allow read: if isAdmin();
-      
-      // Allow reading user documents for email existence check during signup
-      // This is needed to prevent duplicate email registrations
-      allow read: if request.auth != null;
+      // Admins and warehouse staff can read all users (needed for order/inventory management)
+      allow read: if isAdmin() || hasWarehouseAccess();
       
       // Admins can update user roles and data (except their own role)
       allow update: if isAdmin() && (
@@ -46,8 +42,9 @@ service cloud.firestore {
         request.resource.data.role == resource.data.role
       );
       
-      // Allow user creation during signup
+      // Allow user creation during signup and by Cloud Functions
       allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if request.auth.token.firebase.sign_in_provider == 'custom';
       
       // Admins can delete users (except themselves)
       allow delete: if isAdmin() && request.auth.uid != userId;
@@ -74,11 +71,22 @@ service cloud.firestore {
       // All authenticated users can read inventory
       allow read: if isAuthenticated();
       
-      // Warehouse staff and admins can modify inventory
+      // Warehouse staff and admins can modify inventory (same permissions)
       allow create, update, delete: if hasWarehouseAccess();
       
       // Suppliers can create and update inventory items (for quantity request responses)
       allow create, update: if isAuthenticated() && getUserRole(request.auth.uid) == 'supplier';
+      
+      // Internal users can only update specific fields for stock operations (reservedQuantity, quantity, status)
+      allow update: if isAuthenticated() && 
+        getUserRole(request.auth.uid) == 'internal_user' &&
+        // Only allow updates to reservedQuantity, quantity, status, lastUpdated, and updatedBy fields
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reservedQuantity', 'quantity', 'status', 'lastUpdated', 'updatedBy']) &&
+        // Ensure quantity can only decrease (for stock deduction) or stay the same
+        request.resource.data.quantity <= resource.data.quantity &&
+        // Ensure reservedQuantity changes are reasonable (not negative and not exceeding total quantity)
+        request.resource.data.reservedQuantity >= 0 &&
+        request.resource.data.reservedQuantity <= request.resource.data.quantity;
     }
     
     // Orders collection - role-based access
@@ -89,17 +97,21 @@ service cloud.firestore {
       // Internal users, warehouse staff, and admins can create orders
       allow create: if canCreateOrders();
       
-      // Only warehouse staff and admins can update/delete orders
+      // Warehouse staff and admins can update/delete orders (same permissions)
       allow update, delete: if hasWarehouseAccess();
     }
     
-    // Suppliers collection - warehouse and admin access
+    // Suppliers collection - warehouse, admin, and supplier access
     match /suppliers/{supplierId} {
       // All authenticated users can read suppliers
       allow read: if isAuthenticated();
       
-      // Only warehouse staff and admins can modify suppliers
+      // Warehouse staff and admins can modify all suppliers (same permissions)
       allow create, update, delete: if hasWarehouseAccess();
+      
+      // Suppliers can create and update their own supplier records (for auto-registration)
+      allow create, update: if isAuthenticated() && getUserRole(request.auth.uid) == 'supplier' && 
+        (request.resource.data.email == request.auth.token.email || resource.data.email == request.auth.token.email);
     }
     
     // Products collection - supplier, warehouse and admin access
@@ -107,7 +119,7 @@ service cloud.firestore {
       // All authenticated users can read products
       allow read: if isAuthenticated();
       
-      // Suppliers can create and manage their own products, warehouse staff and admins can modify all
+      // Suppliers can create and manage their own products, warehouse staff and admins can modify all (same permissions)
       allow create: if isAuthenticated() && (getUserRole(request.auth.uid) == 'supplier' || hasWarehouseAccess());
       allow update, delete: if isAuthenticated() && (
         (resource.data.supplierId == request.auth.uid && getUserRole(request.auth.uid) == 'supplier') ||
@@ -222,16 +234,21 @@ service cloud.firestore {
       allow create, update, delete: if hasWarehouseAccess();
     }
     
-    // Stock movements collection - warehouse, admin, and supplier access
+    // Stock movements collection - warehouse, admin, supplier, and internal user access
     match /stockMovements/{movementId} {
       // All authenticated users can read stock movements
       allow read: if isAuthenticated();
       
-      // Warehouse staff and admins can create stock movements
+      // Warehouse staff and admins can create stock movements (same permissions)
       allow create, update, delete: if hasWarehouseAccess();
       
       // Suppliers can create stock movements (for quantity request responses)
       allow create: if isAuthenticated() && getUserRole(request.auth.uid) == 'supplier';
+      
+      // Internal users can create stock movements for legitimate operations (reservations, releases, deductions)
+      allow create: if isAuthenticated() && 
+        getUserRole(request.auth.uid) == 'internal_user' &&
+        request.resource.data.reason in ['Stock reserved for order', 'Stock reservation released', 'Order confirmed - stock deducted'];
     }
     
     // Display requests collection - supplier and warehouse access
@@ -291,11 +308,11 @@ service cloud.firestore {
       // End users can create customer orders
       allow create: if isAuthenticated() && getUserRole(request.auth.uid) == 'end_user';
       
-      // Warehouse staff and admins can update customer orders (accept/cancel)
+      // Warehouse staff and admins can update customer orders (accept/cancel) - same permissions
       allow update: if hasWarehouseAccess();
       
-      // Admins can delete customer orders
-      allow delete: if isAdmin();
+      // Warehouse staff and admins can delete customer orders (same permissions)
+      allow delete: if hasWarehouseAccess();
     }
     
     // Purchase orders collection - supplier and warehouse access
@@ -306,17 +323,17 @@ service cloud.firestore {
         hasWarehouseAccess()
       );
       
-      // Warehouse staff can create purchase orders
+      // Warehouse staff and admins can create purchase orders (same permissions)
       allow create: if hasWarehouseAccess();
       
-      // Suppliers can update purchase orders (accept/reject), warehouse staff can update status
+      // Suppliers can update purchase orders (accept/reject), warehouse staff and admins can update status (same permissions)
       allow update: if isAuthenticated() && (
         (resource.data.supplierId == request.auth.uid && getUserRole(request.auth.uid) == 'supplier') ||
         hasWarehouseAccess()
       );
       
-      // Admins can delete purchase orders
-      allow delete: if isAdmin();
+      // Warehouse staff and admins can delete purchase orders (same permissions)
+      allow delete: if hasWarehouseAccess();
     }
     
     // Default deny rule for any other collections

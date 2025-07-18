@@ -232,14 +232,16 @@ export const checkUserApprovalStatus = async (email: string): Promise<boolean> =
 };
 
 // Helper function to check if email already exists in users collection
+// Uses Cloud Function for secure email existence check
 export const checkEmailExists = async (email: string): Promise<boolean> => {
   try {
-    const q = query(
-      collection(db, 'users'),
-      where('email', '==', email)
-    );
-    const querySnapshot = await getDocs(q);
-    return !querySnapshot.empty;
+    const { httpsCallable } = await import('firebase/functions');
+    const { functions } = await import('@/lib/firebase');
+    
+    const checkEmailExistsFunction = httpsCallable(functions, 'checkEmailExists');
+    const result = await checkEmailExistsFunction({ email });
+    
+    return (result.data as { exists: boolean }).exists;
   } catch (error) {
     console.error('Error checking email existence:', error);
     return false;

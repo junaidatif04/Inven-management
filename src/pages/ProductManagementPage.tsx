@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import { Textarea } from '@/components/ui/textarea';
 import { NavigationHeader } from '@/components/NavigationHeader';
+import ProductImageUpload from '@/components/ProductImageUpload';
 import { 
   Plus, 
   Search, 
@@ -20,8 +21,6 @@ import {
 
   Send,
 
-  Upload,
-  X,
   Clock,
   CheckCircle,
   XCircle,
@@ -41,7 +40,6 @@ import {
   getProductsBySupplier,
   createProduct,
   updateProduct,
-  uploadProductImage,
   getAllPurchaseOrders,
   getPurchaseOrdersBySupplier,
 
@@ -66,7 +64,7 @@ import {
 
 const sections = [
   { id: 'products', name: 'Product Catalog', icon: Package },
-  { id: 'requested-products', name: 'Requested Products', icon: Send },
+  { id: 'requested-products', name: 'Proposed Products', icon: Send },
   { id: 'received-requests', name: 'Received Requests', icon: Inbox }
 ];
 
@@ -91,11 +89,10 @@ export default function ProductManagementPage() {
     name: '',
     category: '',
     price: '',
-    description: ''
+    description: '',
+    imageUrl: ''
   });
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [quantityResponseForm, setQuantityResponseForm] = useState({
@@ -216,14 +213,14 @@ export default function ProductManagementPage() {
       };
       
       await createDisplayRequest(requestData);
-      toast.success('Display request submitted successfully');
-      
-      // Reload display requests
+      toast.success('Product proposal submitted successfully');
+
+    // Reload product proposals
       const updatedDisplayRequests = await getDisplayRequestsBySupplier(user.id);
       setDisplayRequests(updatedDisplayRequests);
     } catch (error) {
-      console.error('Error creating display request:', error);
-      toast.error('Failed to create display request');
+      console.error('Error creating product proposal:', error);
+    toast.error('Failed to create product proposal');
     }
   };
 
@@ -292,32 +289,15 @@ export default function ProductManagementPage() {
     
     try {
       await deleteDisplayRequest(requestId, user.id);
-      toast.success('Display request deleted successfully');
-      
-      // Reload display requests
+      toast.success('Product proposal deleted successfully');
+
+    // Reload product proposals
       const updatedDisplayRequests = await getDisplayRequestsBySupplier(user.id);
       setDisplayRequests(updatedDisplayRequests);
     } catch (error: any) {
-      console.error('Error deleting display request:', error);
-      toast.error(error.message || 'Failed to delete display request');
+      console.error('Error deleting product proposal:', error);
+    toast.error(error.message || 'Failed to delete product proposal');
     }
-  };
-
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setSelectedImage(null);
-    setImagePreview(null);
   };
 
   const handleCreateProduct = async () => {
@@ -333,36 +313,21 @@ export default function ProductManagementPage() {
         category: newProductForm.category,
         price: parseFloat(newProductForm.price),
         description: newProductForm.description,
+        imageUrl: newProductForm.imageUrl,
         supplierId: user.id,
         supplierName: user.displayName || user.email || 'Unknown',
         createdBy: user.id
       };
 
-      // Upload image if selected
-      if (selectedImage) {
-        setIsUploadingImage(true);
-        try {
-          const uploadResult = await uploadProductImage(selectedImage);
-          productData.imageUrl = uploadResult.url;
-          productData.imagePath = uploadResult.path;
-        } catch (imageError) {
-          console.error('Error uploading image:', imageError);
-          toast.error('Product created but image upload failed');
-        } finally {
-          setIsUploadingImage(false);
-        }
-      }
-      
       await createProduct(productData);
       toast.success('Product created successfully');
       setNewProductForm({
         name: '',
         category: '',
         price: '',
-        description: ''
+        description: '',
+        imageUrl: ''
       });
-      setSelectedImage(null);
-      setImagePreview(null);
     } catch (error) {
       toast.error('Failed to create product');
     } finally {
@@ -385,7 +350,7 @@ export default function ProductManagementPage() {
   const handleEditProduct = (product: any) => {
     setEditingProduct({
       ...product,
-      images: product.images || []
+      imageUrl: product.imageUrl || ''
     });
     setIsEditDialogOpen(true);
   };
@@ -397,26 +362,7 @@ export default function ProductManagementPage() {
     }));
   };
 
-  const handleEditImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files) {
-      const newImages = Array.from(files).map(file => ({
-        file,
-        preview: URL.createObjectURL(file)
-      }));
-      setEditingProduct((prev: any) => ({
-        ...prev,
-        images: [...(prev.images || []), ...newImages]
-      }));
-    }
-  };
 
-  const handleEditRemoveImage = (index: number) => {
-    setEditingProduct((prev: any) => ({
-      ...prev,
-      images: prev.images.filter((_: any, i: number) => i !== index)
-    }));
-  };
 
   const handleSaveEdit = () => {
     if (editingProduct) {
@@ -424,7 +370,8 @@ export default function ProductManagementPage() {
         name: editingProduct.name,
         category: editingProduct.category,
         price: editingProduct.price,
-        description: editingProduct.description
+        description: editingProduct.description,
+        imageUrl: editingProduct.imageUrl
       });
     }
   };
@@ -508,49 +455,12 @@ export default function ProductManagementPage() {
                 />
               </div>
               
-              {/* Image Upload Section */}
-              <div className="space-y-2">
-                <Label>Product Image (Optional)</Label>
-                <div className="space-y-2">
-                  {imagePreview ? (
-                    <div className="relative">
-                      <img 
-                        src={imagePreview} 
-                        alt="Product preview" 
-                        className="w-full h-32 object-cover rounded-md border"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="absolute top-2 right-2"
-                        onClick={handleRemoveImage}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-md p-4 text-center">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageSelect}
-                        className="hidden"
-                        id="product-image-upload"
-                      />
-                      <label 
-                        htmlFor="product-image-upload" 
-                        className="cursor-pointer flex flex-col items-center space-y-2"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                          <Plus className="h-4 w-4" />
-                        </div>
-                        <span className="text-sm text-muted-foreground">Click to upload image</span>
-                      </label>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ProductImageUpload
+                mode="add"
+                currentImageUrl={newProductForm.imageUrl}
+                productName={newProductForm.name}
+                onImageUpdate={(imageUrl) => setNewProductForm(prev => ({ ...prev, imageUrl }))}
+              />
               
               <Button 
                 onClick={handleCreateProduct} 
@@ -714,7 +624,7 @@ export default function ProductManagementPage() {
                           disabled
                         >
                           <Clock className="h-3 w-3 mr-1" />
-                          Requested
+                          Proposed
                         </Button>
                       ) : (
                         <Button 
@@ -724,7 +634,7 @@ export default function ProductManagementPage() {
                           onClick={() => handleCreateDisplayRequest(product)}
                         >
                           <Send className="h-3 w-3 mr-1" />
-                          Request
+                          Propose
                         </Button>
                       )}
                       <Button 
@@ -809,54 +719,13 @@ export default function ProductManagementPage() {
                 />
               </div>
               
-              {/* Image Upload for Edit */}
-              <div className="space-y-2">
-                <Label>Product Images</Label>
-                <div className="space-y-2">
-                  {editingProduct.images && editingProduct.images.length > 0 && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {editingProduct.images.map((image: any, index: number) => (
-                        <div key={index} className="relative">
-                          <img 
-                            src={image.preview || image.url} 
-                            alt={`Product ${index + 1}`}
-                            className="w-full h-20 object-cover rounded border"
-                          />
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            className="absolute -top-2 -right-2 h-6 w-6 p-0"
-                            onClick={() => handleEditRemoveImage(index)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  <div className="border-2 border-dashed border-muted-foreground/25 rounded-md p-4 text-center">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleEditImageSelect}
-                      className="hidden"
-                      id="edit-product-image-upload"
-                    />
-                    <label 
-                      htmlFor="edit-product-image-upload" 
-                      className="cursor-pointer flex flex-col items-center space-y-2"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                        <Upload className="h-4 w-4" />
-                      </div>
-                      <span className="text-sm text-muted-foreground">Add more images</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
+              <ProductImageUpload
+                mode="update"
+                currentImageUrl={editingProduct.imageUrl || ''}
+                productName={editingProduct.name || ''}
+                productId={editingProduct.id}
+                onImageUpdate={(imageUrl) => handleEditFormChange('imageUrl', imageUrl)}
+              />
               
               <div className="flex space-x-2">
                 <Button 
@@ -880,12 +749,12 @@ export default function ProductManagementPage() {
     </div>
   );
 
-  const renderRequestedProducts = () => (
+  const renderProposedProducts = () => (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold">Requested Products</h2>
+        <h2 className="text-xl font-semibold">Proposed Products</h2>
         <p className="text-sm text-muted-foreground">
-          Track your display requests to Admin/Warehouse
+          Track your product proposals to Admin/Warehouse
         </p>
       </div>
 
@@ -894,8 +763,8 @@ export default function ProductManagementPage() {
           <CardContent className="p-6">
             <div className="text-center py-8 text-muted-foreground">
               <Send className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No display requests found</p>
-              <p className="text-sm">Products you request will appear here</p>
+              <p>No product proposals found</p>
+              <p className="text-sm">Products you propose will appear here</p>
             </div>
           </CardContent>
         </Card>
@@ -919,7 +788,7 @@ export default function ProductManagementPage() {
                       Price: ${request.productPrice}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Requested: {formatDate(request.requestedAt)}
+                      Proposed: {formatDate(request.requestedAt)}
                     </p>
                     {request.reviewedAt && (
                       <p className="text-sm text-muted-foreground">
@@ -1160,7 +1029,7 @@ export default function ProductManagementPage() {
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="pb-6">
           {activeSection === 'products' && renderProducts()}
-          {activeSection === 'requested-products' && renderRequestedProducts()}
+          {activeSection === 'requested-products' && renderProposedProducts()}
           {activeSection === 'received-requests' && renderReceivedRequests()}
         </div>
       </div>

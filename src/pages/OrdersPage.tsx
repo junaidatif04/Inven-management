@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/contexts/AuthContext';
 
 import {
   Table,
@@ -27,7 +28,6 @@ import {
   RefreshCw,
   Eye,
   Plus,
-  Edit,
   Trash2,
   MoreHorizontal
 } from 'lucide-react';
@@ -51,8 +51,10 @@ import { toast } from 'sonner';
 import { getAllOrders, updateOrderStatus, deleteOrder, Order, subscribeToOrders } from '@/services/orderService';
 import { getAllSuppliers } from '@/services/supplierService';
 import OrderDialog from '@/components/OrderDialog';
+import OrderStatusDialog from '@/components/OrderStatusDialog';
 
 export default function OrdersPage() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
 
@@ -73,6 +75,12 @@ export default function OrdersPage() {
     open: false,
     orderId: '',
     orderNumber: ''
+  });
+  
+  // Status update dialog
+  const [statusDialog, setStatusDialog] = useState({
+    open: false,
+    order: null as Order | null
   });
 
   const loadRealData = async () => {
@@ -180,22 +188,36 @@ export default function OrdersPage() {
     setFilteredOrders(filtered);
   };
 
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
+  const handleStatusUpdate = async (orderId: string, newStatus: Order['status'], cancellationReason?: string) => {
+    if (!user || !user.id) {
+      toast.error('User not authenticated');
+      return;
+    }
+    
     try {
       // Update in database
-      await updateOrderStatus(orderId, newStatus as Order['status']);
+      await updateOrderStatus(orderId, newStatus, user.id, cancellationReason);
 
       // Update local state
       setOrders(prev => prev.map(order =>
-        order.id === orderId ? { ...order, status: newStatus as Order['status'] } : order
+        order.id === orderId ? { ...order, status: newStatus, cancellationReason } : order
       ));
 
       toast.success('Order status updated successfully');
       setLastUpdated(new Date());
+      setStatusDialog({ open: false, order: null });
     } catch (error) {
       console.error('Error updating order status:', error);
       toast.error('Failed to update order status');
     }
+  };
+  
+  const openStatusDialog = (order: Order) => {
+    setStatusDialog({ open: true, order });
+  };
+  
+  const closeStatusDialog = () => {
+    setStatusDialog({ open: false, order: null });
   };
 
   const refreshData = async () => {
@@ -225,9 +247,7 @@ export default function OrdersPage() {
     setOrderDialog({ open: true, mode: 'create', order: null });
   };
   
-  const openEditDialog = (order: Order) => {
-    setOrderDialog({ open: true, mode: 'edit', order });
-  };
+
   
   const openViewDialog = (order: Order) => {
     setOrderDialog({ open: true, mode: 'view', order });
@@ -247,8 +267,13 @@ export default function OrdersPage() {
   };
   
   const handleDeleteOrder = async () => {
+    if (!user || !user.id) {
+      toast.error('User not authenticated');
+      return;
+    }
+    
     try {
-      await deleteOrder(deleteDialog.orderId);
+      await deleteOrder(deleteDialog.orderId, user.id);
       toast.success('Order deleted successfully');
       closeDeleteDialog();
     } catch (error) {
@@ -301,10 +326,13 @@ export default function OrdersPage() {
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button onClick={openCreateDialog}>
-            <Plus className="mr-2 h-4 w-4" />
-            Place New Order
-          </Button>
+          {/* Hide Place New Order button for admin and warehouse staff */}
+          {user?.role !== 'admin' && user?.role !== 'warehouse_staff' && (
+            <Button onClick={openCreateDialog}>
+              <Plus className="mr-2 h-4 w-4" />
+              Place New Order
+            </Button>
+          )}
         </div>
       </div>
 
@@ -423,21 +451,26 @@ export default function OrdersPage() {
                     <TableCell>{order.supplierName}</TableCell>
                     <TableCell>{order.requestedBy}</TableCell>
                     <TableCell>
-                      <Select
-                        value={order.status}
-                        onValueChange={(newStatus) => handleStatusChange(order.id, newStatus)}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="approved">Approved</SelectItem>
-                          <SelectItem value="shipped">Shipped</SelectItem>
-                          <SelectItem value="delivered">Delivered</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          order.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                          order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
+                          order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                          order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openStatusDialog(order)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          Update
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
                     <TableCell>{formatDate(order.orderDate || order.createdAt)}</TableCell>
@@ -452,10 +485,6 @@ export default function OrdersPage() {
                           <DropdownMenuItem onClick={() => openViewDialog(order)}>
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEditDialog(order)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit Order
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             onClick={() => openDeleteDialog(order.id, order.orderNumber)}
@@ -501,6 +530,14 @@ export default function OrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Order Status Dialog */}
+      <OrderStatusDialog
+        open={statusDialog.open}
+        onOpenChange={closeStatusDialog}
+        order={statusDialog.order}
+        onStatusUpdate={handleStatusUpdate}
+      />
     </div>
   );
 }

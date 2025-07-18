@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { InventoryItem, CreateInventoryItem, UpdateInventoryItem, StockMovement } from '@/types/inventory';
-import { deleteImage } from './imageUploadService';
+import { deleteImage, uploadImage, ImageUploadResult } from './imageUploadService';
 
 // Inventory Items CRUD
 export const getAllInventoryItems = async (): Promise<InventoryItem[]> => {
@@ -338,29 +338,52 @@ export const findExistingInventoryItem = async (
   sku?: string
 ): Promise<InventoryItem | null> => {
   try {
+    console.log('Finding existing inventory item:', { productName, supplierId, sku });
+    
     const q = query(
       collection(db, 'inventory'),
       where('supplierId', '==', supplierId)
     );
     const querySnapshot = await getDocs(q);
     
+    console.log(`Found ${querySnapshot.docs.length} inventory items for supplier ${supplierId}`);
+    
     // Find exact match by name and optionally SKU
     for (const doc of querySnapshot.docs) {
       const item = { id: doc.id, ...doc.data() } as InventoryItem;
       
-      // Check for exact name match
+      console.log('Checking item:', { 
+        itemId: item.id, 
+        itemName: item.name, 
+        itemSku: item.sku,
+        searchName: productName,
+        searchSku: sku
+      });
+      
+      // Check for exact name match (case-insensitive)
       if (item.name.toLowerCase() === productName.toLowerCase()) {
-        // If SKU is provided, also check SKU match
-        if (sku && item.sku && item.sku.toLowerCase() === sku.toLowerCase()) {
-          return item;
+        console.log('Product name matches, checking SKU...');
+        
+        // If both SKUs exist, they must match
+        if (sku && item.sku) {
+          if (item.sku.toLowerCase() === sku.toLowerCase()) {
+            console.log('SKU also matches, returning existing item:', item.id);
+            return item;
+          } else {
+            console.log('SKU mismatch, continuing search...');
+            continue; // SKUs don't match, continue searching
+          }
         }
-        // If no SKU provided or SKU matches, return the item
-        if (!sku || !item.sku) {
+        
+        // If either SKU is missing/empty, consider it a match based on name only
+        if (!sku || !item.sku || sku.trim() === '' || item.sku.trim() === '') {
+          console.log('SKU not available for comparison, matching by name only:', item.id);
           return item;
         }
       }
     }
     
+    console.log('No existing inventory item found');
     return null;
   } catch (error) {
     console.error('Error finding existing inventory item:', error);
@@ -396,6 +419,179 @@ export const getLowStockItems = async (): Promise<InventoryItem[]> => {
     })) as InventoryItem[];
   } catch (error) {
     console.error('Error fetching low stock items:', error);
+    throw error;
+  }
+};
+
+// Image Upload Functions
+export const uploadInventoryImage = async (file: File, itemId?: string): Promise<ImageUploadResult> => {
+  try {
+    const folder = 'inventory';
+    const fileName = itemId ? `${itemId}_${Date.now()}` : `inventory_${Date.now()}`;
+    return await uploadImage(file, folder, fileName);
+  } catch (error) {
+    console.error('Error uploading inventory image:', error);
+    throw new Error('Failed to upload inventory image');
+  }
+};
+
+export const updateInventoryImage = async (itemId: string, file: File, userId: string): Promise<void> => {
+  try {
+    // Get current item to check for existing image
+    const currentItem = await getInventoryItem(itemId);
+    
+    // Upload new image
+    const uploadResult = await uploadInventoryImage(file, itemId);
+    
+    // Update item with new image data
+    await updateInventoryItem({
+      id: itemId,
+      imageUrl: uploadResult.url,
+      imagePath: uploadResult.path
+    }, userId);
+    
+    // Delete old image if it exists
+    if (currentItem?.imagePath && currentItem.imagePath !== uploadResult.path) {
+      try {
+        await deleteImage(currentItem.imagePath);
+      } catch (imageError) {
+        console.warn('Failed to delete old inventory image:', imageError);
+      }
+    }
+  } catch (error) {
+    console.error('Error updating inventory image:', error);
+    throw new Error('Failed to update inventory image');
+  }
+};
+
+// Stock Reservation Functions
+export const reserveStock = async (itemId: string, quantity: number, userId: string): Promise<void> => {
+  try {
+    const item = await getInventoryItem(itemId);
+    if (!item) {
+      throw new Error('Item not found');
+    }
+
+    const currentReserved = item.reservedQuantity || 0;
+    const availableStock = item.quantity - currentReserved;
+    
+    if (quantity > availableStock) {
+      throw new Error(`Insufficient stock. Available: ${availableStock}, Requested: ${quantity}`);
+    }
+
+    await updateInventoryItem({
+      id: itemId,
+      reservedQuantity: currentReserved + quantity
+    }, userId);
+
+    // Create stock movement record for reservation
+    await addDoc(collection(db, 'stockMovements'), {
+      itemId,
+      itemName: item.name,
+      type: 'out',
+      quantity,
+      reason: 'Stock reserved for order',
+      performedBy: userId,
+      timestamp: serverTimestamp(),
+      notes: 'Stock reservation'
+    });
+  } catch (error) {
+    console.error('Error reserving stock:', error);
+    throw error;
+  }
+};
+
+export const releaseReservation = async (itemId: string, quantity: number, userId: string): Promise<void> => {
+  try {
+    const item = await getInventoryItem(itemId);
+    if (!item) {
+      throw new Error('Item not found');
+    }
+
+    const currentReserved = item.reservedQuantity || 0;
+    const newReserved = Math.max(0, currentReserved - quantity);
+
+    await updateInventoryItem({
+      id: itemId,
+      reservedQuantity: newReserved
+    }, userId);
+
+    // Create stock movement record for reservation release
+    await addDoc(collection(db, 'stockMovements'), {
+      itemId,
+      itemName: item.name,
+      type: 'in',
+      quantity,
+      reason: 'Stock reservation released',
+      performedBy: userId,
+      timestamp: serverTimestamp(),
+      notes: 'Reservation release'
+    });
+  } catch (error) {
+    console.error('Error releasing reservation:', error);
+    throw error;
+  }
+};
+
+export const confirmStockDeduction = async (itemId: string, quantity: number, userId: string): Promise<void> => {
+  try {
+    const item = await getInventoryItem(itemId);
+    if (!item) {
+      throw new Error('Item not found');
+    }
+
+    const currentReserved = item.reservedQuantity || 0;
+    const newQuantity = item.quantity - quantity;
+    const newReserved = Math.max(0, currentReserved - quantity);
+
+    if (newQuantity < 0) {
+      throw new Error('Insufficient stock for deduction');
+    }
+
+    // Calculate new status
+    const status = newQuantity <= 0 ? 'out_of_stock' : 
+                  newQuantity <= item.minStockLevel ? 'low_stock' : 'in_stock';
+
+    await updateInventoryItem({
+      id: itemId,
+      quantity: newQuantity,
+      reservedQuantity: newReserved,
+      status
+    }, userId);
+
+    // Create stock movement record for confirmed deduction
+    await addDoc(collection(db, 'stockMovements'), {
+      itemId,
+      itemName: item.name,
+      type: 'out',
+      quantity,
+      reason: 'Order confirmed - stock deducted',
+      performedBy: userId,
+      timestamp: serverTimestamp(),
+      notes: 'Confirmed order deduction'
+    });
+  } catch (error) {
+    console.error('Error confirming stock deduction:', error);
+    throw error;
+  }
+};
+
+export const getAvailableStock = (item: InventoryItem): number => {
+  const reserved = item.reservedQuantity || 0;
+  return Math.max(0, item.quantity - reserved);
+};
+
+export const getInStockPublishedItemsWithAvailability = async (): Promise<(InventoryItem & { availableStock: number })[]> => {
+  try {
+    const items = await getInStockPublishedItems();
+    return items
+      .map(item => ({
+        ...item,
+        availableStock: getAvailableStock(item)
+      }))
+      .filter(item => item.availableStock > 0);
+  } catch (error) {
+    console.error('Error fetching available published items:', error);
     throw error;
   }
 };

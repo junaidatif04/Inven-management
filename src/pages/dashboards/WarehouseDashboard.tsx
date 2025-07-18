@@ -17,14 +17,13 @@ import {
   Eye,
 
   PackageX,
-  Check,
-  X
+
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllInventoryItems, adjustStock, getLowStockItems } from '@/services/inventoryService';
 import { getAllShipments, subscribeToShipments, Shipment } from '@/services/shipmentService';
-import { getAllDisplayRequests, reviewDisplayRequest, createQuantityRequest } from '@/services/displayRequestService';
+import { getAllDisplayRequests, createQuantityRequest } from '@/services/displayRequestService';
 import { InventoryItem } from '@/types/inventory';
 import { DisplayRequest } from '@/types/displayRequest';
 
@@ -94,7 +93,7 @@ export default function WarehouseDashboard() {
 
   const handleStockUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stockForm.productId || !stockForm.quantity || !user) {
+    if (!stockForm.productId || !stockForm.quantity || !user || !user.id) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -136,37 +135,7 @@ export default function WarehouseDashboard() {
     navigate('/dashboard/warehouse-management');
   };
 
-  const handleApproveDisplayRequest = async (requestId: string) => {
-    if (!user?.id) return;
-    
-    try {
-      await reviewDisplayRequest(requestId, 'accepted', user.id, user.displayName || user.email || 'Warehouse Staff');
-      toast.success('Display request approved');
-      
-      // Reload display requests
-      const displayRequestsData = await getAllDisplayRequests();
-      setDisplayRequests(displayRequestsData);
-    } catch (error) {
-      console.error('Error approving display request:', error);
-      toast.error('Failed to approve display request');
-    }
-  };
 
-  const handleRejectDisplayRequest = async (requestId: string, reason: string) => {
-    if (!user?.id) return;
-    
-    try {
-      await reviewDisplayRequest(requestId, 'rejected', user.id, user.displayName || user.email || 'Warehouse Staff', reason);
-      toast.success('Display request rejected');
-      
-      // Reload display requests
-      const displayRequestsData = await getAllDisplayRequests();
-      setDisplayRequests(displayRequestsData);
-    } catch (error) {
-      console.error('Error rejecting display request:', error);
-      toast.error('Failed to reject display request');
-    }
-  };
 
   const handleCreateQuantityRequest = async () => {
     if (!selectedDisplayRequest || !user?.id || quantityRequestForm.quantity <= 0) {
@@ -334,23 +303,6 @@ export default function WarehouseDashboard() {
                         
                         {request.status === 'pending' && (
                           <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleApproveDisplayRequest(request.id)}
-                              className="flex-1"
-                            >
-                              <Check className="mr-2 h-4 w-4" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleRejectDisplayRequest(request.id, 'Rejected by warehouse staff')}
-                              className="flex-1"
-                            >
-                              <X className="mr-2 h-4 w-4" />
-                              Reject
-                            </Button>
                             <Button
                               size="sm"
                               variant="secondary"

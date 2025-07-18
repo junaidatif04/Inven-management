@@ -37,7 +37,6 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
-  Upload,
   X,
   Image as ImageIcon,
   Eye

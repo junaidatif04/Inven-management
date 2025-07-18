@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import ResumableImageUpload from './ResumableImageUpload';
 import { Camera, Upload, X } from 'lucide-react';
 import { uploadCompressedProfilePicture } from '@/services/imageUploadService';
 import { updateUserProfilePicture } from '@/services/authService';
@@ -15,6 +16,7 @@ interface ProfilePictureUploadProps {
   size?: 'sm' | 'md' | 'lg';
   showUploadButton?: boolean;
   onImageUpdate?: (newImageUrl: string) => void;
+  useResumableUpload?: boolean;
 }
 
 export default function ProfilePictureUpload({
@@ -22,9 +24,29 @@ export default function ProfilePictureUpload({
   userName,
   size = 'md',
   showUploadButton = true,
-  onImageUpdate
+  onImageUpdate,
+  useResumableUpload = false
 }: ProfilePictureUploadProps) {
   const { user, refreshUser } = useAuth();
+  
+  // Use resumable upload component if enabled
+  if (useResumableUpload && user) {
+    return (
+      <ResumableImageUpload
+        currentImageUrl={currentImageUrl}
+        folder="profile-pictures"
+        fileName={`${user.id}_profile`}
+        size={size}
+        showUploadButton={showUploadButton}
+        onImageUpdate={(newImageUrl) => {
+          onImageUpdate?.(newImageUrl);
+          refreshUser();
+        }}
+        title={`Upload Profile Picture for ${userName}`}
+        description="Upload your profile picture with resumable functionality for reliable uploads"
+      />
+    );
+  }
   const [isUploading, setIsUploading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);

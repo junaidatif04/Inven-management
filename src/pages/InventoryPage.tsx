@@ -47,16 +47,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { InventoryItem, CreateInventoryItem } from '@/types/inventory';
 import {
   getAllInventoryItems,
-  getPublishedInventoryItems,
   updateInventoryItem,
   deleteInventoryItem,
-  unpublishInventoryItem,
-  uploadInventoryImage,
-  updateInventoryImage
+  getPublishedInventoryItems,
+  unpublishInventoryItem
 } from '@/services/inventoryService';
-import { deleteImage } from '@/services/imageUploadService';
+
 import { getAllUsers } from '@/services/userService';
 import { User } from '@/services/authService';
+import InventoryImageUpload from '@/components/InventoryImageUpload';
 
 
 export default function InventoryPage() {
@@ -100,11 +99,7 @@ export default function InventoryPage() {
   });
   const [newTag, setNewTag] = useState('');
   
-  // Image upload states
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>('');
-  const [mainImage, setMainImage] = useState<File | null>(null);
-  const [mainImagePreview, setMainImagePreview] = useState<string>('');
+
   
 
 
@@ -194,25 +189,8 @@ export default function InventoryPage() {
     try {
       if (!user || !selectedItem) return;
       
-      let finalFormData = { ...formData };
-      
-      // Upload new image if selected
-      if (selectedImage) {
-        // Delete old image if exists
-        if (formData.imagePath) {
-          try {
-            await deleteImage(formData.imagePath);
-          } catch (error) {
-            console.error('Failed to delete old image:', error);
-          }
-        }
-        
-        const uploadResult = await uploadInventoryImage(selectedImage, selectedItem.id);
-        finalFormData.imageUrl = uploadResult.url;
-        finalFormData.imagePath = uploadResult.path;
-      }
-      
-      await updateInventoryItem({ id: selectedItem.id, ...finalFormData }, user.id);
+      // Image uploads are now handled by the InventoryImageUpload component
+      await updateInventoryItem({ id: selectedItem.id, ...formData }, user.id);
       toast.success('Item updated successfully');
       setIsEditDialogOpen(false);
       resetForm();
@@ -255,8 +233,6 @@ export default function InventoryPage() {
       imageUrl: '',
       imagePath: ''
     });
-    setSelectedImage(null);
-    setImagePreview('');
   };
 
   const resetCurationForm = () => {
@@ -266,8 +242,6 @@ export default function InventoryPage() {
       visibilityTags: []
     });
     setNewTag('');
-    setMainImage(null);
-    setMainImagePreview('');
   };
 
   const openEditDetailsDialog = (item: InventoryItem) => {
@@ -277,8 +251,6 @@ export default function InventoryPage() {
       customerFacingDescription: item.customerFacingDescription || '',
       visibilityTags: item.visibilityTags || []
     });
-    setMainImage(null);
-    setMainImagePreview('');
     setIsEditDetailsDialogOpen(true);
   };
 
@@ -322,13 +294,7 @@ export default function InventoryPage() {
         detailsSaved: true
       };
       
-      // Handle main image update
-      if (mainImage) {
-        // Use the dedicated updateInventoryImage function
-        await updateInventoryImage(selectedItem.id, mainImage, user.id);
-        // The updateInventoryImage function handles both upload and database update
-        // So we don't need to include image data in updateData
-      }
+      // Image updates are now handled by the InventoryImageUpload component
 
       await updateInventoryItem(updateData, user.id);
       
@@ -371,22 +337,7 @@ export default function InventoryPage() {
 
 
 
-  const handleMainImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setMainImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setMainImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
-  const handleRemoveMainImage = () => {
-    setMainImage(null);
-    setMainImagePreview('');
-  };
 
   const openEditDialog = (item: InventoryItem) => {
     setSelectedItem(item);
@@ -404,8 +355,6 @@ export default function InventoryPage() {
       imageUrl: item.imageUrl || '',
       imagePath: item.imagePath || ''
     });
-    setImagePreview(item.imageUrl || '');
-    setSelectedImage(null);
     setIsEditDialogOpen(true);
   };
 
@@ -426,30 +375,7 @@ export default function InventoryPage() {
     }
   };
 
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
-  const handleRemoveImage = async () => {
-    if (formData.imagePath) {
-      try {
-        await deleteImage(formData.imagePath);
-        setFormData(prev => ({ ...prev, imageUrl: '', imagePath: '' }));
-      } catch (error) {
-        console.error('Failed to delete image:', error);
-      }
-    }
-    setSelectedImage(null);
-    setImagePreview('');
-  };
 
   if (loading) {
     return (
@@ -955,42 +881,19 @@ export default function InventoryPage() {
             {/* Image Upload Section */}
             <div className="space-y-2 col-span-2">
               <Label>Item Image (Optional)</Label>
-              <div className="space-y-4">
-                {imagePreview ? (
-                  <div className="relative">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="w-32 h-32 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
-                    />
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
-                      onClick={handleRemoveImage}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center">
-                    <ImageIcon className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Upload an image for this item</p>
-                    <Upload className="h-4 w-4 inline mr-1" />
-                    <label htmlFor="edit-image-upload" className="text-blue-600 hover:text-blue-700 cursor-pointer text-sm font-medium">
-                      Choose file
-                    </label>
-                    <input
-                      id="edit-image-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageSelect}
-                      className="hidden"
-                    />
-                  </div>
-                )}
-              </div>
+              <InventoryImageUpload
+                currentImageUrl={formData.imageUrl}
+                itemName={formData.name}
+                itemId={selectedItem?.id}
+                size="md"
+                showUploadButton={true}
+                onImageUpdate={(newImageUrl) => {
+                  setFormData(prev => ({ ...prev, imageUrl: newImageUrl }));
+                }}
+                mode="update"
+                useResumableUpload={true}
+                userId={user?.id || ''}
+              />
             </div>
           </div>
           <DialogFooter>
@@ -1094,42 +997,22 @@ export default function InventoryPage() {
                 <div className="border-t pt-4">
                   <Label className="text-sm font-medium mb-2 block">Update Product Image</Label>
                   <p className="text-xs text-slate-500 mb-3">This will update the image for both inventory and published views</p>
-                  <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-4 text-center">
-                    <ImageIcon className="h-6 w-6 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Choose a new product image</p>
-                    <Upload className="h-3 w-3 inline mr-1" />
-                    <label htmlFor="main-image-upload" className="text-blue-600 hover:text-blue-700 cursor-pointer text-sm font-medium">
-                      Choose image
-                    </label>
-                    <input
-                      id="main-image-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleMainImageSelect}
-                      className="hidden"
-                    />
-                  </div>
-                  {mainImagePreview && (
-                    <div className="mt-3">
-                      <Label className="text-xs text-slate-500">New image preview:</Label>
-                      <div className="relative inline-block mt-1">
-                        <img
-                          src={mainImagePreview}
-                          alt="New image preview"
-                          className="w-24 h-24 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0"
-                          onClick={handleRemoveMainImage}
-                        >
-                          <X className="h-2 w-2" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <InventoryImageUpload
+                    currentImageUrl={selectedItem?.imageUrl}
+                    itemName={selectedItem?.name || ''}
+                    itemId={selectedItem?.id}
+                    size="lg"
+                    showUploadButton={true}
+                    onImageUpdate={(newImageUrl) => {
+                      // Update the selected item's image URL for immediate UI feedback
+                      if (selectedItem) {
+                        setSelectedItem(prev => prev ? { ...prev, imageUrl: newImageUrl } : null);
+                      }
+                    }}
+                    mode="update"
+                    useResumableUpload={true}
+                    userId={user?.id || ''}
+                  />
                 </div>
               </div>
             </div>

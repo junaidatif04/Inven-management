@@ -28,6 +28,7 @@ import ProductCatalogPage from '@/pages/ProductCatalogPage';
 import MyOrdersPage from '@/pages/MyOrdersPage';
 import CatalogRequestsPage from '@/pages/CatalogRequestsPage';
 import AdminCatalogRequestsPage from '@/pages/AdminCatalogRequestsPage';
+import UploadDemoPage from '@/pages/UploadDemoPage';
 import { useAuth } from '@/contexts/AuthContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -71,6 +72,7 @@ function DashboardRouter() {
         <Route path="/access-requests" element={<AccessRequestsPage />} />
         <Route path="/catalog-requests" element={<CatalogRequestsPage />} />
         <Route path="/admin-catalog-requests" element={<AdminCatalogRequestsPage />} />
+        <Route path="/upload-demo" element={<UploadDemoPage />} />
       </Routes>
     </DashboardLayout>
   );

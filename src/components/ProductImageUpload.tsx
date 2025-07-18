@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Camera, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { uploadProductImage, updateProductImage } from '@/services/productService';
+import ResumableImageUpload from './ResumableImageUpload';
 
 interface ProductImageUploadProps {
   currentImageUrl?: string;
@@ -14,6 +15,7 @@ interface ProductImageUploadProps {
   showUploadButton?: boolean;
   onImageUpdate?: (newImageUrl: string) => void;
   mode?: 'add' | 'update';
+  useResumableUpload?: boolean;
 }
 
 export default function ProductImageUpload({
@@ -23,8 +25,25 @@ export default function ProductImageUpload({
   size = 'md',
   showUploadButton = true,
   onImageUpdate,
-  mode = 'add'
+  mode = 'add',
+  useResumableUpload = false
 }: ProductImageUploadProps) {
+  
+  // Use resumable upload component if enabled
+  if (useResumableUpload) {
+    return (
+      <ResumableImageUpload
+        currentImageUrl={currentImageUrl}
+        folder="products"
+        fileName={productId ? `${productId}_${Date.now()}` : undefined}
+        size={size}
+        showUploadButton={showUploadButton}
+        onImageUpdate={onImageUpdate}
+        title={`Upload ${productName} Image`}
+        description="Upload product image with resumable functionality for reliable uploads"
+      />
+    );
+  }
   const [isUploading, setIsUploading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);

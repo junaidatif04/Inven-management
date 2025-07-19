@@ -144,25 +144,15 @@ export const getActiveSuppliers = async (): Promise<Supplier[]> => {
 
 // Auto-register approved supplier users as suppliers (now just validates user data)
 export const autoRegisterSupplier = async (user: User): Promise<void> => {
-  console.log('Validating supplier user:', {
-    email: user.email,
-    role: user.role,
-    name: user.name,
-    companyName: user.companyName
-  });
-  
   if (user.role !== 'supplier') {
-    console.log('User is not a supplier, skipping validation');
     return;
   }
 
   try {
     // Since we're using users collection directly, just ensure user has required supplier fields
     if (!user.companyName && !user.name) {
-      console.warn('Supplier user missing company name or name');
+      console.warn(`Supplier user ${user.email} missing company name or name`);
     }
-    
-    console.log('Supplier user validation completed');
   } catch (error) {
     console.error('Error in autoRegisterSupplier:', error);
     throw error;
@@ -201,8 +191,16 @@ export const getSupplierByEmail = async (email: string): Promise<Supplier | null
 };
 
 // Seed suppliers from approved supplier users (now just validates existing users)
+// This should only be called during initial setup or manual data migration
 export const seedSuppliersFromUsers = async (): Promise<void> => {
   try {
+    // Check if this is the first time running by looking for a flag in localStorage
+    const hasRunBefore = localStorage.getItem('suppliers_validated');
+    if (hasRunBefore) {
+      console.log('Supplier validation already completed, skipping...');
+      return;
+    }
+
     const users = await getAllUsers();
     const supplierUsers = users.filter(user => 
       user.role === 'supplier'
@@ -212,6 +210,8 @@ export const seedSuppliersFromUsers = async (): Promise<void> => {
       await autoRegisterSupplier(user);
     }
     
+    // Mark as completed to avoid running again
+    localStorage.setItem('suppliers_validated', 'true');
     console.log(`Validated ${supplierUsers.length} supplier users`);
   } catch (error) {
     console.error('Failed to seed suppliers from users:', error);
@@ -230,4 +230,10 @@ export const getApprovedSupplierUsers = async (): Promise<User[]> => {
     console.error('Error fetching approved supplier users:', error);
     throw error;
   }
+};
+
+// Reset supplier validation flag (for admin use)
+export const resetSupplierValidation = (): void => {
+  localStorage.removeItem('suppliers_validated');
+  console.log('Supplier validation flag reset');
 };

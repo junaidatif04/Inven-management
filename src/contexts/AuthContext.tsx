@@ -44,12 +44,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
       
       // Initialize app data and run migrations only after user is authenticated and has proper permissions
-      if (user && (user.role === 'admin' || user.role === 'warehouse_staff')) {
-        // Add a small delay to ensure Firebase Auth token is fully propagated to Firestore
-        setTimeout(async () => {
-          try {
-            // Run user role migration for admin users
-            if (user.role === 'admin') {
+      // Only run for admin users to reduce unnecessary processing
+      if (user && user.role === 'admin') {
+        // Check if initialization has already been done in this session
+        const hasInitialized = sessionStorage.getItem('app_initialized');
+        if (!hasInitialized) {
+          // Add a small delay to ensure Firebase Auth token is fully propagated to Firestore
+          setTimeout(async () => {
+            try {
+              // Run user role migration for admin users
               try {
                 const count = await migrateUserRoles();
                 if (count > 0) {
@@ -59,21 +62,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.error('Error during user role migration:', error);
                 // Don't block app initialization if migration fails
               }
-            }
-            
-            // Initialize app data
-            try {
-              await initializeApp();
-              console.log('App initialization completed successfully');
+              
+              // Initialize app data (this now includes smart caching)
+              try {
+                await initializeApp();
+                sessionStorage.setItem('app_initialized', 'true');
+                console.log('App initialization completed successfully');
+              } catch (error) {
+                console.error('Failed to initialize app:', error);
+                // Don't show error toast as most functionality will still work
+              }
             } catch (error) {
-              console.error('Failed to initialize app:', error);
-              // Show user-friendly error message
-              toast.error('Failed to load application data. Please refresh the page.');
+              console.error('Error during app initialization process:', error);
             }
-          } catch (error) {
-            console.error('Error during app initialization process:', error);
-          }
-        }, 1000); // 1 second delay to ensure auth token propagation
+          }, 1000); // 1 second delay to ensure auth token propagation
+        } else {
+          console.log('App already initialized in this session, skipping...');
+        }
       }
     });
 

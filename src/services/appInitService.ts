@@ -29,13 +29,14 @@ export const initializeApp = async (): Promise<void> => {
       throw new Error('Authentication not ready for app initialization');
     }
     
-    // Seed suppliers from approved supplier users
+    // Only run supplier validation if it hasn't been done before
+    // This prevents unnecessary database queries on every login
     await seedSuppliersFromUsers();
     
     console.log('App initialization completed successfully');
   } catch (error) {
     console.error('Failed to initialize app:', error);
-    // Don't throw error to prevent app from breaking
-    throw error; // Re-throw to allow caller to handle
+    // Don't throw error to prevent app from breaking - just log it
+    // Most app functionality should work even if this fails
   }
 };

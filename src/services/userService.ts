@@ -4,16 +4,13 @@ import {
   getDocs, 
   getDoc, 
   updateDoc, 
-  deleteDoc, 
   query, 
   orderBy, 
   serverTimestamp,
   where,
   writeBatch
 } from 'firebase/firestore';
-import { deleteUser as deleteAuthUser } from 'firebase/auth';
-import { httpsCallable } from 'firebase/functions';
-import { db, auth, functions } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { User, UserRole } from '@/services/authService';
 
 export interface UpdateUser {
@@ -70,78 +67,8 @@ export const updateUser = async (user: UpdateUser): Promise<void> => {
   }
 };
 
-// Delete user from Firestore only
-export const deleteUserFromFirestore = async (id: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, 'users', id));
-  } catch (error) {
-    console.error('Error deleting user from Firestore:', error);
-    throw error;
-  }
-};
-
-// Delete user from both Firestore and Firebase Authentication
-// This function should be used when the current user is the one being deleted
-export const deleteUser = async (id: string): Promise<void> => {
-  try {
-    // First delete from Firestore
-    await deleteUserFromFirestore(id);
-    
-    // Check if the current user is the one being deleted
-    const currentUser = auth.currentUser;
-    if (currentUser && currentUser.uid === id) {
-      // Delete the user from Firebase Authentication
-      await deleteAuthUser(currentUser);
-    } else {
-      console.warn('Cannot delete user from Authentication - not the current user');
-      // Note: To delete other users from Authentication, use adminDeleteUser function
-    }
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    throw error;
-  }
-};
-
-// Admin function to completely delete a user from both Firestore and Firebase Authentication
-// This uses Cloud Functions with Firebase Admin SDK
-export const adminDeleteUser = async (userId: string): Promise<{ success: boolean; message: string }> => {
-  try {
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      throw new Error('You must be logged in to perform this action');
-    }
-
-    // Call the Cloud Function
-    const deleteUserFromAuth = httpsCallable(functions, 'deleteUserFromAuth');
-    const result = await deleteUserFromAuth({
-      userId: userId,
-      adminId: currentUser.uid
-    });
-
-    return result.data as { success: boolean; message: string };
-  } catch (error) {
-    console.error('Error deleting user via admin function:', error);
-    
-    // Handle specific Firebase Functions errors
-    if (error && typeof error === 'object' && 'code' in error) {
-      const firebaseError = error as any;
-      switch (firebaseError.code) {
-        case 'functions/unauthenticated':
-          throw new Error('You must be logged in to delete users');
-        case 'functions/permission-denied':
-          throw new Error('You do not have permission to delete users. Only admins can delete users.');
-        case 'functions/invalid-argument':
-          throw new Error('Invalid request. Admins cannot delete their own account through this method.');
-        case 'functions/not-found':
-          throw new Error('User not found in the system');
-        default:
-          throw new Error(firebaseError.message || 'An error occurred while deleting the user');
-      }
-    }
-    
-    throw error;
-  }
-};
+// Note: User deletion functionality has been moved to completeUserDeletionService.ts
+// Use deleteMyAccount() for self-deletion or adminCompleteUserDeletion() for admin deletion
 
 export const updateUserRole = async (userId: string, role: UserRole): Promise<void> => {
   try {

@@ -13,7 +13,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/services/authService';
 import { submitAccessRequest } from '@/services/accessRequestService';
 import { sendRequestConfirmationEmail } from '@/services/emailService';
-import { deleteUser, updateUser } from '@/services/userService';
+import { updateUser } from '@/services/userService';
+import { deleteMyAccount } from '@/services/completeUserDeletionService';
 import { getSupplierByEmail, updateSupplier } from '@/services/supplierService';
 import { getOrdersByUser } from '@/services/orderService';
 import { getProposedProductsBySupplier } from '@/services/productService';
@@ -392,20 +393,20 @@ export default function UserProfilePage() {
     setIsSubmitting(true);
     
     try {
-      // Delete the user from Firestore and Firebase Authentication
-      await deleteUser(user.id);
+      // Delete the user and all related data using comprehensive deletion
+      const result = await deleteMyAccount(user.id);
       
       // Sign out the user
       await logout();
       
-      // Close dialog and show success message
+      // Close dialog and show success message with details
       setIsDeleteAccountDialogOpen(false);
-      toast.success('Your account has been deleted successfully');
+      toast.success(`Account deleted successfully. Removed: ${result.deletedItems.join(', ')}`);
       
       // Redirect to home or login page will happen automatically due to AuthContext
     } catch (error) {
       console.error('Error deleting account:', error);
-      toast.error('Failed to delete your account. Please try again later.');
+      toast.error(error instanceof Error ? error.message : 'Failed to delete your account. Please try again later.');
     } finally {
       setIsSubmitting(false);
     }

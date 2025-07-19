@@ -52,7 +52,8 @@ import {
   subscribeToProposedProducts,
   subscribeToProductsBySupplier,
   subscribeToPurchaseOrders,
-  subscribeToPurchaseOrdersBySupplier
+  subscribeToPurchaseOrdersBySupplier,
+  subscribeToDraftProductsBySupplier
 } from '@/services/productService';
 import {
   DisplayRequest,
@@ -117,11 +118,15 @@ export default function ProductManagementPage() {
     
     // Set up real-time subscriptions based on user role
     let unsubscribeProducts: (() => void) | undefined;
+    let unsubscribeDraftProducts: (() => void) | undefined;
     let unsubscribePOs: (() => void) | undefined;
     
     if (user?.role === 'supplier') {
       unsubscribeProducts = subscribeToProductsBySupplier(user.id, (updatedProducts) => {
         setProducts(updatedProducts);
+      });
+      unsubscribeDraftProducts = subscribeToDraftProductsBySupplier(user.id, (updatedDraftProducts) => {
+        setDraftProducts(updatedDraftProducts);
       });
       unsubscribePOs = subscribeToPurchaseOrdersBySupplier(user.id, (updatedOrders) => {
         setPurchaseOrders(updatedOrders);
@@ -137,6 +142,7 @@ export default function ProductManagementPage() {
     
     return () => {
       unsubscribeProducts?.();
+      unsubscribeDraftProducts?.();
       unsubscribePOs?.();
     };
   }, [user]);
@@ -403,11 +409,6 @@ export default function ProductManagementPage() {
   };
 
   const renderProducts = () => {
-    // Combine draft and proposed products for supplier view
-    const allSupplierProducts = user?.role === 'supplier' 
-      ? [...draftProducts, ...products.filter(p => p.status === 'proposed')]
-      : products;
-
     // Filter products based on status filter
     const getFilteredProducts = () => {
       if (user?.role === 'supplier') {
@@ -424,10 +425,27 @@ export default function ProductManagementPage() {
             );
           case 'all':
           default:
-            return allSupplierProducts.filter(product =>
-              product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              product.category.toLowerCase().includes(searchTerm.toLowerCase())
-            );
+            // Combine draft and proposed products, ensuring no duplicates by using a Map
+            const productMap = new Map();
+            
+            // Add draft products first
+            draftProducts.forEach(product => {
+              if (product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  product.category.toLowerCase().includes(searchTerm.toLowerCase())) {
+                productMap.set(product.id, product);
+              }
+            });
+            
+            // Add proposed products, but only if not already in map
+            products.filter(p => p.status === 'proposed').forEach(product => {
+              if ((product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                   product.category.toLowerCase().includes(searchTerm.toLowerCase())) &&
+                  !productMap.has(product.id)) {
+                productMap.set(product.id, product);
+              }
+            });
+            
+            return Array.from(productMap.values());
         }
       }
       return filteredProducts;

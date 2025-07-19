@@ -616,3 +616,31 @@ export const getDraftProductsBySupplier = async (supplierId: string): Promise<Pr
     throw new Error('Failed to fetch draft products');
   }
 };
+
+// Real-time subscription for draft products by supplier
+export const subscribeToDraftProductsBySupplier = (supplierId: string, callback: (products: Product[]) => void): (() => void) => {
+  // Return empty unsubscribe function if supplierId is invalid
+  if (!supplierId || typeof supplierId !== 'string') {
+    console.warn('Invalid supplierId provided to subscribeToDraftProductsBySupplier:', supplierId);
+    callback([]);
+    return () => {};
+  }
+
+  const q = query(
+    collection(db, PRODUCTS_COLLECTION),
+    where('supplierId', '==', supplierId),
+    where('status', '==', 'draft'),
+    orderBy('createdAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    const products = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Product[];
+    callback(products);
+  }, (error) => {
+    console.error('Error in draft products by supplier subscription:', error);
+    callback([]);
+  });
+};

@@ -42,10 +42,10 @@ import { User, UserRole } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   getAllUsers,
-  adminDeleteUser,
   updateUserRole,
   getUserStats
 } from '@/services/userService';
+import { adminCompleteUserDeletion } from '@/services/completeUserDeletionService';
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
@@ -127,14 +127,10 @@ export default function UserManagementPage() {
         return;
       }
       
-      // Use the admin delete function that completely removes the user from both Firestore and Firebase Authentication
-      const result = await adminDeleteUser(selectedUser.id);
+      // Use the comprehensive admin delete function that removes all user data
+      const result = await adminCompleteUserDeletion(selectedUser.id);
       
-      if (result.success) {
-        toast.success(result.message);
-      } else {
-        toast.error('Failed to delete user completely');
-      }
+      toast.success(`User deleted successfully. Removed: ${result.deletedItems.join(', ')}`);
       
       setIsDeleteDialogOpen(false);
       setSelectedUser(null);

@@ -1,6 +1,7 @@
 [build]
   publish = "dist"
   command = "npm run build"
+  ignore = "functions/**"
 
 [build.environment]
   VITE_FIREBASE_API_KEY = "AIzaSyDdSrj9QlT_HQjXRP-elkLhLtP5Jx8x8Ug"

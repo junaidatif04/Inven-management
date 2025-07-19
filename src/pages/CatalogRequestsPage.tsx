@@ -133,7 +133,7 @@ export default function CatalogRequestsPage() {
     const unsubscribe = subscribeToCatalogRequests((updatedRequests) => {
       const userRequests = updatedRequests.filter(req => req.userId === user?.id);
       setRequests(userRequests);
-    });
+    }, user?.id);
 
     return () => unsubscribe();
   }, [user]);

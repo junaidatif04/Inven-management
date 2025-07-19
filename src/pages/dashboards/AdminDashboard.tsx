@@ -25,7 +25,7 @@ import { getAllInventoryItems, updateAllItemStatuses } from '@/services/inventor
 import { getAllOrders } from '@/services/orderService';
 import { getAllUsers } from '@/services/userService';
 import { getAllSuppliers } from '@/services/supplierService';
-import { Supplier } from '@/types/inventory';
+
 import { getAllDisplayRequests, getAllQuantityRequests } from '@/services/displayRequestService';
 import type { DisplayRequest, QuantityRequest } from '@/types/displayRequest';
 

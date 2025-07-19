@@ -15,8 +15,7 @@ import {
   Shield,
   Zap,
   Mail,
-  Phone,
-  MapPin,
+
   Menu,
   X
 } from 'lucide-react';

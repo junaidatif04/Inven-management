@@ -33,6 +33,7 @@ import {
 
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { 
   Product, 
   PurchaseOrder, 
@@ -72,17 +73,16 @@ import {
 
 
 
-const sections = [
-  { id: 'products', name: 'Product Catalog', icon: Package },
-  { id: 'received-requests', name: 'Received Requests', icon: Inbox }
-];
+// This will be defined inside the component to access pendingQuantityRequests
 
 export default function ProductManagementPage() {
   const { user } = useAuth();
+  const { pendingQuantityRequests } = useNotifications();
   const [activeSection, setActiveSection] = useState('products');
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [draftProducts, setDraftProducts] = useState<Product[]>([]);
@@ -120,6 +120,11 @@ export default function ProductManagementPage() {
   });
   const [showQuantityResponseDialog, setShowQuantityResponseDialog] = useState(false);
 
+  // Define sections with unread count
+  const sections = [
+    { id: 'products', name: 'Product Catalog', icon: Package },
+    { id: 'received-requests', name: 'Received Requests', icon: Inbox, unreadCount: pendingQuantityRequests }
+  ];
 
   useEffect(() => {
     loadData();
@@ -180,7 +185,7 @@ export default function ProductManagementPage() {
   const loadData = async () => {
     if (!user || !user.id) return;
     
-
+    setIsLoadingRequests(true);
     try {
       let productsData: Product[];
       let ordersData: PurchaseOrder[];
@@ -214,6 +219,8 @@ export default function ProductManagementPage() {
       setQuantityRequests(quantityRequestsData);
     } catch (error) {
       toast.error('Failed to load data');
+    } finally {
+      setIsLoadingRequests(false);
     }
   };
 
@@ -938,7 +945,16 @@ export default function ProductManagementPage() {
         </p>
       </div>
 
-      {quantityRequests.length === 0 ? (
+      {isLoadingRequests ? (
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center py-8 text-muted-foreground">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p>Loading requests...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : quantityRequests.length === 0 ? (
         <Card>
           <CardContent className="p-6">
             <div className="text-center py-8 text-muted-foreground">

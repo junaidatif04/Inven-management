@@ -40,7 +40,7 @@ const navigation = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
-  const { notifications, unreadCount, pendingAccessRequests, pendingOrders, pendingQuantityRequests } = useNotifications();
+  const { unreadCount, pendingAccessRequests, pendingOrders, pendingQuantityRequests } = useNotifications();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

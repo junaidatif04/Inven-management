@@ -20,6 +20,7 @@ interface NavigationHeaderProps {
     id: string;
     name: string;
     href?: string;
+    unreadCount?: number;
   }>;
   activeSection?: string;
   onSectionChange?: (sectionId: string) => void;
@@ -148,7 +149,7 @@ export function NavigationHeader({
               key={section.id}
               onClick={() => onSectionChange?.(section.id)}
               className={`
-                px-4 py-2 text-sm font-medium rounded-md transition-all duration-200
+                relative px-4 py-2 text-sm font-medium rounded-md transition-all duration-200
                 ${activeSection === section.id
                   ? 'bg-background text-foreground shadow-sm border-l-2 border-primary font-semibold'
                   : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
@@ -156,6 +157,11 @@ export function NavigationHeader({
               `}
             >
               {section.name}
+              {section.unreadCount && section.unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                  {section.unreadCount > 99 ? '99+' : section.unreadCount}
+                </span>
+              )}
             </button>
           ))}
         </div>

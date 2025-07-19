@@ -7,7 +7,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import SignUpPage from '@/pages/SignUpPage';
-import RequestAccessPage from '@/pages/RequestAccessPage';
+
 import RequestSubmittedPage from '@/pages/RequestSubmittedPage';
 import CompleteSignupPage from '@/pages/CompleteSignupPage';
 import EmailVerificationPage from '@/pages/EmailVerificationPage';

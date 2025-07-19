@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
@@ -27,7 +27,8 @@ import {
   XCircle,
   Inbox,
   Trash2,
-  ArrowDown
+  ArrowDown,
+  AlertTriangle
 } from 'lucide-react';
 
 import { toast } from 'sonner';
@@ -42,6 +43,7 @@ import {
   getProductsBySupplier,
   createProduct,
   updateProduct,
+  deleteProduct,
   getAllPurchaseOrders,
   getPurchaseOrdersBySupplier,
   convertToDraft,
@@ -64,7 +66,8 @@ import {
   getDisplayRequestsBySupplier,
   getQuantityRequestsBySupplier,
   respondToQuantityRequest,
-  deleteDisplayRequest
+  deleteDisplayRequest,
+  hasActiveQuantityRequests
 } from '@/services/displayRequestService';
 
 
@@ -88,6 +91,11 @@ export default function ProductManagementPage() {
   const [quantityRequests, setQuantityRequests] = useState<QuantityRequest[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'proposed'>('all');
+  const [productsWithActiveRequests, setProductsWithActiveRequests] = useState<Set<string>>(new Set());
+  
+  // Delete confirmation dialog state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
 
   const [selectedQuantityRequest, setSelectedQuantityRequest] = useState<QuantityRequest | null>(null);
@@ -147,6 +155,28 @@ export default function ProductManagementPage() {
     };
   }, [user]);
 
+  const checkProductsWithActiveRequests = async (allProducts: Product[]) => {
+    if (user?.role !== 'supplier' || !user?.id) return;
+    
+    try {
+      const activeRequestsSet = new Set<string>();
+      
+      // Check each product for active quantity requests
+      await Promise.all(
+        allProducts.map(async (product) => {
+          const hasActive = await hasActiveQuantityRequests(product.id, user.id);
+          if (hasActive) {
+            activeRequestsSet.add(product.id);
+          }
+        })
+      );
+      
+      setProductsWithActiveRequests(activeRequestsSet);
+    } catch (error) {
+      console.error('Error checking products with active requests:', error);
+    }
+  };
+
   const loadData = async () => {
     if (!user || !user.id) return;
     
@@ -166,6 +196,10 @@ export default function ProductManagementPage() {
           getQuantityRequestsBySupplier(user.id),
           getDraftProductsBySupplier(user.id)
         ]);
+        
+        // Check for active requests for all products (draft + proposed)
+        const allProducts = [...draftProductsData, ...productsData];
+        await checkProductsWithActiveRequests(allProducts);
       } else {
         [productsData, ordersData] = await Promise.all([
           getProposedProducts(),
@@ -382,7 +416,42 @@ export default function ProductManagementPage() {
     }));
   };
 
-
+  const handleDeleteProduct = (product: Product) => {
+    setProductToDelete(product);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  const confirmDeleteProduct = async () => {
+    if (!user || !user.id || !productToDelete) return;
+    
+    try {
+      // Check if product has active quantity requests
+      const hasActiveRequests = await hasActiveQuantityRequests(productToDelete.id, user.id);
+      if (hasActiveRequests) {
+        toast.error('Cannot delete product with active quantity requests. Please resolve all pending requests first.');
+        setIsDeleteDialogOpen(false);
+        setProductToDelete(null);
+        return;
+      }
+      
+      // If product is in proposed status, convert to draft first
+      if (productToDelete.status === 'proposed') {
+        await convertToDraft(productToDelete.id);
+        toast.success('Product converted to draft');
+      }
+      
+      // Delete the product (this will also delete associated images)
+      await deleteProduct(productToDelete.id);
+      toast.success('Product deleted successfully');
+      
+      setIsDeleteDialogOpen(false);
+      setProductToDelete(null);
+      
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      toast.error(error.message || 'Failed to delete product');
+    }
+  };
 
   const handleSaveEdit = () => {
     if (editingProduct) {
@@ -661,6 +730,17 @@ export default function ProductManagementPage() {
                         >
                           <Edit className="h-3 w-3 mr-1" />
                           Edit
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive" 
+                          className="flex-1"
+                          disabled={productsWithActiveRequests.has(product.id)}
+                          onClick={() => handleDeleteProduct(product)}
+                          title={productsWithActiveRequests.has(product.id) ? 'Cannot delete product with active quantity requests' : 'Delete product'}
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Delete
                         </Button>
                       </>
                     ) : (
@@ -1134,6 +1214,46 @@ export default function ProductManagementPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Product Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Product</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{productToDelete?.name}"? This action will permanently remove the product and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 my-2 bg-red-50 border border-red-200 rounded-md">
+            <div className="flex items-start">
+              <AlertTriangle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-red-800">Warning</h4>
+                <p className="text-sm text-red-700 mt-1">
+                  This will permanently delete the product from your catalog. If the product has active quantity requests, deletion will be prevented.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setProductToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDeleteProduct}
+            >
+              Delete Product Permanently
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

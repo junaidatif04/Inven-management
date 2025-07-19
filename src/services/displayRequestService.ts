@@ -420,6 +420,34 @@ const checkForExistingPendingRequest = async (
   }
 };
 
+// Public function to check if a product has active quantity requests
+export const hasActiveQuantityRequests = async (productId: string, supplierId?: string): Promise<boolean> => {
+  try {
+    let q;
+    if (supplierId) {
+      // If supplierId is provided, filter by supplier (for supplier users)
+      q = query(
+        collection(db, QUANTITY_REQUESTS_COLLECTION),
+        where('productId', '==', productId),
+        where('supplierId', '==', supplierId),
+        where('status', '==', 'pending')
+      );
+    } else {
+      // If no supplierId, query all (for admin/warehouse users)
+      q = query(
+        collection(db, QUANTITY_REQUESTS_COLLECTION),
+        where('productId', '==', productId),
+        where('status', '==', 'pending')
+      );
+    }
+    const querySnapshot = await getDocs(q);
+    return !querySnapshot.empty;
+  } catch (error) {
+    console.error('Error checking for active quantity requests:', error);
+    return false;
+  }
+};
+
 // Create a standalone quantity request (for warehouse to request from suppliers)
 export const createQuantityRequest = async (
   requestData: CreateQuantityRequest,

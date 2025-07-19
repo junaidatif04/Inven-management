@@ -49,7 +49,8 @@ import {
   updateInventoryItem,
   deleteInventoryItem,
   getPublishedInventoryItems,
-  unpublishInventoryItem
+  unpublishInventoryItem,
+  updateAllItemStatuses
 } from '@/services/inventoryService';
 
 import { getAllUsers } from '@/services/userService';
@@ -115,6 +116,8 @@ export default function InventoryPage() {
   const loadInventoryItems = async () => {
     try {
       setLoading(true);
+      // Update all item statuses first to ensure they're current
+      await updateAllItemStatuses();
       const data = await getAllInventoryItems();
       setItems(data);
     } catch (error) {

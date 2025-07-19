@@ -3,6 +3,8 @@ import { getAllInventoryItems } from '@/services/inventoryService';
 import { getAllOrders } from '@/services/orderService';
 import { getPendingAccessRequests } from '@/services/accessRequestService';
 import { useAuth } from '@/contexts/AuthContext';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export interface Notification {
   id: string;
@@ -21,6 +23,8 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   unreadCount: number;
   pendingAccessRequests: number;
+  pendingOrders: number;
+  pendingQuantityRequests: number;
   refreshNotifications: () => void;
 }
 
@@ -110,6 +114,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [pendingAccessRequests, setPendingAccessRequests] = useState<number>(0);
+  const [pendingOrders, setPendingOrders] = useState<number>(0);
+  const [pendingQuantityRequests, setPendingQuantityRequests] = useState<number>(0);
 
   const loadRealNotifications = async () => {
     if (!user || !user.role) {
@@ -121,18 +127,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const realNotifications = await generateRealNotifications(user.role);
       setNotifications(realNotifications);
 
-      // Update pending access requests count (admin only)
-      if (user.role === 'admin') {
-        try {
-          const accessRequests = await getPendingAccessRequests();
-          setPendingAccessRequests(accessRequests.length);
-        } catch (error) {
-          console.error('Error loading access requests count (admin only):', error);
-          setPendingAccessRequests(0);
-        }
-      } else {
-        setPendingAccessRequests(0);
-      }
+      // Note: Pending counts are now handled by real-time listeners for instant updates
     } catch (error) {
       console.error('Error loading notifications:', error);
     }
@@ -142,10 +137,53 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (user && user.role) {
       loadRealNotifications();
 
-      // Refresh notifications every 5 minutes
+      // Set up real-time listeners for instant updates
+      const unsubscribers: (() => void)[] = [];
+
+      // Listen for access requests changes (admin only)
+      if (user.role === 'admin') {
+        const accessRequestsQuery = query(
+          collection(db, 'accessRequests'),
+          where('status', '==', 'pending')
+        );
+        const unsubscribeAccessRequests = onSnapshot(accessRequestsQuery, (snapshot) => {
+          setPendingAccessRequests(snapshot.size);
+        });
+        unsubscribers.push(unsubscribeAccessRequests);
+      }
+
+      // Listen for orders changes (admin and warehouse_staff only)
+      if (user.role === 'admin' || user.role === 'warehouse_staff') {
+        const ordersQuery = query(
+          collection(db, 'orders'),
+          where('status', '==', 'pending')
+        );
+        const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+          setPendingOrders(snapshot.size);
+        });
+        unsubscribers.push(unsubscribeOrders);
+      }
+
+      // Listen for quantity requests changes (supplier only)
+      if (user.role === 'supplier' && user.id) {
+        const quantityRequestsQuery = query(
+          collection(db, 'quantityRequests'),
+          where('supplierId', '==', user.id),
+          where('status', '==', 'pending')
+        );
+        const unsubscribeQuantityRequests = onSnapshot(quantityRequestsQuery, (snapshot) => {
+          setPendingQuantityRequests(snapshot.size);
+        });
+        unsubscribers.push(unsubscribeQuantityRequests);
+      }
+
+      // Refresh notifications every 5 minutes for other data
       const interval = setInterval(loadRealNotifications, 5 * 60 * 1000);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+        unsubscribers.forEach(unsubscribe => unsubscribe());
+      };
     }
   }, [user, user?.role]);
 
@@ -182,6 +220,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     markAllAsRead,
     unreadCount,
     pendingAccessRequests,
+    pendingOrders,
+    pendingQuantityRequests,
     refreshNotifications: loadRealNotifications,
   };
 

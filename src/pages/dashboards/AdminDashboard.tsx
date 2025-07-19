@@ -21,7 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { DashboardStats } from '@/services/analyticsService';
 import { subscribeToRecentOrders } from '@/services/orderService';
 import { Order } from '@/services/orderService';
-import { getAllInventoryItems } from '@/services/inventoryService';
+import { getAllInventoryItems, updateAllItemStatuses } from '@/services/inventoryService';
 import { getAllOrders } from '@/services/orderService';
 import { getAllUsers } from '@/services/userService';
 import { getAllSuppliers } from '@/services/supplierService';
@@ -39,22 +39,13 @@ import type { DisplayRequest, QuantityRequest } from '@/types/displayRequest';
 export default function AdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalInventoryValue: 0,
-    lowStockAlerts: 0,
-    outOfStockItems: 0,
-    totalOrders: 0,
-    pendingOrders: 0,
-    totalUsers: 0,
-    activeSuppliers: 0,
-    monthlyOrderGrowth: 0,
-    inventoryTurnover: 0
-  });
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [lowStockItemsData, setLowStockItemsData] = useState<any[]>([]);
   const [systemLogs, setSystemLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [lastStatusUpdate, setLastStatusUpdate] = useState<Date | null>(null);
 
   const handleViewAllUsers = () => {
     navigate('/dashboard/user-management');
@@ -87,17 +78,31 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
 
-      // Load real data from services
-      const inventoryItems = await getAllInventoryItems();
-      const orders = await getAllOrders();
-      const users = await getAllUsers();
+      // Update all item statuses conditionally - only if it's been more than 5 minutes since last update
+      const now = new Date();
+      const shouldUpdateStatuses = !lastStatusUpdate || (now.getTime() - lastStatusUpdate.getTime()) > 5 * 60 * 1000;
       
-      // Load suppliers
-      const suppliers: Supplier[] = await getAllSuppliers();
+      if (shouldUpdateStatuses) {
+        await updateAllItemStatuses();
+        setLastStatusUpdate(now);
+      }
       
-      // Load display requests and quantity requests
-      const displayRequestsData = await getAllDisplayRequests();
-      const quantityRequestsData = await getAllQuantityRequests();
+      // Load all data in parallel for better performance
+      const [
+        inventoryItems,
+        orders,
+        users,
+        suppliers,
+        displayRequestsData,
+        quantityRequestsData
+      ] = await Promise.all([
+        getAllInventoryItems(),
+        getAllOrders(),
+        getAllUsers(),
+        getAllSuppliers(),
+        getAllDisplayRequests(),
+        getAllQuantityRequests()
+      ]);
 
       // Calculate real inventory value
       const totalInventoryValue = inventoryItems.reduce((sum, item) =>
@@ -130,9 +135,9 @@ export default function AdminDashboard() {
       const pendingOrders = orders.filter(order => order.status === 'pending').length;
 
       // Calculate monthly growth
-      const now = new Date();
-      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const currentDate = new Date();
+      const currentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
 
       const currentMonthOrders = orders.filter(order => {
         const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
@@ -209,7 +214,37 @@ export default function AdminDashboard() {
 
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      toast.error('Failed to load dashboard data');
+      
+      // More specific error handling
+      if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          toast.error('Permission denied. Please check your access rights.');
+        } else if (error.message.includes('network')) {
+          toast.error('Network error. Please check your connection.');
+        } else {
+          toast.error(`Failed to load dashboard data: ${error.message}`);
+        }
+      } else {
+        toast.error('Failed to load dashboard data. Please try again.');
+      }
+      
+      // Don't clear existing data on error, just stop loading
+      if (!stats) {
+        // Only show fallback if we have no data at all
+        setStats({
+          totalInventoryValue: 0,
+          lowStockAlerts: 0,
+          outOfStockItems: 0,
+          totalOrders: 0,
+          pendingOrders: 0,
+          totalUsers: 0,
+          activeSuppliers: 0,
+          monthlyOrderGrowth: 0,
+          inventoryTurnover: 0,
+          pendingDisplayRequests: 0,
+          pendingQuantityRequests: 0
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -223,10 +258,10 @@ export default function AdminDashboard() {
       setRecentOrders(orders);
     });
 
-    // Set up periodic refresh for real-time updates
+    // Set up periodic refresh for real-time updates (reduced frequency for better performance)
     const interval = setInterval(() => {
       loadRealData();
-    }, 30000); // Refresh every 30 seconds
+    }, 60000); // Refresh every 60 seconds instead of 30
 
     return () => {
       unsubscribeOrders();
@@ -234,7 +269,59 @@ export default function AdminDashboard() {
     };
   }, []);
 
-  const refreshData = async () => {
+  // Show loading state while data is being fetched
+  if (loading || !stats) {
+    return (
+      <div className="h-full flex flex-col space-y-6">
+        <div className="flex items-center justify-between flex-shrink-0">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-200 dark:to-slate-400 bg-clip-text text-transparent">Admin Dashboard</h1>
+            <p className="text-slate-600 dark:text-slate-400 font-medium">
+              Loading dashboard data...
+            </p>
+          </div>
+        </div>
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="glass-card shadow-elegant border-0 animate-pulse">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-24"></div>
+                <div className="h-8 w-8 bg-slate-200 dark:bg-slate-700 rounded"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-16 mb-2"></div>
+                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        
+        <div className="grid gap-4 lg:grid-cols-2">
+          {[...Array(2)].map((_, i) => (
+            <Card key={i} className="glass-card shadow-elegant border-0 animate-pulse">
+              <CardHeader>
+                <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-32 mb-2"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-48"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, j) => (
+                    <div key={j} className="h-16 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const refreshData = async (forceStatusUpdate = false) => {
+    if (forceStatusUpdate) {
+      setLastStatusUpdate(null); // Force status update on next load
+    }
     await loadRealData();
     toast.success('Dashboard data refreshed');
   };
@@ -280,9 +367,13 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={refreshData} disabled={loading} className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm">
+          <Button variant="outline" onClick={() => refreshData(false)} disabled={loading} className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            Quick Refresh
+          </Button>
+          <Button variant="outline" onClick={() => refreshData(true)} disabled={loading} className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm">
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Full Refresh
           </Button>
         </div>
       </div>
@@ -444,7 +535,12 @@ export default function AdminDashboard() {
                             </span>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline" className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
+                          onClick={() => navigate('/dashboard/inventory')}
+                        >
                           <Eye className="h-3 w-3 mr-1" />
                           View
                         </Button>
@@ -498,7 +594,12 @@ export default function AdminDashboard() {
                             </p>
                           </div>
                           <div className="flex space-x-1">
-                            <Button size="sm" variant="outline" className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
+                              onClick={() => navigate('/dashboard/orders')}
+                            >
                               <Eye className="h-3 w-3 mr-1" />
                               View
                             </Button>

@@ -26,8 +26,8 @@ import WarehouseManagementPage from '@/pages/WarehouseManagementPage';
 import ProductManagementPage from '@/pages/ProductManagementPage';
 import ProductCatalogPage from '@/pages/ProductCatalogPage';
 import MyOrdersPage from '@/pages/MyOrdersPage';
-import CatalogRequestsPage from '@/pages/catalogrequestspage';
-import AdminCatalogRequestsPage from '@/pages/admincatalogrequestspage';
+import CatalogRequestsPage from '@/pages/CatalogRequestsPage';
+import AdminCatalogRequestsPage from '@/pages/AdminCatalogRequestsPage';
 
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -92,7 +92,7 @@ function App() {
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignUpPage />} />
-                <Route path="/request-access" element={<RequestAccessPage />} />
+                <Route path="/request-access" element={<Navigate to="/login" replace />} />
                 <Route path="/request-submitted" element={<RequestSubmittedPage />} />
                 <Route path="/complete-signup" element={<CompleteSignupPage />} />
                 <Route path="/verify-email" element={<EmailVerificationPage />} />

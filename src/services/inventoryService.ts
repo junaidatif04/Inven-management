@@ -408,6 +408,9 @@ export const addStockToExistingItem = async (
 
 export const getLowStockItems = async (): Promise<InventoryItem[]> => {
   try {
+    // First, update all item statuses to ensure they're current
+    await updateAllItemStatuses();
+    
     const q = query(
       collection(db, 'inventory'), 
       where('status', 'in', ['low_stock', 'out_of_stock'])
@@ -419,6 +422,38 @@ export const getLowStockItems = async (): Promise<InventoryItem[]> => {
     })) as InventoryItem[];
   } catch (error) {
     console.error('Error fetching low stock items:', error);
+    throw error;
+  }
+};
+
+// Function to update all inventory item statuses based on current quantity and minStockLevel
+export const updateAllItemStatuses = async (): Promise<void> => {
+  try {
+    const allItems = await getAllInventoryItems();
+    const batch = writeBatch(db);
+    let updateCount = 0;
+    
+    for (const item of allItems) {
+      const currentStatus = item.status;
+      const newStatus = item.quantity <= 0 ? 'out_of_stock' : 
+                       item.quantity <= item.minStockLevel ? 'low_stock' : 'in_stock';
+      
+      // Only update if status has changed
+      if (currentStatus !== newStatus) {
+        batch.update(doc(db, 'inventory', item.id), {
+          status: newStatus,
+          lastUpdated: serverTimestamp()
+        });
+        updateCount++;
+      }
+    }
+    
+    if (updateCount > 0) {
+      await batch.commit();
+      console.log(`Updated status for ${updateCount} inventory items`);
+    }
+  } catch (error) {
+    console.error('Error updating item statuses:', error);
     throw error;
   }
 };

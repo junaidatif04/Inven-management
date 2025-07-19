@@ -59,6 +59,12 @@ export default function OrdersPage() {
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<{
+    total: number;
+    pending: number;
+    approved: number;
+    totalValue: number;
+  } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -107,6 +113,16 @@ export default function OrdersPage() {
         }));
 
         setOrders(ordersWithSupplierNames);
+        
+        // Calculate and set stats
+        const calculatedStats = {
+          total: ordersWithSupplierNames.length,
+          pending: ordersWithSupplierNames.filter(o => o.status === 'pending').length,
+          approved: ordersWithSupplierNames.filter(o => o.status === 'approved').length,
+          totalValue: ordersWithSupplierNames.reduce((sum, order) => sum + order.totalAmount, 0),
+        };
+        setStats(calculatedStats);
+        
         setLastUpdated(new Date());
         setLoading(false);
       });
@@ -138,6 +154,16 @@ export default function OrdersPage() {
       }));
       
       setOrders(ordersWithSupplierNames);
+      
+      // Calculate and set stats
+      const calculatedStats = {
+        total: ordersWithSupplierNames.length,
+        pending: ordersWithSupplierNames.filter(o => o.status === 'pending').length,
+        approved: ordersWithSupplierNames.filter(o => o.status === 'approved').length,
+        totalValue: ordersWithSupplierNames.reduce((sum, order) => sum + order.totalAmount, 0),
+      };
+      setStats(calculatedStats);
+      
       setLastUpdated(new Date());
       setLoading(false);
       toast.success('Orders loaded successfully');
@@ -223,6 +249,8 @@ export default function OrdersPage() {
   const refreshData = async () => {
     try {
       setLoading(true);
+      setStats(null); // Reset stats to show loading state
+      
       const suppliersData = await getAllSuppliers();
       const ordersData = await getAllOrders();
       
@@ -232,6 +260,16 @@ export default function OrdersPage() {
       }));
       
       setOrders(ordersWithSupplierNames);
+      
+      // Calculate and set stats
+      const calculatedStats = {
+        total: ordersWithSupplierNames.length,
+        pending: ordersWithSupplierNames.filter(o => o.status === 'pending').length,
+        approved: ordersWithSupplierNames.filter(o => o.status === 'approved').length,
+        totalValue: ordersWithSupplierNames.reduce((sum, order) => sum + order.totalAmount, 0),
+      };
+      setStats(calculatedStats);
+      
       setLastUpdated(new Date());
       toast.success('Orders data refreshed');
     } catch (error) {
@@ -302,13 +340,7 @@ export default function OrdersPage() {
     return dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
   };
 
-  // Calculate stats
-  const stats = {
-    total: orders.length,
-    pending: orders.filter(o => o.status === 'pending').length,
-    approved: orders.filter(o => o.status === 'approved').length,
-    totalValue: orders.reduce((sum, order) => sum + order.totalAmount, 0),
-  };
+
 
   return (
     <div className="space-y-6">
@@ -338,45 +370,62 @@ export default function OrdersPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approved Orders</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <Package className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
-          </CardContent>
-        </Card>
+        {stats === null ? (
+          // Loading skeleton for stats cards
+          Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 w-16 bg-gray-200 rounded animate-pulse"></div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.total}</div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+                <Clock className="h-4 w-4 text-yellow-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Approved Orders</CardTitle>
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Value</CardTitle>
+                <Package className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Filters */}
@@ -423,7 +472,37 @@ export default function OrdersPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredOrders.length === 0 ? (
+          {loading ? (
+            // Loading skeleton for table
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Supplier</TableHead>
+                    <TableHead>Requested By</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Total Amount</TableHead>
+                    <TableHead>Created Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={index}>
+                      <TableCell><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></TableCell>
+                      <TableCell><div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div></TableCell>
+                      <TableCell><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></TableCell>
+                      <TableCell><div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div></TableCell>
+                      <TableCell><div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div></TableCell>
+                      <TableCell><div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div></TableCell>
+                      <TableCell><div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : filteredOrders.length === 0 ? (
             <div className="text-center py-8">
               <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No orders found</h3>

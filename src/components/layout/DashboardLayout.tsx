@@ -40,7 +40,7 @@ const navigation = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
-  const { unreadCount, pendingAccessRequests } = useNotifications();
+  const { notifications, unreadCount, pendingAccessRequests, pendingOrders, pendingQuantityRequests } = useNotifications();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -131,11 +131,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {pendingAccessRequests}
                       </span>
                     )}
+                    {item.name === 'Order Management' && pendingOrders > 0 && (
+                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-sm">
+                        {pendingOrders}
+                      </span>
+                    )}
+                    {item.name === 'Product Management' && user?.role === 'supplier' && pendingQuantityRequests > 0 && (
+                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-sm">
+                        {pendingQuantityRequests}
+                      </span>
+                    )}
                   </div>
                 )}
                 {isCollapsed && item.name === 'Access Requests' && pendingAccessRequests > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center shadow-sm border border-white dark:border-slate-900">
                     {pendingAccessRequests > 9 ? '9+' : pendingAccessRequests}
+                  </span>
+                )}
+                {isCollapsed && item.name === 'Order Management' && pendingOrders > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center shadow-sm border border-white dark:border-slate-900">
+                    {pendingOrders > 9 ? '9+' : pendingOrders}
+                  </span>
+                )}
+                {isCollapsed && item.name === 'Product Management' && user?.role === 'supplier' && pendingQuantityRequests > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center shadow-sm border border-white dark:border-slate-900">
+                    {pendingQuantityRequests > 9 ? '9+' : pendingQuantityRequests}
                   </span>
                 )}
               </Link>

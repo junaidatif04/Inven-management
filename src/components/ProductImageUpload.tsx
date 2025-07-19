@@ -34,13 +34,12 @@ export default function ProductImageUpload({
     return (
       <ResumableImageUpload
         currentImageUrl={currentImageUrl}
-        folder="products"
-        fileName={productId ? `${productId}_${Date.now()}` : undefined}
-        size={size}
-        showUploadButton={showUploadButton}
-        onImageUpdate={onImageUpdate}
-        title={`Upload ${productName} Image`}
-        description="Upload product image with resumable functionality for reliable uploads"
+        uploadType="product"
+        onImageUpdate={(newImageUrl: string) => {
+          onImageUpdate?.(newImageUrl);
+        }}
+        className="max-w-md"
+        maxSizeInMB={5}
       />
     );
   }

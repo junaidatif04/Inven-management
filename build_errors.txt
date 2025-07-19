@@ -1,7 +1,0 @@
-Build completed successfully with no TypeScript errors.
-All issues have been resolved:
-- Removed unused imports (React, getQuantityRequestsBySupplier, getAllQuantityRequests, getQuantityRequestsByRequester, QuantityRequest, DialogTrigger, Eye, Calendar, Edit, ChevronDown, Filter)
-- Removed unused state variables (selectedRequest, setSelectedRequest)
-- Fixed supplierEmail property access by finding supplier from suppliers array
-
-Build output shows successful compilation with some optimization warnings about chunk sizes, which are not errors.

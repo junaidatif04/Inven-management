@@ -1,106 +1,43 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Upload, X, Pause, Play, RotateCcw, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { 
-  Camera, 
-  Upload, 
-  X, 
-  Image as ImageIcon, 
-  Pause, 
-  Play, 
-  Trash2, 
-  Wifi, 
-  WifiOff,
-  RefreshCw,
-  CheckCircle,
-  AlertCircle
-} from 'lucide-react';
-import { useResumableUpload } from '@/hooks/useResumableUpload';
-import { ResumableUploadResult } from '@/services/resumableUploadService';
+import { uploadImageWithResumability } from '@/services/imageUploadService';
 
 interface ResumableImageUploadProps {
+  onImageUpdate: (imageUrl: string) => void;
   currentImageUrl?: string;
-  folder: string;
-  fileName?: string;
-  size?: 'sm' | 'md' | 'lg';
-  showUploadButton?: boolean;
-  onImageUpdate?: (newImageUrl: string) => void;
-  title?: string;
-  description?: string;
+  uploadType: 'general' | 'product' | 'profile' | 'inventory';
+  className?: string;
+  maxSizeInMB?: number;
 }
 
-export default function ResumableImageUpload({
-  currentImageUrl,
-  folder,
-  fileName,
-  size = 'md',
-  showUploadButton = true,
+interface UploadState {
+  file: File | null;
+  progress: number;
+  status: 'idle' | 'uploading' | 'paused' | 'completed' | 'error';
+  error?: string;
+  uploadId?: string;
+}
+
+const ResumableImageUpload: React.FC<ResumableImageUploadProps> = ({
   onImageUpdate,
-  title = 'Upload Image',
-  description = 'Select an image to upload with resumable functionality'
-}: ResumableImageUploadProps) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [currentUploadId, setCurrentUploadId] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const {
-    upload,
-    pause,
-    resume,
-    cancel,
-    getProgress,
-    pendingUploads,
-    isUploading,
-    resumeAllPending,
-    cleanupCompleted
-  } = useResumableUpload({
-    folder,
-    fileName,
-    showToasts: true,
-    onSuccess: handleUploadSuccess,
-    onError: handleUploadError
+  currentImageUrl,
+  uploadType,
+  className = '',
+  maxSizeInMB = 5
+}) => {
+  const [uploadState, setUploadState] = useState<UploadState>({
+    file: null,
+    progress: 0,
+    status: 'idle'
   });
-
-  const sizeClasses = {
-    sm: 'h-16 w-16',
-    md: 'h-24 w-24',
-    lg: 'h-32 w-32'
-  };
-
-  // Monitor online/offline status
-  React.useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  function handleUploadSuccess(result: ResumableUploadResult) {
-    onImageUpdate?.(result.url);
-    setIsDialogOpen(false);
-    setPreviewUrl(null);
-    setSelectedFile(null);
-    setCurrentUploadId(null);
-    toast.success('Image uploaded successfully!');
-  }
-
-  function handleUploadError(error: Error) {
-    toast.error(`Upload failed: ${error.message}`);
-  }
+  const [previewUrl, setPreviewUrl] = useState<string | null>(currentImageUrl || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -112,14 +49,12 @@ export default function ResumableImageUpload({
       return;
     }
 
-    // Validate file size (5MB limit)
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      toast.error('Image size must be less than 5MB');
+    // Validate file size
+    const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
+    if (file.size > maxSizeInBytes) {
+      toast.error(`File size must be less than ${maxSizeInMB}MB`);
       return;
     }
-
-    setSelectedFile(file);
 
     // Create preview
     const reader = new FileReader();
@@ -127,263 +62,226 @@ export default function ResumableImageUpload({
       setPreviewUrl(e.target?.result as string);
     };
     reader.readAsDataURL(file);
-  }, []);
 
-  const handleUpload = async () => {
-    if (!selectedFile) return;
+    setUploadState({
+      file,
+      progress: 0,
+      status: 'idle'
+    });
+  }, [maxSizeInMB]);
+
+  const startUpload = useCallback(async () => {
+    if (!uploadState.file) return;
 
     try {
-      const uploadId = await upload(selectedFile);
-      setCurrentUploadId(uploadId);
-    } catch (error) {
-      console.error('Upload failed:', error);
+      setUploadState(prev => ({ ...prev, status: 'uploading', error: undefined }));
+      
+      // Create abort controller for this upload
+      abortControllerRef.current = new AbortController();
+
+      const result = await uploadImageWithResumability(
+        uploadState.file,
+        uploadType,
+        {
+          onProgress: (progress) => {
+            setUploadState(prev => ({ ...prev, progress }));
+          },
+          signal: abortControllerRef.current.signal
+        }
+      );
+
+      if (result.success && result.url) {
+        setUploadState(prev => ({ ...prev, status: 'completed', progress: 100 }));
+        onImageUpdate(result.url);
+        toast.success('Image uploaded successfully!');
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        setUploadState(prev => ({ ...prev, status: 'paused' }));
+        toast.info('Upload paused');
+      } else {
+        setUploadState(prev => ({ 
+          ...prev, 
+          status: 'error', 
+          error: error.message || 'Upload failed' 
+        }));
+        toast.error('Upload failed: ' + (error.message || 'Unknown error'));
+      }
+    }
+  }, [uploadState.file, uploadType, onImageUpdate]);
+
+  const pauseUpload = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
+
+  const resumeUpload = useCallback(() => {
+    startUpload();
+  }, [startUpload]);
+
+  const resetUpload = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setUploadState({
+      file: null,
+      progress: 0,
+      status: 'idle'
+    });
+    setPreviewUrl(currentImageUrl || null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [currentImageUrl]);
+
+  const getStatusColor = () => {
+    switch (uploadState.status) {
+      case 'completed': return 'bg-green-500';
+      case 'error': return 'bg-red-500';
+      case 'uploading': return 'bg-blue-500';
+      case 'paused': return 'bg-yellow-500';
+      default: return 'bg-gray-500';
     }
   };
 
-  const handlePause = () => {
-    if (currentUploadId) {
-      pause(currentUploadId);
+  const getStatusIcon = () => {
+    switch (uploadState.status) {
+      case 'completed': return <Check className="w-4 h-4" />;
+      case 'error': return <AlertCircle className="w-4 h-4" />;
+      case 'uploading': return <Upload className="w-4 h-4" />;
+      case 'paused': return <Pause className="w-4 h-4" />;
+      default: return <Upload className="w-4 h-4" />;
     }
   };
-
-  const handleResume = () => {
-    if (currentUploadId) {
-      resume(currentUploadId);
-    }
-  };
-
-  const handleCancel = () => {
-    if (currentUploadId) {
-      cancel(currentUploadId);
-      setCurrentUploadId(null);
-      setPreviewUrl(null);
-      setSelectedFile(null);
-    }
-  };
-
-  const getCurrentProgress = () => {
-    if (!currentUploadId) return null;
-    return getProgress(currentUploadId);
-  };
-
-  const currentProgress = getCurrentProgress();
 
   return (
-    <div className="space-y-4">
-      {/* Current Image Display */}
-      <div className="flex items-center space-x-4">
-        <div className={`${sizeClasses[size]} rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50`}>
-          {currentImageUrl ? (
-            <img
-              src={currentImageUrl}
-              alt="Current image"
-              className="w-full h-full object-cover"
+    <Card className={`w-full ${className}`}>
+      <CardContent className="p-4">
+        <div className="space-y-4">
+          {/* File Input */}
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+              id={`file-input-${uploadType}`}
             />
-          ) : (
-            <ImageIcon className="h-8 w-8 text-gray-400" />
-          )}
-        </div>
-        
-        {showUploadButton && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Camera className="h-4 w-4 mr-2" />
-                {currentImageUrl ? 'Change Image' : 'Upload Image'}
+            <label htmlFor={`file-input-${uploadType}`}>
+              <Button variant="outline" className="cursor-pointer" asChild>
+                <span>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Select Image
+                </span>
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {title}
-                  {isOnline ? (
-                    <Wifi className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <WifiOff className="h-4 w-4 text-red-500" />
-                  )}
-                </DialogTitle>
-                <DialogDescription>
-                  {description}
-                  {!isOnline && (
-                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-sm">
-                      You're offline. Uploads will resume automatically when connection is restored.
-                    </div>
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-4">
-                {/* File Selection */}
+            </label>
+            {uploadState.file && (
+              <Badge variant="secondary">
+                {uploadState.file.name}
+              </Badge>
+            )}
+          </div>
+
+          {/* Preview */}
+          {previewUrl && (
+            <div className="relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden">
+              <img
+                src={previewUrl}
+                alt="Preview"
+                className="w-full h-full object-cover"
+              />
+              <Button
+                variant="destructive"
+                size="sm"
+                className="absolute top-2 right-2"
+                onClick={() => {
+                  setPreviewUrl(null);
+                  onImageUpdate('');
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+
+          {/* Upload Controls */}
+          {uploadState.file && uploadState.status !== 'completed' && (
+            <div className="space-y-3">
+              {/* Progress Bar */}
+              {uploadState.status === 'uploading' && (
                 <div className="space-y-2">
-                  <Label htmlFor="file-upload">Select Image</Label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      ref={fileInputRef}
-                      id="file-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading}
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Choose File
-                    </Button>
-                    {selectedFile && (
-                      <span className="text-sm text-gray-600">
-                        {selectedFile.name}
-                      </span>
-                    )}
+                  <div className="flex justify-between text-sm">
+                    <span>Uploading...</span>
+                    <span>{Math.round(uploadState.progress)}%</span>
                   </div>
+                  <Progress value={uploadState.progress} className="w-full" />
                 </div>
+              )}
 
-                {/* Preview */}
-                {previewUrl && (
-                  <div className="space-y-2">
-                    <Label>Preview</Label>
-                    <div className="w-full h-48 border rounded-lg overflow-hidden bg-gray-50">
-                      <img
-                        src={previewUrl}
-                        alt="Preview"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                  </div>
+              {/* Status Badge */}
+              <div className="flex items-center gap-2">
+                <Badge className={`${getStatusColor()} text-white`}>
+                  {getStatusIcon()}
+                  <span className="ml-1 capitalize">{uploadState.status}</span>
+                </Badge>
+                {uploadState.error && (
+                  <span className="text-sm text-red-600">{uploadState.error}</span>
                 )}
+              </div>
 
-                {/* Upload Progress */}
-                {currentProgress && (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center justify-between">
-                        Upload Progress
-                        <Badge variant={currentProgress.state === 'running' ? 'default' : 
-                                     currentProgress.state === 'paused' ? 'secondary' :
-                                     currentProgress.state === 'success' ? 'default' : 'destructive'}>
-                          {currentProgress.state}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <Progress value={currentProgress.percentage} className="w-full" />
-                      <div className="flex justify-between text-sm text-gray-600">
-                        <span>{Math.round(currentProgress.percentage)}%</span>
-                        <span>
-                          {Math.round(currentProgress.bytesTransferred / 1024)} KB / {Math.round(currentProgress.totalBytes / 1024)} KB
-                        </span>
-                      </div>
-                      
-                      {/* Upload Controls */}
-                      <div className="flex space-x-2">
-                        {currentProgress.state === 'running' && (
-                          <Button size="sm" variant="outline" onClick={handlePause}>
-                            <Pause className="h-4 w-4 mr-1" />
-                            Pause
-                          </Button>
-                        )}
-                        {currentProgress.state === 'paused' && (
-                          <Button size="sm" variant="outline" onClick={handleResume}>
-                            <Play className="h-4 w-4 mr-1" />
-                            Resume
-                          </Button>
-                        )}
-                        <Button size="sm" variant="destructive" onClick={handleCancel}>
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Cancel
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Upload Button */}
-                {selectedFile && !currentProgress && (
-                  <Button
-                    onClick={handleUpload}
-                    disabled={isUploading}
-                    className="w-full"
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                {uploadState.status === 'idle' && (
+                  <Button onClick={startUpload} size="sm">
+                    <Play className="w-4 h-4 mr-2" />
                     Start Upload
                   </Button>
                 )}
+                
+                {uploadState.status === 'uploading' && (
+                  <Button onClick={pauseUpload} variant="outline" size="sm">
+                    <Pause className="w-4 h-4 mr-2" />
+                    Pause
+                  </Button>
+                )}
+                
+                {uploadState.status === 'paused' && (
+                  <Button onClick={resumeUpload} size="sm">
+                    <Play className="w-4 h-4 mr-2" />
+                    Resume
+                  </Button>
+                )}
+                
+                {(uploadState.status === 'error' || uploadState.status === 'paused') && (
+                  <Button onClick={resetUpload} variant="outline" size="sm">
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Reset
+                  </Button>
+                )}
               </div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
-
-      {/* Pending Uploads Panel */}
-      {pendingUploads.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center justify-between">
-              Pending Uploads ({pendingUploads.length})
-              <div className="flex space-x-2">
-                <Button size="sm" variant="outline" onClick={resumeAllPending}>
-                  <RefreshCw className="h-4 w-4 mr-1" />
-                  Resume All
-                </Button>
-                <Button size="sm" variant="outline" onClick={cleanupCompleted}>
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Cleanup
-                </Button>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {pendingUploads.map((session) => {
-                const progress = getProgress(session.uploadId);
-                return (
-                  <div key={session.uploadId} className="flex items-center justify-between p-2 border rounded">
-                    <div className="flex items-center space-x-2">
-                      {session.state === 'error' ? (
-                        <AlertCircle className="h-4 w-4 text-red-500" />
-                      ) : session.state === 'success' ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <Pause className="h-4 w-4 text-yellow-500" />
-                      )}
-                      <span className="text-sm font-medium">{session.fileName}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {session.state}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {progress && (
-                        <span className="text-xs text-gray-500">
-                          {Math.round(progress.percentage)}%
-                        </span>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => resume(session.uploadId)}
-                        disabled={session.state === 'running'}
-                      >
-                        <Play className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => cancel(session.uploadId)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+          )}
+
+          {/* Success State */}
+          {uploadState.status === 'completed' && (
+            <div className="flex items-center justify-between">
+              <Badge className="bg-green-500 text-white">
+                <Check className="w-4 h-4 mr-1" />
+                Upload Complete
+              </Badge>
+              <Button onClick={resetUpload} variant="outline" size="sm">
+                Upload New Image
+              </Button>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
-}
+};
+
+export default ResumableImageUpload;

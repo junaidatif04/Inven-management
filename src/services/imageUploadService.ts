@@ -1,9 +1,20 @@
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 
 export interface ImageUploadResult {
   url: string;
   path: string;
+}
+
+export interface UploadOptions {
+  onProgress?: (progress: number) => void;
+  signal?: AbortSignal;
+}
+
+export interface UploadResult {
+  success: boolean;
+  url?: string;
+  error?: string;
 }
 
 /**
@@ -74,6 +85,78 @@ export const uploadImage = async (
     }
     
     throw error;
+  }
+};
+
+/**
+ * Enhanced image upload service with resumability
+ * @param file - The image file to upload
+ * @param uploadType - Type of upload (general, product, profile, inventory)
+ * @param options - Upload options including progress callback and abort signal
+ * @returns Promise with upload result
+ */
+export const uploadImageWithResumability = async (
+  file: File,
+  uploadType: 'general' | 'product' | 'profile' | 'inventory',
+  options: UploadOptions = {}
+): Promise<UploadResult> => {
+  try {
+    // Generate unique filename
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const fileExtension = file.name.split('.').pop();
+    const fileName = `${uploadType}_${timestamp}_${randomString}.${fileExtension}`;
+    
+    // Create storage reference
+    const storageRef = ref(storage, `images/${uploadType}/${fileName}`);
+    
+    // Create upload task
+    const uploadTask = uploadBytesResumable(storageRef, file);
+    
+    return new Promise((resolve, reject) => {
+      // Handle abort signal
+      if (options.signal) {
+        options.signal.addEventListener('abort', () => {
+          uploadTask.cancel();
+          reject(new Error('Upload aborted'));
+        });
+      }
+      
+      // Monitor upload progress
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          options.onProgress?.(progress);
+        },
+        (error) => {
+          console.error('Upload error:', error);
+          resolve({
+            success: false,
+            error: error.message || 'Upload failed'
+          });
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve({
+              success: true,
+              url: downloadURL
+            });
+          } catch (error: any) {
+            resolve({
+              success: false,
+              error: error.message || 'Failed to get download URL'
+            });
+          }
+        }
+      );
+    });
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Upload initialization failed'
+    };
   }
 };
 

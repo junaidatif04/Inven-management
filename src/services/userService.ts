@@ -23,6 +23,7 @@ export interface UpdateUser {
   role?: UserRole;
   phone?: string;
   address?: string;
+  status?: string;
 }
 
 // User Management CRUD Operations

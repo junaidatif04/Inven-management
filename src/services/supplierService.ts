@@ -3,55 +3,54 @@ import {
   doc, 
   getDocs, 
   getDoc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
   query, 
-  orderBy, 
-  serverTimestamp,
   where
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Supplier } from '@/types/inventory';
 import { User } from '@/types/auth';
-import { getAllUsers } from './userService';
+import { getAllUsers, updateUser } from './userService';
 
-export interface CreateSupplier {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  contactPerson: string;
-}
+// Helper function to convert User to Supplier format
+const userToSupplier = (user: User): Supplier => ({
+  id: user.id,
+  name: user.companyName || user.name,
+  companyName: user.companyName,
+  email: user.email,
+  phone: user.phone || '',
+  address: user.address || '',
+  contactPerson: user.contactPerson || user.name,
+  businessType: user.businessType,
+  website: user.website,
+  taxId: user.taxId,
+  status: user.status === 'approved' ? 'active' : 'inactive',
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt
+});
 
-export interface UpdateSupplier extends Partial<CreateSupplier> {
+export interface UpdateSupplier {
   id: string;
-  status?: 'active' | 'inactive';
+  name?: string;
+  companyName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contactPerson?: string;
+  businessType?: string;
+  website?: string;
+  taxId?: string;
+  status?: 'active' | 'inactive' | 'pending';
 }
 
 // Supplier CRUD Operations
 export const getAllSuppliers = async (): Promise<Supplier[]> => {
   try {
-    // Get all suppliers
-    const q = query(collection(db, 'suppliers'), orderBy('name'));
-    const querySnapshot = await getDocs(q);
-    const allSuppliers = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Supplier[];
-
-    // Get all approved supplier users
     const users = await getAllUsers();
-    const approvedSupplierEmails = new Set(
-      users
-        .filter(user => user.role === 'supplier' && user.status === 'approved')
-        .map(user => user.email)
+    const supplierUsers = users.filter(user => 
+      user.role === 'supplier' && user.status === 'approved'
     );
-
-    // Filter suppliers to only include those with approved user accounts
-    return allSuppliers.filter(supplier => 
-      approvedSupplierEmails.has(supplier.email)
-    );
+    
+    return supplierUsers.map(userToSupplier).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error('Error fetching suppliers:', error);
     throw error;
@@ -60,11 +59,14 @@ export const getAllSuppliers = async (): Promise<Supplier[]> => {
 
 export const getSupplier = async (id: string): Promise<Supplier | null> => {
   try {
-    const docRef = doc(db, 'suppliers', id);
+    const docRef = doc(db, 'users', id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() } as Supplier;
+      const user = { id: docSnap.id, ...docSnap.data() } as User;
+      if (user.role === 'supplier' && user.status === 'approved') {
+        return userToSupplier(user);
+      }
     }
     return null;
   } catch (error) {
@@ -73,50 +75,37 @@ export const getSupplier = async (id: string): Promise<Supplier | null> => {
   }
 };
 
-export const createSupplier = async (supplier: CreateSupplier): Promise<string> => {
-  try {
-    const docRef = await addDoc(collection(db, 'suppliers'), {
-      ...supplier,
-      status: 'active',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    
-    return docRef.id;
-  } catch (error) {
-    console.error('Error creating supplier:', error);
-    throw error;
-  }
-};
-
 export const updateSupplier = async (supplier: UpdateSupplier): Promise<void> => {
   try {
-    const { id, ...updateData } = supplier;
+    const { id, status, ...supplierData } = supplier;
     
-    await updateDoc(doc(db, 'suppliers', id), {
-      ...updateData,
-      updatedAt: serverTimestamp()
-    });
+    // Convert supplier status to user status
+    const userStatus = status === 'active' ? 'approved' : 'pending';
+    
+    // Map supplier data to UpdateUser format
+    const updateUserData: any = {
+      id,
+      ...supplierData
+    };
+    
+    // Add status field if it exists in User type
+    if (userStatus) {
+      updateUserData.status = userStatus;
+    }
+    
+    await updateUser(updateUserData);
   } catch (error) {
     console.error('Error updating supplier:', error);
     throw error;
   }
 };
 
-export const deleteSupplier = async (id: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, 'suppliers', id));
-  } catch (error) {
-    console.error('Error deleting supplier:', error);
-    throw error;
-  }
-};
-
 export const toggleSupplierStatus = async (id: string, status: 'active' | 'inactive'): Promise<void> => {
   try {
-    await updateDoc(doc(db, 'suppliers', id), {
-      status,
-      updatedAt: serverTimestamp()
+    const userStatus = status === 'active' ? 'approved' : 'pending';
+    await updateUser({
+      id,
+      status: userStatus
     });
   } catch (error) {
     console.error('Error updating supplier status:', error);
@@ -141,39 +130,21 @@ export const searchSuppliers = async (searchTerm: string): Promise<Supplier[]> =
 
 export const getActiveSuppliers = async (): Promise<Supplier[]> => {
   try {
-    // Get all active suppliers
-    const q = query(
-      collection(db, 'suppliers'), 
-      where('status', '==', 'active'),
-      orderBy('name')
-    );
-    const querySnapshot = await getDocs(q);
-    const activeSuppliers = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Supplier[];
-
-    // Get all approved supplier users
     const users = await getAllUsers();
-    const approvedSupplierEmails = new Set(
-      users
-        .filter(user => user.role === 'supplier' && user.status === 'approved')
-        .map(user => user.email)
+    const activeSupplierUsers = users.filter(user => 
+      user.role === 'supplier' && user.status === 'approved'
     );
-
-    // Filter active suppliers to only include those with approved user accounts
-    return activeSuppliers.filter(supplier => 
-      approvedSupplierEmails.has(supplier.email)
-    );
+    
+    return activeSupplierUsers.map(userToSupplier).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error('Error fetching active suppliers:', error);
     throw error;
   }
 };
 
-// Auto-register approved supplier users as suppliers
+// Auto-register approved supplier users as suppliers (now just validates user data)
 export const autoRegisterSupplier = async (user: User): Promise<void> => {
-  console.log('Auto-registering supplier for user:', {
+  console.log('Validating supplier user:', {
     email: user.email,
     role: user.role,
     name: user.name,
@@ -181,42 +152,17 @@ export const autoRegisterSupplier = async (user: User): Promise<void> => {
   });
   
   if (user.role !== 'supplier') {
-    console.log('User is not a supplier, skipping auto-registration');
+    console.log('User is not a supplier, skipping validation');
     return;
   }
 
   try {
-    // Check if supplier already exists
-    console.log('Checking for existing supplier with email:', user.email);
-    const existingSupplier = await getSupplierByEmail(user.email);
-    
-    if (existingSupplier) {
-      console.log('Found existing supplier, updating:', existingSupplier.id);
-      // Update existing supplier with latest user data
-      await updateSupplier({
-        id: existingSupplier.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone || '',
-        contactPerson: user.name
-      });
-      console.log('Successfully updated existing supplier');
-      return;
+    // Since we're using users collection directly, just ensure user has required supplier fields
+    if (!user.companyName && !user.name) {
+      console.warn('Supplier user missing company name or name');
     }
-
-    // Create new supplier record
-    console.log('No existing supplier found, creating new supplier');
-    const supplierData: CreateSupplier = {
-      name: user.companyName || user.name,
-      email: user.email,
-      phone: user.phone || '',
-      address: user.address || '',
-      contactPerson: user.name
-    };
     
-    console.log('Creating supplier with data:', supplierData);
-    const supplierId = await createSupplier(supplierData);
-    console.log('Successfully created new supplier with ID:', supplierId);
+    console.log('Supplier user validation completed');
   } catch (error) {
     console.error('Error in autoRegisterSupplier:', error);
     throw error;
@@ -227,8 +173,9 @@ export const autoRegisterSupplier = async (user: User): Promise<void> => {
 export const getSupplierByEmail = async (email: string): Promise<Supplier | null> => {
   try {
     const q = query(
-      collection(db, 'suppliers'),
-      where('email', '==', email)
+      collection(db, 'users'),
+      where('email', '==', email),
+      where('role', '==', 'supplier')
     );
     
     const querySnapshot = await getDocs(q);
@@ -237,17 +184,23 @@ export const getSupplierByEmail = async (email: string): Promise<Supplier | null
     }
     
     const docSnap = querySnapshot.docs[0];
-    return {
+    const user = {
       id: docSnap.id,
       ...docSnap.data()
-    } as Supplier;
+    } as User;
+    
+    if (user.status === 'approved') {
+      return userToSupplier(user);
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error fetching supplier by email:', error);
     throw error;
   }
 };
 
-// Seed suppliers from approved supplier users
+// Seed suppliers from approved supplier users (now just validates existing users)
 export const seedSuppliersFromUsers = async (): Promise<void> => {
   try {
     const users = await getAllUsers();
@@ -258,6 +211,8 @@ export const seedSuppliersFromUsers = async (): Promise<void> => {
     for (const user of supplierUsers) {
       await autoRegisterSupplier(user);
     }
+    
+    console.log(`Validated ${supplierUsers.length} supplier users`);
   } catch (error) {
     console.error('Failed to seed suppliers from users:', error);
     throw error;
@@ -273,30 +228,6 @@ export const getApprovedSupplierUsers = async (): Promise<User[]> => {
     );
   } catch (error) {
     console.error('Error fetching approved supplier users:', error);
-    throw error;
-  }
-};
-
-// Sync supplier data with user profile
-export const syncSupplierWithUser = async (user: User): Promise<void> => {
-  try {
-    if (user.role !== 'supplier') {
-      return;
-    }
-
-    const supplier = await getSupplierByEmail(user.email);
-    if (supplier) {
-      await updateSupplier({
-        id: supplier.id,
-        name: user.companyName || user.name,
-        email: user.email,
-        phone: user.phone || '',
-        address: user.address || '',
-        contactPerson: user.name
-      });
-    }
-  } catch (error) {
-    console.error('Error syncing supplier with user:', error);
     throw error;
   }
 };

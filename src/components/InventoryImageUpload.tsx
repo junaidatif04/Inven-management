@@ -36,13 +36,12 @@ export default function InventoryImageUpload({
     return (
       <ResumableImageUpload
         currentImageUrl={currentImageUrl}
-        folder="inventory"
-        fileName={itemId ? `${itemId}_${Date.now()}` : undefined}
-        size={size}
-        showUploadButton={showUploadButton}
-        onImageUpdate={onImageUpdate}
-        title="Upload Inventory Image"
-        description="Select an image for this inventory item with resumable functionality"
+        uploadType="inventory"
+        onImageUpdate={(newImageUrl: string) => {
+          onImageUpdate?.(newImageUrl);
+        }}
+        className="max-w-md"
+        maxSizeInMB={5}
       />
     );
   }

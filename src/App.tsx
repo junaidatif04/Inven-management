@@ -27,7 +27,7 @@ import ProductManagementPage from '@/pages/ProductManagementPage';
 import ProductCatalogPage from '@/pages/ProductCatalogPage';
 import MyOrdersPage from '@/pages/MyOrdersPage';
 import CatalogRequestsPage from '@/pages/CatalogRequestsPage';
-import AdminCatalogRequestsPage from '@/pages/AdminCatalogRequestsPage';
+import AdminCatalogRequestsPage from '@/pages/admincatalogrequestspage';
 
 import { useAuth } from '@/contexts/AuthContext';
 

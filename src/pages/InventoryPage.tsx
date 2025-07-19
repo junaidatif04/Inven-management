@@ -699,7 +699,7 @@ export default function InventoryPage() {
                         <TableCell className="font-medium text-slate-700 dark:text-slate-300">{item.supplier || item.supplierName || 'N/A'}</TableCell>
                         <TableCell>
                           <div className="text-center">
-                            <div className="font-bold text-slate-800 dark:text-slate-200 text-lg">{item.quantity}</div>
+                            <div className="font-bold text-slate-800 dark:text-slate-200 text-ellipsis">{item.quantity}</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">
                               Min: {item.minStockLevel}
                             </div>

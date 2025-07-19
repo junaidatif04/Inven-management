@@ -130,8 +130,8 @@ export default function CatalogRequestsPage() {
     loadData();
 
     // Subscribe to real-time updates
-    const unsubscribe = subscribeToCatalogRequests((updatedRequests) => {
-      const userRequests = updatedRequests.filter(req => req.userId === user?.id);
+    const unsubscribe = subscribeToCatalogRequests((updatedRequests: CatalogRequest[]) => {
+      const userRequests = updatedRequests.filter((req: CatalogRequest) => req.userId === user?.id);
       setRequests(userRequests);
     }, user?.id);
 

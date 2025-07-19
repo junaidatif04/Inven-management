@@ -487,7 +487,7 @@ export default function SupplierDashboard() {
                           <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
                             <div className="space-y-1">
                               <div className="flex items-center space-x-2">
-                                <p className="font-medium text-sm">{product.name}</p>
+                                <p className="font-bold text-sm">{product.name}</p>
                                 <Badge variant="outline">
                                   {product.status}
                                 </Badge>
@@ -603,7 +603,7 @@ export default function SupplierDashboard() {
                         <div key={request.id} className="p-3 border rounded-lg space-y-2">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
-                              <p className="font-medium text-sm">{request.productName}</p>
+                              <p className="font-bold text-sm">{request.productName}</p>
                               <Badge variant={getStatusBadgeVariant(request.status)}>
                                 {request.status}
                               </Badge>

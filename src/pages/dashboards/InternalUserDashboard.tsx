@@ -306,7 +306,7 @@ export default function InternalUserDashboard() {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-sm truncate">{product.name}</h3>
+                              <h3 className="font-bold text-sm truncate">{product.name}</h3>
                               <p className="text-xs text-muted-foreground">{product.category}</p>
                               <p className="text-sm font-bold">${product.price}</p>
                             </div>

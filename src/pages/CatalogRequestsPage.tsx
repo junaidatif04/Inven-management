@@ -312,7 +312,7 @@ export default function CatalogRequestsPage() {
                                 </div>
                               </div>
                               <div>
-                                <p className="font-medium">{item.productName}</p>
+                                <p className="font-bold">{item.productName}</p>
                                 <p className="text-sm text-muted-foreground">${item.price.toFixed(2)} each</p>
                               </div>
                             </div>
@@ -452,7 +452,7 @@ export default function CatalogRequestsPage() {
             <CardContent className="p-4">
               <div className="space-y-3">
                 <div>
-                  <h3 className="font-semibold truncate">{item.name}</h3>
+                  <h3 className="font-bold truncate">{item.name}</h3>
                   <p className="text-sm text-muted-foreground">{item.category}</p>
                   {item.sku && (
                     <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>

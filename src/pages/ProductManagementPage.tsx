@@ -674,7 +674,7 @@ export default function ProductManagementPage() {
                   
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
-                      <h3 className="font-semibold">{product.name}</h3>
+                      <h3 className="font-bold">{product.name}</h3>
                       <p className="text-sm text-muted-foreground">{product.category}</p>
                       <p className="text-sm text-muted-foreground">ID: {product.id}</p>
                     </div>

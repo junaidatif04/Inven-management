@@ -672,7 +672,7 @@ export default function InventoryPage() {
                       <TableRow key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                         <TableCell>
                           <div>
-                            <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
+                            <div className="font-bold text-slate-800 dark:text-slate-200">{item.name}</div>
                             <div className="text-sm text-slate-500 dark:text-slate-400">{item.description}</div>
                           </div>
                         </TableCell>

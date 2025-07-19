@@ -478,7 +478,7 @@ export default function WarehouseDashboard() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {getMovementIcon(movement.type)}
-                              <span className="font-medium text-sm">{movement.itemName}</span>
+                              <span className="font-bold text-sm">{movement.itemName}</span>
                             </div>
                             <Badge variant="outline" className="text-xs">
                               {movement.type === 'in' ? '+' : movement.type === 'out' ? '-' : '±'}{movement.quantity}
@@ -522,7 +522,7 @@ export default function WarehouseDashboard() {
                       myQuantityRequests.map((request) => (
                         <div key={request.id} className="border rounded-lg p-3 space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium text-sm">{request.productName}</span>
+                            <span className="font-bold text-sm">{request.productName}</span>
                             <Badge className={`text-xs flex items-center gap-1 ${getStatusColor(request.status)}`}>
                               {getStatusIcon(request.status)}
                               {request.status.replace('_', ' ')}
@@ -580,7 +580,7 @@ export default function WarehouseDashboard() {
                       lowStockItems.map((item) => (
                         <div key={item.id} className="border rounded-lg p-3 space-y-2 border-yellow-200 bg-yellow-50">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium text-sm">{item.name}</span>
+                            <span className="font-bold text-sm">{item.name}</span>
                             <Badge variant="destructive" className="text-xs">
                               {item.quantity} left
                             </Badge>

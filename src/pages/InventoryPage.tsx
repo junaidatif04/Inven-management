@@ -416,96 +416,103 @@ export default function InventoryPage() {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">{sectionTitle}</h2>
-            <p className="text-slate-600 dark:text-slate-400 font-medium">{sectionDescription}</p>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-200 dark:to-slate-400 bg-clip-text text-transparent tracking-tight">{sectionTitle}</h2>
+            <p className="text-slate-600 dark:text-slate-400 font-medium mt-1">{sectionDescription}</p>
           </div>
           {activeSection === 'inventory' && (
             <div className="text-right">
-              <p className="text-sm text-slate-500 dark:text-slate-400">Items are automatically added when suppliers approve requests</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">Items are automatically added when suppliers approve requests</p>
             </div>
           )}
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card className="card-premium hover:hover-lift transition-all duration-300 border-0 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">Total Items</CardTitle>
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                <Package className="h-4 w-4 text-white" />
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <Package className="h-5 w-5 text-white" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{currentItems.length}</div>
+              <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{currentItems.length}</div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Total inventory</p>
             </CardContent>
           </Card>
           
-          <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+          <Card className="card-premium hover:hover-lift transition-all duration-300 border-0 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">In Stock</CardTitle>
-              <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
-                <TrendingUp className="h-4 w-4 text-white" />
+              <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <TrendingUp className="h-5 w-5 text-white" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600 dark:text-green-500">
+              <div className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                 {currentItems.filter(item => item.status === 'in_stock').length}
               </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Available items</p>
             </CardContent>
           </Card>
           
-          <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+          <Card className="card-premium hover:hover-lift transition-all duration-300 border-0 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">Low Stock</CardTitle>
-              <div className="p-2 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg">
-                <AlertTriangle className="h-4 w-4 text-white" />
+              <div className="p-3 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <AlertTriangle className="h-5 w-5 text-white" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600 dark:text-orange-500">
+              <div className="text-3xl font-bold bg-gradient-to-r from-yellow-600 to-orange-600 bg-clip-text text-transparent">
                 {currentItems.filter(item => item.status === 'low_stock').length}
               </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Need attention</p>
             </CardContent>
           </Card>
           
-          <Card className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+          <Card className="card-premium hover:hover-lift transition-all duration-300 border-0 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">Out of Stock</CardTitle>
-              <div className="p-2 bg-gradient-to-br from-red-500 to-rose-600 rounded-lg">
-                <TrendingDown className="h-4 w-4 text-white" />
+              <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <TrendingDown className="h-5 w-5 text-white" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600 dark:text-red-500">
+              <div className="text-3xl font-bold bg-gradient-to-r from-red-600 to-rose-600 bg-clip-text text-transparent">
                 {currentItems.filter(item => item.status === 'out_of_stock').length}
               </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Requires restocking</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Filters */}
-        <Card className="glass-card shadow-elegant border-0">
-          <CardHeader>
-            <CardTitle className="text-slate-800 dark:text-slate-200">Filters</CardTitle>
+        <Card className="card-premium border-0">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Search className="h-5 w-5 text-blue-600" />
+              Filters & Search
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-4">
               <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <div className="relative group">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                   <Input
                     placeholder="Search items..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                    className="pl-10 h-12 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 rounded-xl"
                   />
                 </div>
               </div>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-48 h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                <SelectTrigger className="w-48 h-12 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 rounded-xl">
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl border-slate-200 dark:border-slate-700">
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="in_stock">In Stock</SelectItem>
                   <SelectItem value="low_stock">Low Stock</SelectItem>
@@ -521,9 +528,12 @@ export default function InventoryPage() {
         {activeSection === 'published-items' ? (
           /* Published Items - Card View */
           <div className="space-y-6">
-            <Card className="glass-card shadow-elegant border-0">
-              <CardHeader>
-                <CardTitle className="text-slate-800 dark:text-slate-200">{sectionTitle}</CardTitle>
+            <Card className="card-premium border-0">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800/50 dark:to-slate-700/50 rounded-t-xl">
+                <CardTitle className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <Package className="h-5 w-5 text-blue-600" />
+                  {sectionTitle}
+                </CardTitle>
                 <CardDescription className="text-slate-600 dark:text-slate-400">
                   {sectionDescription}
                 </CardDescription>
@@ -544,32 +554,33 @@ export default function InventoryPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredItems.map((item) => (
-                  <Card key={item.id} className="glass-card shadow-elegant hover:shadow-elegant-lg transition-all duration-200 border-0">
+                  <Card key={item.id} className="card-premium hover:hover-lift transition-all duration-300 border-0 group overflow-hidden">
                     {/* Product Image */}
                     {(item.images && item.images.length > 0 ? item.images[0] : item.imageUrl) && (
-                      <div className="aspect-square w-full overflow-hidden rounded-t-lg">
+                      <div className="aspect-square w-full overflow-hidden rounded-t-xl relative">
                         <img
                           src={item.images && item.images.length > 0 ? item.images[0] : item.imageUrl}
                           alt={item.name}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
                           }}
                         />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                       </div>
                     )}
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <CardTitle className="text-lg font-semibold line-clamp-2 text-slate-800 dark:text-slate-200">
+                          <CardTitle className="text-lg font-bold line-clamp-2 text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                             {item.name}
                           </CardTitle>
-                          <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                          <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-1 font-medium">
                             {item.supplier || item.supplierName || 'N/A'}
                           </CardDescription>
                         </div>
-                        <Badge variant="outline" className="ml-2 text-slate-700 dark:text-slate-300">
+                        <Badge variant="outline" className="ml-2 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                           {item.category}
                         </Badge>
                       </div>
@@ -584,18 +595,18 @@ export default function InventoryPage() {
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            <span className="text-lg font-bold text-green-600 dark:text-green-500">
+                            <span className="text-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                               ${(item.salePrice || item.unitPrice).toFixed(2)}
                             </span>
                           </div>
-                          <div className="flex items-center space-x-1 text-sm text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center space-x-1 text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-lg">
                             <Package className="h-4 w-4" />
                             <span>Stock: {item.quantity}</span>
                           </div>
                         </div>
                         
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-600 dark:text-slate-400">SKU: {item.sku}</span>
+                          <span className="text-slate-600 dark:text-slate-400 font-mono bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded text-xs">SKU: {item.sku}</span>
                           {getStatusBadge(item.status)}
                         </div>
                       </div>
@@ -604,7 +615,7 @@ export default function InventoryPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="flex-1 bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
+                          className="flex-1 btn-glass hover:hover-glow transition-all duration-200"
                           onClick={() => openEditDetailsDialog(item)}
                         >
                           <Eye className="h-4 w-4 mr-1" />
@@ -613,7 +624,7 @@ export default function InventoryPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:border-orange-200 dark:hover:border-orange-800 hover:text-orange-600 dark:hover:text-orange-400"
+                          className="btn-glass hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:border-orange-200 dark:hover:border-orange-800 hover:text-orange-600 dark:hover:text-orange-400 transition-all duration-200"
                           onClick={() => handleUnpublishItem(item)}
                         >
                           Unpublish
@@ -627,9 +638,12 @@ export default function InventoryPage() {
           </div>
         ) : (
           /* Inventory Items - Table View */
-          <Card className="glass-card shadow-elegant border-0">
-            <CardHeader>
-              <CardTitle className="text-slate-800 dark:text-slate-200">{sectionTitle}</CardTitle>
+          <Card className="card-premium border-0">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800/50 dark:to-slate-700/50 rounded-t-xl">
+              <CardTitle className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <Package className="h-5 w-5 text-blue-600" />
+                {sectionTitle}
+              </CardTitle>
               <CardDescription className="text-slate-600 dark:text-slate-400">
                 {sectionDescription}
               </CardDescription>
@@ -652,48 +666,52 @@ export default function InventoryPage() {
                   )}
                 </div>
               ) : (
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-lg">
                   <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-50 dark:bg-slate-700/50">
-                      <TableHead>Product Name</TableHead>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Supplier</TableHead>
-                      <TableHead>Stock Qty</TableHead>
-                      <TableHead>Published?</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Actions</TableHead>
+                    <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-700/50 dark:to-slate-600/50 border-b border-slate-200 dark:border-slate-600">
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">Product Name</TableHead>
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">SKU</TableHead>
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">Category</TableHead>
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">Supplier</TableHead>
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">Stock Qty</TableHead>
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">Published?</TableHead>
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">Status</TableHead>
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">Price</TableHead>
+                      <TableHead className="font-semibold text-slate-700 dark:text-slate-300">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredItems.map((item) => (
-                      <TableRow key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                      <TableRow key={item.id} className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-slate-700/30 dark:hover:to-slate-600/30 transition-all duration-200 border-b border-slate-100 dark:border-slate-700/50">
                         <TableCell>
                           <div>
                             <div className="font-bold text-slate-800 dark:text-slate-200">{item.name}</div>
-                            <div className="text-sm text-slate-500 dark:text-slate-400">{item.description}</div>
+                            <div className="text-sm text-slate-500 dark:text-slate-400 line-clamp-1">{item.description}</div>
                           </div>
                         </TableCell>
-                        <TableCell className="font-mono text-slate-700 dark:text-slate-300">{item.sku}</TableCell>
-                        <TableCell>{item.category}</TableCell>
-                        <TableCell>{item.supplier || item.supplierName || 'N/A'}</TableCell>
+                        <TableCell className="font-mono text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded text-sm">{item.sku}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                            {item.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium text-slate-700 dark:text-slate-300">{item.supplier || item.supplierName || 'N/A'}</TableCell>
                         <TableCell>
                           <div className="text-center">
-                            <div className="font-medium text-slate-800 dark:text-slate-200">{item.quantity}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                            <div className="font-bold text-slate-800 dark:text-slate-200 text-lg">{item.quantity}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">
                               Min: {item.minStockLevel}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={item.isPublished ? "default" : "secondary"} className={item.isPublished ? "bg-green-500" : "bg-gray-500"}>
+                          <Badge variant={item.isPublished ? "default" : "secondary"} className={item.isPublished ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white" : "bg-slate-500 text-white"}>
                             {item.isPublished ? "Yes" : "No"}
                           </Badge>
                         </TableCell>
                         <TableCell>{getStatusBadge(item.status)}</TableCell>
-                        <TableCell className="font-medium">${(item.salePrice || item.unitPrice).toFixed(2)}</TableCell>
+                        <TableCell className="font-bold text-lg bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">${(item.salePrice || item.unitPrice).toFixed(2)}</TableCell>
                         <TableCell>
                           <div className="flex gap-2">
                             {!item.isPublished ? (
@@ -701,7 +719,7 @@ export default function InventoryPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
+                                  className="btn-glass hover:hover-glow transition-all duration-200"
                                   onClick={() => openEditDetailsDialog(item)}
                                 >
                                   Edit Details
@@ -709,7 +727,7 @@ export default function InventoryPage() {
                                 <Button
                                   variant="default"
                                   size="sm"
-                                  className="bg-blue-600 hover:bg-blue-700"
+                                  className="btn-gradient hover:hover-glow transition-all duration-200"
                                   disabled={!canPublishItem(item)}
                                   onClick={() => handlePublishItem(item)}
                                 >
@@ -717,14 +735,14 @@ export default function InventoryPage() {
                                 </Button>
                               </>
                             ) : (
-                              <Badge variant="outline" className="text-green-600 border-green-600">
+                              <Badge variant="outline" className="text-green-600 border-green-600 bg-green-50 dark:bg-green-900/20">
                                 Published
                               </Badge>
                             )}
                             <Button
                               variant="outline"
                               size="sm"
-                              className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
+                              className="btn-glass hover:hover-glow transition-all duration-200 p-2"
                               onClick={() => openEditDialog(item)}
                             >
                               <Edit className="h-4 w-4" />
@@ -732,7 +750,7 @@ export default function InventoryPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-800 hover:text-red-600 dark:hover:text-red-400"
+                              className="btn-glass hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-800 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 p-2"
                               onClick={() => {
                                 setSelectedItem(item);
                                 setIsDeleteDialogOpen(true);

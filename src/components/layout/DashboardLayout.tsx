@@ -95,14 +95,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const SidebarContent = ({ isCollapsed = false }: { isCollapsed?: boolean }) => (
     <div className="flex flex-col h-full">
       {/* Logo Header */}
-      <div className={`flex items-center p-6 border-b border-slate-200/60 dark:border-slate-700/60 ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
-        <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-elegant">
+      <div className={`flex items-center p-6 border-b border-slate-200/60 dark:border-slate-700/60 ${isCollapsed ? 'justify-center' : 'space-x-4'}`}>
+        <div className="relative p-3 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-2xl shadow-elegant hover:shadow-blue transition-all duration-300 hover:scale-105">
           <Package className="h-6 w-6 text-white flex-shrink-0" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-2xl blur-sm"></div>
         </div>
         {!isCollapsed && (
           <div>
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">InventoryPro</span>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Management System</p>
+            <span className="text-xl font-bold font-display bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">InventoryPro</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium tracking-wide">Management System</p>
           </div>
         )}
       </div>
@@ -115,29 +116,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.name}
                 to={item.href}
-                className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-elegant'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    ? 'bg-gradient-to-r from-blue-500 via-indigo-600 to-purple-600 text-white shadow-elegant hover:shadow-blue transform hover:scale-[1.02]'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 dark:hover:from-slate-800 dark:hover:to-slate-700 hover:shadow-soft'
                 }`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <item.icon className="h-5 w-5 flex-shrink-0" />
+                <item.icon className={`h-5 w-5 flex-shrink-0 transition-all duration-300 ${isActive ? 'drop-shadow-sm' : 'group-hover:scale-110'}`} />
                 {!isCollapsed && (
                   <div className="flex items-center justify-between flex-1">
                     <span>{item.name}</span>
                     {item.name === 'Access Requests' && pendingAccessRequests > 0 && (
-                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-sm">
+                      <span className="bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-red animate-pulse">
                         {pendingAccessRequests}
                       </span>
                     )}
                     {item.name === 'Order Management' && pendingOrders > 0 && (
-                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-sm">
+                      <span className="bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-red animate-pulse">
                         {pendingOrders}
                       </span>
                     )}
                     {item.name === 'Product Management' && user?.role === 'supplier' && pendingQuantityRequests > 0 && (
-                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-sm">
+                      <span className="bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-red animate-pulse">
                         {pendingQuantityRequests}
                       </span>
                     )}
@@ -182,19 +183,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="p-4 border-t border-slate-200/60 dark:border-slate-700/60">
         {!isCollapsed ? (
           <>
-            <div className="flex items-center space-x-3 mb-4">
-              <Avatar className="ring-2 ring-slate-200 dark:ring-slate-700">
+            <div className="flex items-center space-x-3 mb-4 p-3 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-200/50 dark:border-slate-600/50">
+              <Avatar className="ring-2 ring-blue-200 dark:ring-blue-700 shadow-soft hover:ring-blue-300 dark:hover:ring-blue-600 transition-all duration-300">
                 <AvatarImage 
                   src={user?.profilePicture || user?.avatar} 
                   alt={user?.name}
                 />
-                <AvatarFallback>
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
                   {user?.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate text-slate-800 dark:text-slate-200">{user?.name}</p>
-                <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-xs">
+                <p className="text-sm font-semibold truncate text-slate-800 dark:text-slate-200">{user?.name}</p>
+                <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-xs font-medium shadow-soft">
                   {getRoleDisplayName(user?.role || '')}
                 </Badge>
               </div>
@@ -204,9 +205,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               variant="ghost"
               size="sm"
               onClick={handleLogout}
-              className="w-full justify-start text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200"
+              className="w-full justify-start text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-300 group rounded-xl"
             >
-              <LogOut className="h-4 w-4 mr-2" />
+              <LogOut className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform duration-300" />
               Logout
             </Button>
           </>
@@ -258,23 +259,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900/50 overflow-hidden relative">
-      {/* Animated background elements */}
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-slate-900 dark:via-slate-800/90 dark:to-indigo-900/30 overflow-hidden relative">
+      {/* Enhanced animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-96 h-96 bg-gradient-to-br from-blue-400/5 to-purple-600/5 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 left-20 w-96 h-96 bg-gradient-to-br from-cyan-400/5 to-blue-600/5 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[32rem] h-[32rem] bg-gradient-to-br from-purple-400/3 to-pink-600/3 rounded-full blur-3xl animate-pulse delay-500"></div>
+        <div className="absolute top-20 right-20 w-96 h-96 bg-gradient-to-br from-blue-400/8 to-purple-600/8 rounded-full blur-3xl animate-pulse float"></div>
+        <div className="absolute bottom-20 left-20 w-96 h-96 bg-gradient-to-br from-cyan-400/8 to-blue-600/8 rounded-full blur-3xl animate-pulse delay-1000 float"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[32rem] h-[32rem] bg-gradient-to-br from-purple-400/5 to-pink-600/5 rounded-full blur-3xl animate-pulse delay-500 float"></div>
+        <div className="absolute top-10 left-1/3 w-64 h-64 bg-gradient-to-br from-emerald-400/6 to-teal-600/6 rounded-full blur-2xl animate-pulse delay-2000 float"></div>
+        <div className="absolute bottom-10 right-1/3 w-80 h-80 bg-gradient-to-br from-rose-400/6 to-orange-600/6 rounded-full blur-2xl animate-pulse delay-3000 float"></div>
       </div>
       {/* Desktop Sidebar */}
       <div className={`hidden md:flex md:flex-col transition-all duration-300 relative ${isSidebarCollapsed ? 'md:w-16' : 'md:w-64'}`}>
-        <div className="flex flex-col h-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60 shadow-elegant">
+        <div className="flex flex-col h-full bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border-r border-slate-200/80 dark:border-slate-700/80 shadow-elegant-lg">
           <SidebarContent isCollapsed={isSidebarCollapsed} />
         </div>
         
         {/* Simple Sidebar Toggle Arrow */}
         <button
           onClick={toggleSidebar}
-          className="absolute -right-3 top-8 group z-20 p-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-full shadow-elegant border border-slate-200 dark:border-slate-700 transition-all duration-200 hover:shadow-elegant-lg"
+          className="absolute -right-3 top-8 group z-20 p-2 bg-white/90 dark:bg-slate-800/90 hover:bg-white dark:hover:bg-slate-700 rounded-full shadow-elegant-lg border border-slate-200/80 dark:border-slate-700/80 transition-all duration-300 hover:shadow-blue hover:scale-110 backdrop-blur-xl"
           aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isSidebarCollapsed ? (
@@ -287,7 +290,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Mobile Sidebar */}
       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-        <SheetContent side="left" className="p-0 w-64 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl">
+        <SheetContent side="left" className="p-0 w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border-r border-slate-200/80 dark:border-slate-700/80">
           <SidebarContent />
         </SheetContent>
       </Sheet>
@@ -295,8 +298,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-700/60 px-6 py-4 flex items-center justify-between flex-shrink-0 shadow-sm">
-          <div className="flex items-center space-x-4">
+        <header className="bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border-b border-slate-200/80 dark:border-slate-700/80 px-6 py-4 flex items-center justify-between flex-shrink-0 shadow-elegant relative overflow-hidden">
+          {/* Header background gradient */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-50/20 to-transparent dark:via-blue-900/10 pointer-events-none"></div>
+          <div className="flex items-center space-x-4 relative z-10">
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="md:hidden hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -305,61 +310,64 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </SheetTrigger>
             </Sheet>
             
-            <div className="hidden md:block">
-              <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-200">
+            <div className="hidden md:block relative z-10">
+              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200 tracking-tight">
                 {navigation.find(item => item.href === location.pathname)?.name || 'Dashboard'}
               </h1>
+              <div className="h-0.5 w-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mt-1"></div>
             </div>
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* Clean Notification Bell Button */}
+            {/* Enhanced Notification Bell Button */}
             <button
               onClick={() => setIsNotificationPanelOpen(true)}
-              className="relative p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              className="relative p-3 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 dark:hover:from-slate-800 dark:hover:to-slate-700 rounded-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 group hover:shadow-soft"
               aria-label="Open notifications"
             >
-              <Bell className="h-5 w-5" />
+              <Bell className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
               {unreadCount > 0 && (
                 <Badge
                   variant="destructive"
-                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-red-500 text-white border-2 border-white dark:border-slate-900"
+                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-gradient-to-r from-red-500 to-red-600 text-white border-2 border-white dark:border-slate-900 shadow-red animate-pulse"
                 >
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </Badge>
               )}
             </button>
 
-            <div className="flex items-center space-x-2">
-              <Avatar className="h-9 w-9 ring-2 ring-slate-200 dark:ring-slate-700">
+            <div className="flex items-center space-x-3 p-2 rounded-xl bg-gradient-to-r from-slate-50/50 to-slate-100/50 dark:from-slate-800/50 dark:to-slate-700/50 border border-slate-200/50 dark:border-slate-600/50 hover:shadow-soft transition-all duration-300">
+              <Avatar className="h-10 w-10 ring-2 ring-blue-200 dark:ring-blue-700 shadow-soft hover:ring-blue-300 dark:hover:ring-blue-600 transition-all duration-300 hover:scale-105">
                 <AvatarImage 
                   src={user?.profilePicture || user?.avatar} 
                   alt={user?.name}
                 />
-                <AvatarFallback className="text-xs">
+                <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
                   {user?.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden sm:block">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{user?.name}</p>
-                <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-xs">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{user?.name}</p>
+                <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-xs font-medium shadow-soft">
                   {getRoleDisplayName(user?.role || '')}
                 </Badge>
-                <Link to="/dashboard/profile" className="text-xs text-blue-500 hover:text-blue-700 block mt-1">View Profile</Link>
+                <Link to="/dashboard/profile" className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-400 block mt-1 transition-colors duration-300 hover:underline">View Profile</Link>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Main Content Area - Full Height with Consistent Padding */}
-        <main className="flex-1 overflow-hidden">
+        {/* Main Content Area - Enhanced with better spacing and animations */}
+        <main className="flex-1 overflow-hidden relative">
           <div className="h-full overflow-auto">
-            <div className="h-full p-6 animate-fade-in">
-              <div className="h-full w-full max-w-none">
+            <div className="h-full p-8 animate-fade-in-up">
+              <div className="h-full w-full max-w-none space-y-6">
                 {children}
               </div>
             </div>
           </div>
+          {/* Subtle content overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-50/20 dark:to-slate-900/20 pointer-events-none"></div>
         </main>
       </div>
 

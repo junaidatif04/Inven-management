@@ -36,6 +36,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return user ? <>{children}</> : <Navigate to="/login" />;
 }
 
+function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  return !user ? <>{children}</> : <Navigate to="/dashboard" />;
+}
+
 function DashboardRouter() {
   const { user } = useAuth();
   
@@ -89,13 +94,13 @@ function App() {
           <Router>
             <div className="min-h-screen bg-background">
               <Routes>
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/signup" element={<SignUpPage />} />
+                <Route path="/" element={<PublicOnlyRoute><LandingPage /></PublicOnlyRoute>} />
+                <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
+                <Route path="/signup" element={<PublicOnlyRoute><SignUpPage /></PublicOnlyRoute>} />
                 <Route path="/request-access" element={<Navigate to="/login" replace />} />
                 <Route path="/request-submitted" element={<RequestSubmittedPage />} />
                 <Route path="/complete-signup" element={<CompleteSignupPage />} />
-                <Route path="/verify-email" element={<EmailVerificationPage />} />
+                <Route path="/verify-email" element={<PublicOnlyRoute><EmailVerificationPage /></PublicOnlyRoute>} />
                 <Route
                   path="/dashboard/*"
                   element={

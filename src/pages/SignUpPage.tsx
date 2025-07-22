@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Package, Mail, Loader2 } from 'lucide-react';
+import { Package, Mail, Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendVerificationEmail, verifyCode } from '@/services/emailVerificationService';
@@ -28,7 +28,7 @@ export default function SignUpPage() {
     try {
       const success = await loginWithGoogle();
       if (success) {
-        navigate('/');
+        navigate('/dashboard');
       }
     } catch (error) {
       console.error('Google sign-up error:', error);
@@ -101,7 +101,7 @@ export default function SignUpPage() {
       
       if (success) {
         // User is now automatically logged in via AuthContext
-        navigate('/');
+        navigate('/dashboard');
       }
     } catch (error: any) {
       console.error('Verification error:', error);
@@ -114,6 +114,18 @@ export default function SignUpPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900 p-4">
       <div className="w-full max-w-md">
+        {/* Back Button */}
+        <div className="flex justify-start mb-6">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 p-2"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Home
+          </Button>
+        </div>
+        
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">

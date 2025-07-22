@@ -47,8 +47,12 @@ export default function EmailVerificationPage() {
 
       if (isVerified) {
         toast.success('Email verified successfully!');
-        // Redirect to dashboard or login page
-        navigate('/dashboard');
+        // Redirect to dashboard if user is authenticated, otherwise to login
+        if (user) {
+          navigate('/dashboard');
+        } else {
+          navigate('/login');
+        }
       } else {
         toast.error('Invalid or expired verification code');
       }

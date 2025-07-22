@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,11 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { Package, Loader2, UserPlus, Mail } from 'lucide-react';
+import { Package, Loader2, UserPlus, Mail, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
   const { user, loginWithGoogle, loginWithEmail, isLoading } = useAuth();
   const { addNotification } = useNotifications();
+  const navigate = useNavigate();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [emailCredentials, setEmailCredentials] = useState({
     email: '',
@@ -88,7 +89,19 @@ export default function LoginPage() {
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-indigo-400/20 to-purple-600/20 rounded-full blur-3xl"></div>
       </div>
       
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md space-y-6 relative z-20">
+        {/* Back Button */}
+        <div className="flex justify-start relative z-30">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 p-2 relative z-40"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Home
+          </Button>
+        </div>
+        
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center space-x-2">
             <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-elegant">

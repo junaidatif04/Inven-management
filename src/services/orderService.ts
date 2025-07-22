@@ -12,7 +12,9 @@ import {
   where,
   onSnapshot,
   limit,
-  writeBatch
+  writeBatch,
+  startAfter,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { reserveStock, releaseReservation, confirmStockDeduction, adjustStock } from './inventoryService';
@@ -468,6 +470,218 @@ export const subscribeToOrdersByUser = (userId: string, callback: (orders: Order
     (error) => {
       console.error('Error in user orders subscription:', error);
       callback([]);
+    }
+  );
+};
+
+// Pagination interfaces and functions
+export interface PaginatedOrdersResult {
+  orders: Order[];
+  totalCount: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  currentPage: number;
+  totalPages: number;
+}
+
+export interface OrdersFilter {
+  status?: Order['status'] | 'all';
+  searchTerm?: string;
+  supplierId?: string;
+  userId?: string;
+  startDate?: Date;
+  endDate?: Date;
+}
+
+// Get paginated orders with filters
+export const getPaginatedOrders = async (
+  page: number = 1,
+  pageSize: number = 10,
+  filters: OrdersFilter = {}
+): Promise<PaginatedOrdersResult> => {
+  try {
+    // Build base query
+    let baseQuery = collection(db, 'orders');
+    const constraints: any[] = [];
+
+    // Add filters
+    if (filters.status && filters.status !== 'all') {
+      constraints.push(where('status', '==', filters.status));
+    }
+    if (filters.supplierId) {
+      constraints.push(where('supplierId', '==', filters.supplierId));
+    }
+    if (filters.userId) {
+      constraints.push(where('userId', '==', filters.userId));
+    }
+    if (filters.startDate && filters.endDate) {
+      constraints.push(where('orderDate', '>=', filters.startDate));
+      constraints.push(where('orderDate', '<=', filters.endDate));
+    }
+
+    // Add ordering
+    constraints.push(orderBy('createdAt', 'desc'));
+
+    // Get total count for pagination
+    const countQuery = query(baseQuery, ...constraints);
+    const countSnapshot = await getCountFromServer(countQuery);
+    const totalCount = countSnapshot.data().count;
+
+    // Calculate pagination
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const offset = (page - 1) * pageSize;
+
+    // Get paginated data
+    const dataQuery = query(
+      baseQuery,
+      ...constraints,
+      limit(pageSize)
+    );
+
+    // If not first page, we need to get the starting point
+    let finalQuery = dataQuery;
+    if (page > 1) {
+      // Get the last document from previous page
+      const prevPageQuery = query(
+        baseQuery,
+        ...constraints,
+        limit(offset)
+      );
+      const prevSnapshot = await getDocs(prevPageQuery);
+      if (prevSnapshot.docs.length > 0) {
+        const lastDoc = prevSnapshot.docs[prevSnapshot.docs.length - 1];
+        finalQuery = query(
+          baseQuery,
+          ...constraints,
+          startAfter(lastDoc),
+          limit(pageSize)
+        );
+      }
+    }
+
+    const querySnapshot = await getDocs(finalQuery);
+    let orders = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Order[];
+
+    // Apply client-side search filter if needed (since Firestore doesn't support full-text search)
+    if (filters.searchTerm && filters.searchTerm.trim()) {
+      const searchLower = filters.searchTerm.toLowerCase().trim();
+      orders = orders.filter(order => 
+        order.orderNumber.toLowerCase().includes(searchLower) ||
+        order.supplierName.toLowerCase().includes(searchLower) ||
+        order.requestedBy.toLowerCase().includes(searchLower) ||
+        order.status.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return {
+      orders,
+      totalCount,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+      currentPage: page,
+      totalPages
+    };
+  } catch (error) {
+    console.error('Error fetching paginated orders:', error);
+    throw error;
+  }
+};
+
+// Subscribe to paginated orders with real-time updates
+export const subscribeToPaginatedOrders = (
+  page: number = 1,
+  pageSize: number = 10,
+  filters: OrdersFilter = {},
+  callback: (result: PaginatedOrdersResult) => void
+) => {
+  // Build query constraints
+  const constraints: any[] = [];
+  
+  if (filters.status && filters.status !== 'all') {
+    constraints.push(where('status', '==', filters.status));
+  }
+  if (filters.supplierId) {
+    constraints.push(where('supplierId', '==', filters.supplierId));
+  }
+  if (filters.userId) {
+    constraints.push(where('userId', '==', filters.userId));
+  }
+  if (filters.startDate && filters.endDate) {
+    constraints.push(where('orderDate', '>=', filters.startDate));
+    constraints.push(where('orderDate', '<=', filters.endDate));
+  }
+
+  constraints.push(orderBy('createdAt', 'desc'));
+
+  // For real-time subscription, we'll get more data and handle pagination client-side
+  // This is a simplified approach - for production, you might want to implement server-side pagination
+  const q = query(
+    collection(db, 'orders'),
+    ...constraints,
+    limit(pageSize * 5) // Get more data for better real-time experience
+  );
+
+  return onSnapshot(q,
+    async (querySnapshot) => {
+      try {
+        let orders = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Order[];
+
+        // Apply client-side search filter
+        if (filters.searchTerm && filters.searchTerm.trim()) {
+          const searchLower = filters.searchTerm.toLowerCase().trim();
+          orders = orders.filter(order => 
+            order.orderNumber.toLowerCase().includes(searchLower) ||
+            order.supplierName.toLowerCase().includes(searchLower) ||
+            order.requestedBy.toLowerCase().includes(searchLower) ||
+            order.status.toLowerCase().includes(searchLower)
+          );
+        }
+
+        // Calculate pagination
+        const totalCount = orders.length;
+        const totalPages = Math.ceil(totalCount / pageSize);
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedOrders = orders.slice(startIndex, endIndex);
+
+        const result: PaginatedOrdersResult = {
+          orders: paginatedOrders,
+          totalCount,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+          currentPage: page,
+          totalPages
+        };
+
+        callback(result);
+      } catch (error) {
+        console.error('Error processing paginated orders subscription:', error);
+        callback({
+          orders: [],
+          totalCount: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+          currentPage: 1,
+          totalPages: 0
+        });
+      }
+    },
+    (error) => {
+      console.error('Error in paginated orders subscription:', error);
+      callback({
+        orders: [],
+        totalCount: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+        currentPage: 1,
+        totalPages: 0
+      });
     }
   );
 };

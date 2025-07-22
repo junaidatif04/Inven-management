@@ -30,7 +30,10 @@ import {
   Eye,
   Plus,
   Trash2,
-  MoreHorizontal
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -49,21 +52,31 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { getAllOrders, updateOrderStatus, deleteOrder, Order, subscribeToOrders, bulkUpdateOrderStatus } from '@/services/orderService';
-import { getAllSuppliers } from '@/services/supplierService';
+import { 
+  updateOrderStatus, 
+  deleteOrder, 
+  bulkUpdateOrderStatus,
+  getOrderStats,
+  getPaginatedOrders,
+  subscribeToPaginatedOrders,
+  Order,
+  PaginatedOrdersResult,
+  OrdersFilter 
+} from '@/services/orderService';
+
 import OrderDialog from '@/components/OrderDialog';
 import OrderStatusDialog from '@/components/OrderStatusDialog';
 
 export default function OrdersPage() {
   const { user } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<{
     total: number;
     pending: number;
-    approved: number;
+    delivered: number;
+    cancelled: number;
     totalValue: number;
   } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -73,6 +86,18 @@ export default function OrdersPage() {
   // Bulk selection state
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [paginationData, setPaginationData] = useState<PaginatedOrdersResult>({
+    orders: [],
+    totalCount: 0,
+    hasNextPage: false,
+    hasPreviousPage: false,
+    currentPage: 1,
+    totalPages: 0
+  });
   
   // Dialog states
   const [orderDialog, setOrderDialog] = useState({
@@ -94,130 +119,47 @@ export default function OrdersPage() {
     order: null as Order | null
   });
 
-  const loadRealData = async () => {
-    try {
-      setLoading(true);
-
-      // Set a timeout to prevent infinite loading
-      const timeoutId = setTimeout(() => {
-        console.warn('Orders loading timeout - falling back to direct fetch');
-        fallbackToDirectFetch();
-      }, 10000); // 10 second timeout
-
-      // Load suppliers for mapping
-      const suppliersData = await getAllSuppliers();
-
-      // Subscribe to real-time orders
-      const unsubscribe = subscribeToOrders((ordersData) => {
-        clearTimeout(timeoutId);
-        
-        // Map supplier names to orders
-        const ordersWithSupplierNames = ordersData.map(order => ({
-          ...order,
-          supplierName: suppliersData.find(s => s.id === order.supplierId)?.name || 'Unknown Supplier'
-        }));
-
-        setOrders(ordersWithSupplierNames);
-        
-        // Calculate and set stats
-        const calculatedStats = {
-          total: ordersWithSupplierNames.length,
-          pending: ordersWithSupplierNames.filter(o => o.status === 'pending').length,
-          approved: ordersWithSupplierNames.filter(o => o.status === 'approved').length,
-          totalValue: ordersWithSupplierNames.reduce((sum, order) => sum + order.totalAmount, 0),
-        };
-        setStats(calculatedStats);
-        
-        setLastUpdated(new Date());
-        setLoading(false);
-      });
-
-      // Return cleanup function
-      return () => {
-        clearTimeout(timeoutId);
-        unsubscribe();
-      };
-
-    } catch (error) {
-      console.error('Error loading orders:', error);
-      toast.error('Failed to load orders data');
-      fallbackToDirectFetch();
-    }
-  };
-
-  const fallbackToDirectFetch = async () => {
-    try {
-      console.log('Using fallback direct fetch for orders');
-      const [ordersData, suppliersData] = await Promise.all([
-        getAllOrders(),
-        getAllSuppliers()
-      ]);
-      
-      const ordersWithSupplierNames = ordersData.map(order => ({
-        ...order,
-        supplierName: suppliersData.find(s => s.id === order.supplierId)?.name || 'Unknown Supplier'
-      }));
-      
-      setOrders(ordersWithSupplierNames);
-      
-      // Calculate and set stats
-      const calculatedStats = {
-        total: ordersWithSupplierNames.length,
-        pending: ordersWithSupplierNames.filter(o => o.status === 'pending').length,
-        approved: ordersWithSupplierNames.filter(o => o.status === 'approved').length,
-        totalValue: ordersWithSupplierNames.reduce((sum, order) => sum + order.totalAmount, 0),
-      };
-      setStats(calculatedStats);
-      
-      setLastUpdated(new Date());
-      setLoading(false);
-      toast.success('Orders loaded successfully');
-    } catch (error) {
-      console.error('Error in fallback fetch:', error);
-      toast.error('Failed to load orders');
-      setLoading(false);
-    }
-  };
-
+  // Load initial stats
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    
-    const setupSubscription = async () => {
-      unsubscribe = await loadRealData();
-    };
-    
-    setupSubscription();
-    
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
+    const loadStats = async () => {
+      try {
+        const statsData = await getOrderStats();
+        setStats(statsData);
+      } catch (error) {
+        console.error('Error loading stats:', error);
       }
     };
+    
+    loadStats();
   }, []);
 
   useEffect(() => {
-    filterOrders();
-  }, [orders, searchTerm, filterStatus]);
+    const filters: OrdersFilter = {
+      status: filterStatus === 'all' ? undefined : filterStatus as Order['status'],
+      searchTerm: searchTerm.trim() || undefined
+    };
 
-  const filterOrders = () => {
-    let filtered = orders;
-    
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(order =>
-        order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.requestedBy.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    const unsubscribe = subscribeToPaginatedOrders(
+      currentPage,
+      pageSize,
+      filters,
+      (result) => {
+        setPaginationData(result);
+        setFilteredOrders(result.orders);
+        setLoading(false);
+        setLastUpdated(new Date());
+      }
+    );
+
+    return () => unsubscribe();
+  }, [currentPage, pageSize, filterStatus, searchTerm]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
     }
-    
-    // Apply status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(order => order.status === filterStatus);
-    }
-    
-    setFilteredOrders(filtered);
-  };
+  }, [searchTerm, filterStatus]);
 
   // Clear selected orders when filters change
   useEffect(() => {
@@ -235,9 +177,17 @@ export default function OrdersPage() {
       await updateOrderStatus(orderId, newStatus, user.id, cancellationReason);
 
       // Update local state
-      setOrders(prev => prev.map(order =>
+      setFilteredOrders(prev => prev.map(order =>
         order.id === orderId ? { ...order, status: newStatus, cancellationReason } : order
       ));
+      
+      // Update pagination data as well
+      setPaginationData(prev => ({
+        ...prev,
+        orders: prev.orders.map(order =>
+          order.id === orderId ? { ...order, status: newStatus, cancellationReason } : order
+        )
+      }));
 
       toast.success('Order status updated successfully');
       setLastUpdated(new Date());
@@ -261,24 +211,19 @@ export default function OrdersPage() {
       setLoading(true);
       setStats(null); // Reset stats to show loading state
       
-      const suppliersData = await getAllSuppliers();
-      const ordersData = await getAllOrders();
-      
-      const ordersWithSupplierNames = ordersData.map(order => ({
-        ...order,
-        supplierName: suppliersData.find(s => s.id === order.supplierId)?.name || 'Unknown Supplier'
-      }));
-      
-      setOrders(ordersWithSupplierNames);
-      
-      // Calculate and set stats
-      const calculatedStats = {
-        total: ordersWithSupplierNames.length,
-        pending: ordersWithSupplierNames.filter(o => o.status === 'pending').length,
-        approved: ordersWithSupplierNames.filter(o => o.status === 'approved').length,
-        totalValue: ordersWithSupplierNames.reduce((sum, order) => sum + order.totalAmount, 0),
+      // Fetch paginated orders
+      const filters: OrdersFilter = {
+        status: filterStatus === 'all' ? undefined : filterStatus as Order['status'],
+        searchTerm: searchTerm.trim() || undefined
       };
-      setStats(calculatedStats);
+      
+      const paginatedResult = await getPaginatedOrders(currentPage, pageSize, filters);
+      setPaginationData(paginatedResult);
+      setFilteredOrders(paginatedResult.orders);
+      
+      // Calculate stats
+      const statsData = await getOrderStats();
+      setStats(statsData);
       
       setLastUpdated(new Date());
       toast.success('Orders data refreshed');
@@ -423,6 +368,30 @@ export default function OrdersPage() {
     setLastUpdated(new Date());
   };
 
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    setSelectedOrders([]); // Clear selections when changing pages
+  };
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    setCurrentPage(1); // Reset to first page
+    setSelectedOrders([]); // Clear selections
+  };
+
+  const handlePreviousPage = () => {
+    if (paginationData.hasPreviousPage) {
+      handlePageChange(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (paginationData.hasNextPage) {
+      handlePageChange(currentPage + 1);
+    }
+  };
+
 
 
   const formatCurrency = (amount: number) => {
@@ -467,10 +436,10 @@ export default function OrdersPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {stats === null ? (
           // Loading skeleton for stats cards
-          Array.from({ length: 4 }).map((_, index) => (
+          Array.from({ length: 5 }).map((_, index) => (
             <Card key={index}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
@@ -505,13 +474,23 @@ export default function OrdersPage() {
             
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Approved Orders</CardTitle>
+                <CardTitle className="text-sm font-medium">Delivered Orders</CardTitle>
                 <CheckCircle className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
+                <div className="text-2xl font-bold text-green-600">{stats.delivered}</div>
               </CardContent>
             </Card>
+            
+            <Card>
+               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                 <CardTitle className="text-sm font-medium">Cancelled Orders</CardTitle>
+                 <X className="h-4 w-4 text-red-500" />
+               </CardHeader>
+               <CardContent>
+                 <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
+               </CardContent>
+             </Card>
             
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -749,6 +728,78 @@ export default function OrdersPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          
+          {/* Pagination Controls */}
+          {!loading && filteredOrders.length > 0 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, paginationData.totalCount)} of {paginationData.totalCount} orders
+                </span>
+                <Select value={pageSize.toString()} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">per page</span>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePreviousPage}
+                  disabled={!paginationData.hasPreviousPage}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, paginationData.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (paginationData.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= paginationData.totalPages - 2) {
+                      pageNum = paginationData.totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={!paginationData.hasNextPage}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

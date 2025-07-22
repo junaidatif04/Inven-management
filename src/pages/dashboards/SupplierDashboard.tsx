@@ -30,7 +30,7 @@ import {
   deleteProduct,
   proposeProduct,
   convertToDraft,
-  getDraftProductsBySupplier,
+  subscribeToDraftProductsBySupplier,
   CreateProduct
 } from '@/services/productService';
 import ProductImageUpload from '@/components/ProductImageUpload';
@@ -83,19 +83,7 @@ export default function SupplierDashboard() {
 
     let unsubscribeProducts: (() => void) | null = null;
     let unsubscribeQuantityRequests: (() => void) | null = null;
-
-
-
-    const loadDraftProducts = async () => {
-      try {
-        if (user?.id) {
-          const draftProductsData = await getDraftProductsBySupplier(user.id);
-          setDraftProducts(draftProductsData);
-        }
-      } catch (error) {
-        console.error('Error loading draft products:', error);
-      }
-    };
+    let unsubscribeDraftProducts: (() => void) | null = null;
 
     try {
       unsubscribeProducts = subscribeToProductsBySupplier(user.id, (productsData) => {
@@ -108,7 +96,10 @@ export default function SupplierDashboard() {
         setQuantityRequests(quantityRequestsData);
       });
 
-      loadDraftProducts();
+      // Real-time subscription for draft products
+      unsubscribeDraftProducts = subscribeToDraftProductsBySupplier(user.id, (draftProductsData: any) => {
+        setDraftProducts(draftProductsData);
+      });
     } catch (error) {
       console.error('Error setting up subscriptions in SupplierDashboard:', error);
       setLoading(false);
@@ -118,6 +109,7 @@ export default function SupplierDashboard() {
       try {
         if (unsubscribeProducts) unsubscribeProducts();
         if (unsubscribeQuantityRequests) unsubscribeQuantityRequests();
+        if (unsubscribeDraftProducts) unsubscribeDraftProducts();
       } catch (error) {
         console.error('Error cleaning up subscriptions:', error);
       }
@@ -182,9 +174,7 @@ export default function SupplierDashboard() {
       toast.success('Product created as draft. You can propose it when ready.');
       setShowAddProduct(false);
       resetProductForm();
-      // Reload draft products
-      const draftProductsData = await getDraftProductsBySupplier(user.id);
-      setDraftProducts(draftProductsData);
+      // Draft products will update automatically via real-time subscription
     } catch (error) {
       console.error('Error creating product:', error);
       toast.error('Failed to create product');
@@ -232,9 +222,7 @@ export default function SupplierDashboard() {
     try {
       await deleteProduct(productId);
       toast.success('Product deleted successfully');
-      // Reload draft products if it was a draft
-      const draftProductsData = await getDraftProductsBySupplier(user.id);
-      setDraftProducts(draftProductsData);
+      // Products will update automatically via real-time subscription
     } catch (error) {
       console.error('Error deleting product:', error);
       toast.error('Failed to delete product');
@@ -245,11 +233,7 @@ export default function SupplierDashboard() {
     try {
       await proposeProduct(productId);
       toast.success('Product proposed successfully! It will now appear in the admin/warehouse staff product catalog.');
-      // Reload both draft and proposed products
-      if (user?.id) {
-        const draftProductsData = await getDraftProductsBySupplier(user.id);
-        setDraftProducts(draftProductsData);
-      }
+      // Products will update automatically via real-time subscription
     } catch (error) {
       console.error('Error proposing product:', error);
       toast.error('Failed to propose product');
@@ -260,11 +244,7 @@ export default function SupplierDashboard() {
     try {
       await convertToDraft(productId);
       toast.success('Product converted to draft successfully! It is no longer visible to admin/warehouse staff.');
-      // Reload both draft and proposed products
-      if (user?.id) {
-        const draftProductsData = await getDraftProductsBySupplier(user.id);
-        setDraftProducts(draftProductsData);
-      }
+      // Products will update automatically via real-time subscription
     } catch (error) {
       console.error('Error converting product to draft:', error);
       toast.error('Failed to convert product to draft');
@@ -510,7 +490,13 @@ export default function SupplierDashboard() {
                               <Button size="sm" variant="outline" onClick={() => handleViewProduct(product)}>
                                 <Eye className="h-3 w-3" />
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                disabled={true}
+                                title="Cannot edit proposed products. Convert to draft first to make changes."
+                                className="opacity-50 cursor-not-allowed"
+                              >
                                 <Edit className="h-3 w-3" />
                               </Button>
                               <Button 

@@ -357,9 +357,13 @@ export default function AdminCatalogRequestsPage() {
               )}
             </div>
             <CardContent className="space-y-4">
-              {product.description && (
+              {product.description ? (
                 <p className="text-sm text-muted-foreground line-clamp-3">
                   {product.description}
+                </p>
+              ) : (
+                <p className="text-sm italic text-muted-foreground">
+                  No description provided
                 </p>
               )}
               
@@ -649,8 +653,10 @@ export default function AdminCatalogRequestsPage() {
                                 <div className="space-y-1 text-sm text-muted-foreground">
                                   <div>Category: {product.category}</div>
                                   <div className="font-semibold text-foreground">${product.price.toFixed(2)}</div>
-                                  {product.description && (
+                                  {product.description ? (
                                     <div className="text-xs line-clamp-2">{product.description}</div>
+                                  ) : (
+                                    <div className="text-xs italic text-muted-foreground">No description provided</div>
                                   )}
                                 </div>
                               </div>

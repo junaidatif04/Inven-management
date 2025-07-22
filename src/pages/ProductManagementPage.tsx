@@ -415,6 +415,12 @@ export default function ProductManagementPage() {
   };
 
   const handleEditProduct = (product: any) => {
+    // Prevent suppliers from editing proposed products
+    if (user?.role === 'supplier' && product.status === 'proposed') {
+      toast.error('Cannot edit proposed products. Please convert to draft first.');
+      return;
+    }
+    
     setEditingProduct({
       ...product,
       imageUrl: product.imageUrl || ''
@@ -703,6 +709,18 @@ export default function ProductManagementPage() {
                   </div>
                   
                   <div className="space-y-3">
+                    {/* Product Description */}
+                    <div className="space-y-1">
+                      <span className="text-sm font-medium text-muted-foreground">Description:</span>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2 min-h-[2.5rem]">
+                        {product.description || (
+                          <span className="text-muted-foreground italic">
+                            No description provided
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium text-muted-foreground">Price:</span>
                       <span className="text-xl font-semibold text-slate-900 dark:text-slate-100">
@@ -747,14 +765,17 @@ export default function ProductManagementPage() {
                             To Draft
                           </Button>
                         ) : null}
-                        <Button 
-                          size="sm" 
-                          className="btn-outline flex-1 min-w-[70px]"
-                          onClick={() => handleEditProduct(product)}
-                        >
-                          <Edit className="h-3 w-3 mr-1" />
-                          Edit
-                        </Button>
+                        {/* Only show edit button for non-proposed products for suppliers */}
+                        {!((user?.role as string) === 'supplier' && product.status === 'proposed') && (
+                          <Button 
+                            size="sm" 
+                            className="btn-outline flex-1 min-w-[70px]"
+                            onClick={() => handleEditProduct(product)}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                        )}
                         <Button 
                           size="sm" 
                           variant="destructive" 
@@ -779,14 +800,17 @@ export default function ProductManagementPage() {
                             To Draft
                           </Button>
                         )}
-                        <Button 
-                          size="sm" 
-                          className="btn-glass hover-glow flex-1 min-w-[70px]"
-                          onClick={() => handleEditProduct(product)}
-                        >
-                          <Edit className="h-3 w-3 mr-1" />
-                          Edit
-                        </Button>
+                        {/* Only show edit button for non-proposed products for suppliers */}
+                        {!((user?.role as string) === 'supplier' && product.status === 'proposed') && (
+                          <Button 
+                            size="sm" 
+                            className="btn-glass hover-glow flex-1 min-w-[70px]"
+                            onClick={() => handleEditProduct(product)}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                        )}
                       </>
                     )}
                   </div>
@@ -850,18 +874,31 @@ export default function ProductManagementPage() {
               </div>
             </div>
             <div>
+              <Label className="text-sm font-medium">Description</Label>
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                {selectedProduct.description || (
+                  <span className="text-muted-foreground italic">
+                    No description provided
+                  </span>
+                )}
+              </p>
+            </div>
+            <div>
               <Label className="text-sm font-medium">Last Updated</Label>
               <p className="text-sm">{formatDate(selectedProduct.updatedAt)}</p>
             </div>
             <div className="flex space-x-2 pt-4">
-              <Button 
-                variant="outline" 
-                className="flex-1 h-9"
-                onClick={() => handleEditProduct(selectedProduct)}
-              >
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
+              {/* Only show edit button for non-proposed products for suppliers */}
+              {!((user?.role as string) === 'supplier' && selectedProduct.status === 'proposed') && (
+                <Button 
+                  variant="outline" 
+                  className="flex-1 h-9"
+                  onClick={() => handleEditProduct(selectedProduct)}
+                >
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>

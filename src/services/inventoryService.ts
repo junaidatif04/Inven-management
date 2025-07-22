@@ -3,7 +3,8 @@ import {
   doc, 
   getDocs, 
   getDoc, 
-  addDoc, 
+  addDoc,
+  onSnapshot, 
   updateDoc, 
 
   query, 
@@ -629,4 +630,50 @@ export const getInStockPublishedItemsWithAvailability = async (): Promise<(Inven
     console.error('Error fetching available published items:', error);
     throw error;
   }
+};
+
+// Real-time subscription for published inventory items
+export const subscribeToPublishedInventoryItems = (callback: (items: InventoryItem[]) => void): (() => void) => {
+  const q = query(
+    collection(db, 'inventory'),
+    where('isPublished', '==', true),
+    where('status', 'in', ['in_stock', 'low_stock']),
+    orderBy('name')
+  );
+  
+  return onSnapshot(q, (querySnapshot: any) => {
+    const items = querySnapshot.docs.map((doc: any) => ({
+      id: doc.id,
+      ...doc.data()
+    })) as InventoryItem[];
+    callback(items);
+  }, (error: any) => {
+    console.error('Error in published inventory items subscription:', error);
+    callback([]);
+  });
+};
+
+// Real-time subscription for published inventory items with availability
+export const subscribeToPublishedInventoryItemsWithAvailability = (callback: (items: (InventoryItem & { availableStock: number })[]) => void): (() => void) => {
+  const q = query(
+    collection(db, 'inventory'),
+    where('isPublished', '==', true),
+    where('quantity', '>', 0),
+    orderBy('quantity'),
+    orderBy('name')
+  );
+  
+  return onSnapshot(q, (querySnapshot: any) => {
+    const items = querySnapshot.docs.map((doc: any) => {
+      const item = { id: doc.id, ...doc.data() } as InventoryItem;
+      return {
+        ...item,
+        availableStock: getAvailableStock(item)
+      };
+    }).filter((item: any) => item.availableStock > 0);
+    callback(items);
+  }, (error: any) => {
+    console.error('Error in published inventory items with availability subscription:', error);
+    callback([]);
+  });
 };

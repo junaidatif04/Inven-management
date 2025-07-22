@@ -24,7 +24,7 @@ import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2, Edit } from '
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 
 export default function UserProfilePage() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout } = useAuth();
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,7 +70,7 @@ export default function UserProfilePage() {
       if (user.role === 'warehouse_staff') {
         checkWarehouseActivities();
       }
-      // Update profile form with latest user data
+      // Update profile form with latest user data (real-time updates)
       setProfileForm({ 
         name: user.name || '', 
         phone: user.phone || '', 
@@ -78,6 +78,17 @@ export default function UserProfilePage() {
       });
     }
   }, [user]);
+
+  // Sync profile form when entering edit mode to ensure latest data
+  useEffect(() => {
+    if (isEditingProfile && user) {
+      setProfileForm({ 
+        name: user.name || '', 
+        phone: user.phone || '', 
+        address: user.address || '' 
+      });
+    }
+  }, [isEditingProfile, user]);
 
 
 
@@ -175,9 +186,7 @@ export default function UserProfilePage() {
         address: profileForm.address
       });
       
-      // Refresh user data to show changes immediately
-      await refreshUser();
-      
+      // Real-time listener will automatically update user data
       toast.success('Profile updated successfully');
       setIsEditingProfile(false);
     } catch (error) {

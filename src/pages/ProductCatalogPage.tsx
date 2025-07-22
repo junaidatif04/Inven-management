@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { getInStockPublishedItemsWithAvailability } from '@/services/inventoryService';
+import { subscribeToPublishedInventoryItemsWithAvailability } from '@/services/inventoryService';
 import { InventoryItem } from '@/types/inventory';
 import { createOrder, OrderItem } from '@/services/orderService';
 import {
@@ -29,13 +30,6 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 interface CartItem {
   productId: string;
@@ -51,6 +45,7 @@ export default function ProductCatalogPage() {
   const [products, setProducts] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -66,21 +61,19 @@ export default function ProductCatalogPage() {
   });
 
   useEffect(() => {
-    loadProducts();
-  }, []);
-
-  const loadProducts = async () => {
-    try {
-      setLoading(true);
-      // Only load published items that are in stock
-      const data = await getInStockPublishedItemsWithAvailability();
+    setLoading(true);
+    
+    // Set up real-time subscription for published inventory items
+    const unsubscribe = subscribeToPublishedInventoryItemsWithAvailability((data) => {
       setProducts(data);
-    } catch (error) {
-      toast.error('Failed to load products');
-    } finally {
       setLoading(false);
-    }
-  };
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
 
 
@@ -88,8 +81,12 @@ export default function ProductCatalogPage() {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.supplier.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch && product.quantity > 0;
+    const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
+    return matchesSearch && matchesCategory && product.quantity > 0;
   });
+
+  // Get unique categories for filter dropdown
+  const categories = ['All', ...Array.from(new Set(products.map(product => product.category)))];
 
   const addToCart = (product: InventoryItem) => {
     const selectedQuantity = selectedQuantities[product.id!] || 1;
@@ -273,8 +270,7 @@ export default function ProductCatalogPage() {
       setIsCartOpen(false);
       
       toast.success('Order placed successfully! Stock has been reserved.');
-      // Reload products to reflect updated available stock
-      loadProducts();
+      // Products will be updated automatically via real-time subscription
     } catch (error) {
       console.error('Error creating order:', error);
       toast.error('Failed to place order. Please try again.');
@@ -318,15 +314,31 @@ export default function ProductCatalogPage() {
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-        <Input
-          placeholder="Search products..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* Search and Filter */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search products..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="w-full sm:w-48">
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Products Grid */}
@@ -377,11 +389,11 @@ export default function ProductCatalogPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(product.customerFacingDescription || product.description) && (
-                <p className="text-sm text-gray-600 line-clamp-3">
-                  {product.customerFacingDescription || product.description}
-                </p>
-              )}
+              <p className="text-sm text-gray-600 line-clamp-3">
+                {product.customerFacingDescription || product.description || (
+                  <span className="text-muted-foreground italic">No description provided</span>
+                )}
+              </p>
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Progress } from '@/components/ui/progress';
+
 
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -163,22 +163,7 @@ export default function InternalUserDashboard() {
     }
   };
 
-  const getProgressPercentage = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 20;
-      case 'approved':
-        return 50;
-      case 'shipped':
-        return 80;
-      case 'delivered':
-        return 100;
-      case 'cancelled':
-        return 0;
-      default:
-        return 0;
-    }
-  };
+
 
 
 
@@ -291,7 +276,11 @@ export default function InternalUserDashboard() {
                     {filteredProducts.length > 0 ? (
                       <div className="grid grid-cols-1 gap-3">
                         {filteredProducts.slice(0, 6).map((product) => (
-                          <div key={product.id} className="flex items-center space-x-3 p-3 border rounded-lg">
+                          <div 
+                            key={product.id} 
+                            className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                            onClick={() => navigate('/dashboard/product-catalog')}
+                          >
                             <div className="w-12 h-12 bg-muted rounded overflow-hidden flex-shrink-0">
                               {product.imageUrl ? (
                                 <img 
@@ -392,13 +381,7 @@ export default function InternalUserDashboard() {
                           )}
                         </div>
                         
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">Progress</span>
-                            <span className="font-medium">{getProgressPercentage(order.status)}%</span>
-                          </div>
-                          <Progress value={getProgressPercentage(order.status)} className="h-2" />
-                        </div>
+
                         
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">

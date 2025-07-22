@@ -392,7 +392,11 @@ export default function WarehouseDashboard() {
                       </div>
                     ) : (
                       proposedProducts.map((product) => (
-                        <div key={product.id} className="border rounded-lg p-4 space-y-3">
+                        <div 
+                          key={product.id} 
+                          className="border rounded-lg p-4 space-y-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                          onClick={() => navigate('/dashboard/product-management')}
+                        >
                           <div className="flex items-center justify-between">
                             <div className="space-y-1">
                               <h4 className="font-medium">{product.name}</h4>
@@ -417,7 +421,7 @@ export default function WarehouseDashboard() {
                             </p>
                           )}
                           
-                          <div className="flex space-x-2">
+                          <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
                             <Button
                               size="sm"
                               variant="default"

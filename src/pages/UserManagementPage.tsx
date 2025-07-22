@@ -65,6 +65,7 @@ export default function UserManagementPage() {
   // Dialog states
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -127,6 +128,8 @@ export default function UserManagementPage() {
         return;
       }
       
+      setIsDeletingUser(true);
+      
       // Use the comprehensive admin delete function that removes all user data
       const result = await adminCompleteUserDeletion(selectedUser.id);
       
@@ -139,6 +142,8 @@ export default function UserManagementPage() {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete user';
       toast.error(errorMessage);
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -393,11 +398,11 @@ export default function UserManagementPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeletingUser}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteUser}>
-              Delete User Permanently
+            <Button variant="destructive" onClick={handleDeleteUser} disabled={isDeletingUser}>
+              {isDeletingUser ? 'Deleting...' : 'Delete User Permanently'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -300,21 +300,13 @@ export default function InventoryPage() {
 
       await updateInventoryItem(updateData, user.id);
       
-      // Refresh data lists
-      await loadInventoryItems();
-      await loadPublishedItems();
-      
-      // Update selectedItem with fresh data to reflect image changes in the dialog
-      const updatedItems = activeSection === 'published-items' ? 
-        await getPublishedInventoryItems() : 
-        await getAllInventoryItems();
-      const updatedItem = updatedItems.find(item => item.id === selectedItem.id);
-      if (updatedItem) {
-        setSelectedItem(updatedItem);
-      }
-      
       toast.success('Details saved successfully');
       resetCurationForm();
+      setIsEditDetailsDialogOpen(false);
+      
+      // Refresh data lists after closing the dialog to avoid reopening
+      await loadInventoryItems();
+      await loadPublishedItems();
     } catch (error) {
       toast.error('Failed to save details');
     }
@@ -556,20 +548,37 @@ export default function InventoryPage() {
                 {filteredItems.map((item) => (
                   <Card key={item.id} className="card-premium hover:hover-lift transition-all duration-300 border-0 group overflow-hidden">
                     {/* Product Image */}
-                    {(item.images && item.images.length > 0 ? item.images[0] : item.imageUrl) && (
-                      <div className="aspect-square w-full overflow-hidden rounded-t-xl relative">
-                        <img
-                          src={item.images && item.images.length > 0 ? item.images[0] : item.imageUrl}
-                          alt={item.name}
-                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      </div>
-                    )}
+                    <div className="aspect-square w-full overflow-hidden rounded-t-xl relative">
+                      {(item.images && item.images.length > 0 ? item.images[0] : item.imageUrl) ? (
+                        <>
+                          <img
+                            src={item.images && item.images.length > 0 ? item.images[0] : item.imageUrl}
+                            alt={item.name}
+                            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              const parent = target.parentElement;
+                              if (parent) {
+                                parent.innerHTML = `
+                                  <div class="h-full w-full bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center">
+                                    <svg class="h-12 w-12 text-slate-400 dark:text-slate-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span class="text-sm text-slate-500 dark:text-slate-400 font-medium">No Image</span>
+                                  </div>
+                                `;
+                              }
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        </>
+                      ) : (
+                        <div className="h-full w-full bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center">
+                          <ImageIcon className="h-12 w-12 text-slate-400 dark:text-slate-500 mb-2" />
+                          <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">No Image</span>
+                        </div>
+                      )}
+                    </div>
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -909,6 +918,21 @@ export default function InventoryPage() {
                 showUploadButton={true}
                 onImageUpdate={(newImageUrl) => {
                   setFormData(prev => ({ ...prev, imageUrl: newImageUrl }));
+                  
+                  // Also update the item in the main inventory lists immediately
+                  if (selectedItem) {
+                    setItems(prevItems => 
+                      prevItems.map(item => 
+                        item.id === selectedItem.id ? { ...item, imageUrl: newImageUrl } : item
+                      )
+                    );
+                    
+                    setPublishedItems(prevItems => 
+                      prevItems.map(item => 
+                        item.id === selectedItem.id ? { ...item, imageUrl: newImageUrl } : item
+                      )
+                    );
+                  }
                 }}
                 mode="update"
                 useResumableUpload={true}
@@ -1027,6 +1051,19 @@ export default function InventoryPage() {
                       // Update the selected item's image URL for immediate UI feedback
                       if (selectedItem) {
                         setSelectedItem(prev => prev ? { ...prev, imageUrl: newImageUrl } : null);
+                        
+                        // Also update the item in the main inventory lists immediately
+                        setItems(prevItems => 
+                          prevItems.map(item => 
+                            item.id === selectedItem.id ? { ...item, imageUrl: newImageUrl } : item
+                          )
+                        );
+                        
+                        setPublishedItems(prevItems => 
+                          prevItems.map(item => 
+                            item.id === selectedItem.id ? { ...item, imageUrl: newImageUrl } : item
+                          )
+                        );
                       }
                     }}
                     mode="update"

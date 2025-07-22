@@ -14,15 +14,10 @@ import { getAllUsers, updateUser } from './userService';
 // Helper function to convert User to Supplier format
 const userToSupplier = (user: User): Supplier => ({
   id: user.id,
-  name: user.companyName || user.name,
-  companyName: user.companyName,
+  name: user.contactPerson || user.name,
   email: user.email,
   phone: user.phone || '',
-  address: user.address || '',
   contactPerson: user.contactPerson || user.name,
-  businessType: user.businessType,
-  website: user.website,
-  taxId: user.taxId,
   status: user.status === 'approved' ? 'active' : 'inactive',
   createdAt: user.createdAt,
   updatedAt: user.updatedAt
@@ -31,14 +26,9 @@ const userToSupplier = (user: User): Supplier => ({
 export interface UpdateSupplier {
   id: string;
   name?: string;
-  companyName?: string;
   email?: string;
   phone?: string;
-  address?: string;
   contactPerson?: string;
-  businessType?: string;
-  website?: string;
-  taxId?: string;
   status?: 'active' | 'inactive' | 'pending';
 }
 
@@ -150,8 +140,8 @@ export const autoRegisterSupplier = async (user: User): Promise<void> => {
 
   try {
     // Since we're using users collection directly, just ensure user has required supplier fields
-    if (!user.companyName && !user.name) {
-      console.warn(`Supplier user ${user.email} missing company name or name`);
+    if (!user.contactPerson && !user.name) {
+      console.warn(`Supplier user ${user.email} missing contact person or name`);
     }
   } catch (error) {
     console.error('Error in autoRegisterSupplier:', error);

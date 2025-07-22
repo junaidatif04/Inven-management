@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendEmailViaWebService } from './emailService';
 
@@ -122,7 +122,7 @@ export const verifyCode = async (email: string, code: string): Promise<boolean> 
       verified: true,
       verifiedAt: serverTimestamp()
     }, { merge: true });
-    
+
     return true;
   } catch (error) {
     console.error('Error verifying code:', error);
@@ -177,6 +177,9 @@ export const verifyCodeAndCreateUser = async (
               true
             );
             
+            // Clean up verification record after successful user creation
+            await deleteVerificationRecord(email);
+            
             console.log('User account created successfully');
             return true;
           } else if (authError.code === 'auth/wrong-password') {
@@ -215,6 +218,9 @@ export const verifyCodeAndCreateUser = async (
         true // Mark as verified
       );
       
+      // Clean up verification record after successful user creation
+      await deleteVerificationRecord(email);
+      
       console.log('User account created successfully');
       return true;
     } catch (createError: any) {
@@ -227,6 +233,17 @@ export const verifyCodeAndCreateUser = async (
   } catch (error) {
     console.error('Error verifying code and creating user:', error);
     throw error;
+  }
+};
+
+// Delete verification record after successful user creation
+export const deleteVerificationRecord = async (email: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'emailVerifications', email));
+    console.log('Verification record deleted for email:', email);
+  } catch (error) {
+    console.error('Error deleting verification record:', error);
+    // Don't throw error as this is cleanup - user creation was successful
   }
 };
 

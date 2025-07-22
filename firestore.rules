@@ -147,22 +147,57 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     
-    // Notifications collection - user-specific access
+    // Notifications - role-based access control
     match /notifications/{notificationId} {
       // Users can read their own notifications
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
       
-      // Admins can read all notifications
-      allow read: if isAdmin();
+      // Users can update their own notifications (mark as read, etc.)
+      allow update: if request.auth != null && 
+                   request.auth.uid == resource.data.userId &&
+                   // Only allow updating read status and timestamp
+                   request.resource.data.keys().hasOnly(['read', 'timestamp', 'userId', 'title', 'message', 'type', 'actionUrl']) &&
+                   request.resource.data.userId == resource.data.userId &&
+                   request.resource.data.title == resource.data.title &&
+                   request.resource.data.message == resource.data.message &&
+                   request.resource.data.type == resource.data.type;
       
-      // System can create notifications (for server-side operations)
-      allow create: if isAuthenticated();
+      // Admins can read all notifications and delete them
+      allow read, delete: if isAdmin();
       
-      // Users can update their own notifications (mark as read)
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // System can create notifications based on user roles
+      allow create: if request.auth != null && 
+                   isValidNotificationForRole(request.resource.data, getUserRole(request.auth.uid));
+    }
+    
+    // Helper function to validate notifications based on user roles
+    function isValidNotificationForRole(notificationData, userRole) {
+      // Admin notifications - can receive all types
+      let adminNotifications = userRole == 'admin' && (
+        notificationData.type in ['info', 'warning', 'success', 'error']
+      );
       
-      // Admins can delete notifications
-      allow delete: if isAdmin();
+      // Warehouse staff notifications - inventory and order related
+      let warehouseNotifications = userRole == 'warehouse_staff' && (
+        notificationData.type in ['warning', 'info'] &&
+        (notificationData.title.matches('.*Stock.*') || 
+         notificationData.title.matches('.*Order.*'))
+      );
+      
+      // Supplier notifications - product and request related
+      let supplierNotifications = userRole == 'supplier' && (
+        notificationData.type in ['info', 'success'] &&
+        (notificationData.title.matches('.*Request.*') || 
+         notificationData.title.matches('.*Product.*'))
+      );
+      
+      // Internal user notifications - their own orders only
+      let internalUserNotifications = userRole == 'internal_user' && (
+        notificationData.type in ['info', 'success', 'error'] &&
+        notificationData.title.matches('.*Your Order.*')
+      );
+      
+      return adminNotifications || warehouseNotifications || supplierNotifications || internalUserNotifications;
     }
     
     // Catalog requests collection - internal user and admin access

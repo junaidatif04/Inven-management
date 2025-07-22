@@ -112,6 +112,7 @@ export default function ProductManagementPage() {
   });
   const [isUploadingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
 
   const [quantityResponseForm, setQuantityResponseForm] = useState({
     status: '' as 'approved_full' | 'approved_partial' | 'rejected' | '',
@@ -259,7 +260,7 @@ export default function ProductManagementPage() {
 
 
   const handleQuantityResponse = async () => {
-    if (!selectedQuantityRequest || !user) return;
+    if (!selectedQuantityRequest || !user || isSubmittingResponse) return;
     
     if (!quantityResponseForm.status) {
       toast.error('Please select a response type');
@@ -284,6 +285,8 @@ export default function ProductManagementPage() {
     }
     
     try {
+      setIsSubmittingResponse(true);
+      
       const response: QuantityResponse = {
         quantityRequestId: selectedQuantityRequest.id,
         status: quantityResponseForm.status,
@@ -311,6 +314,8 @@ export default function ProductManagementPage() {
       setQuantityRequests(updatedQuantityRequests);
     } catch (error) {
       toast.error('Failed to submit response');
+    } finally {
+      setIsSubmittingResponse(false);
     }
   };
 
@@ -1185,10 +1190,10 @@ export default function ProductManagementPage() {
               <Button 
                 className="flex-1 h-10 btn-premium"
                 onClick={handleQuantityResponse}
-                disabled={!quantityResponseForm.status}
+                disabled={!quantityResponseForm.status || isSubmittingResponse}
               >
                 <Send className="h-4 w-4 mr-2" />
-                Submit Response
+                {isSubmittingResponse ? 'Submitting...' : 'Submit Response'}
               </Button>
             </div>
           </div>

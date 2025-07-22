@@ -15,11 +15,11 @@ import { submitAccessRequest } from '@/services/accessRequestService';
 import { sendRequestConfirmationEmail } from '@/services/emailService';
 import { updateUser } from '@/services/userService';
 import { deleteMyAccount } from '@/services/completeUserDeletionService';
-import { getSupplierByEmail, updateSupplier } from '@/services/supplierService';
+
 import { getOrdersByUser } from '@/services/orderService';
 import { getProposedProductsBySupplier } from '@/services/productService';
 import { getQuantityRequestsBySupplier, getQuantityRequestsByRequester } from '@/services/displayRequestService';
-import { Supplier } from '@/types/inventory';
+
 import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2, Edit } from 'lucide-react';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 
@@ -39,8 +39,8 @@ export default function UserProfilePage() {
   const [businessType, setBusinessType] = useState('');
   const [website, setWebsite] = useState('');
   const [taxId, setTaxId] = useState('');
-  const [supplierData, setSupplierData] = useState<Supplier | null>(null);
-  const [isEditingSupplier, setIsEditingSupplier] = useState(false);
+
+
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ 
     name: '', 
@@ -54,19 +54,12 @@ export default function UserProfilePage() {
   const [checkingSupplierActivities, setCheckingSupplierActivities] = useState(false);
   const [hasActiveWarehouseRequests, setHasActiveWarehouseRequests] = useState(false);
   const [checkingWarehouseActivities, setCheckingWarehouseActivities] = useState(false);
-  const [supplierForm, setSupplierForm] = useState({
-    companyName: '',
-    contactPerson: '',
-    email: '',
-    phone: '',
-    address: ''
-  });
+
 
   useEffect(() => {
     if (user) {
-      // Load supplier data if user is a supplier
+      // Check supplier activities if user is a supplier
       if (user.role === 'supplier') {
-        loadSupplierData();
         checkSupplierActivities();
       }
       // Check for active orders if user is an internal user
@@ -86,25 +79,7 @@ export default function UserProfilePage() {
     }
   }, [user]);
 
-  const loadSupplierData = async () => {
-    if (!user?.email) return;
-    
-    try {
-      const supplier = await getSupplierByEmail(user.email);
-      if (supplier) {
-        setSupplierData(supplier);
-        setSupplierForm({
-          companyName: supplier.companyName || '',
-          contactPerson: supplier.contactPerson || '',
-          email: supplier.email || '',
-          phone: supplier.phone || '',
-          address: supplier.address || ''
-        });
-      }
-    } catch (error) {
-      console.error('Error loading supplier data:', error);
-    }
-  };
+
 
   const checkActiveOrders = async () => {
     if (!user?.id || user.role !== 'internal_user') return;
@@ -185,26 +160,7 @@ export default function UserProfilePage() {
     }
   };
 
-  const handleUpdateSupplierInfo = async () => {
-    if (!supplierData?.id) return;
-    
-    setIsSubmitting(true);
-    try {
-      await updateSupplier({
-        id: supplierData.id,
-        ...supplierForm
-      });
-      
-      setSupplierData(prev => prev ? { ...prev, ...supplierForm } : null);
-      setIsEditingSupplier(false);
-      toast.success('Supplier information updated successfully!');
-    } catch (error) {
-      console.error('Error updating supplier info:', error);
-      toast.error('Failed to update supplier information. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+
 
   const handleUpdateProfile = async () => {
     if (!user) return;
@@ -538,121 +494,7 @@ export default function UserProfilePage() {
                 )}
               </div>
 
-              <Separator />
 
-              {/* Supplier Information Section */}
-              {user.role === 'supplier' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium">Supplier Information</h4>
-                    {!isEditingSupplier && (
-                      <Button variant="outline" size="sm" onClick={() => setIsEditingSupplier(true)}>
-                        Edit
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {supplierData ? (
-                    <div className="space-y-4">
-                      {isEditingSupplier ? (
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="companyName">Company Name</Label>
-                              <Input
-                                id="companyName"
-                                value={supplierForm.companyName}
-                                onChange={(e) => setSupplierForm(prev => ({ ...prev, companyName: e.target.value }))}
-                                placeholder="Enter company name"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="contactPerson">Contact Person</Label>
-                              <Input
-                                id="contactPerson"
-                                value={supplierForm.contactPerson}
-                                onChange={(e) => setSupplierForm(prev => ({ ...prev, contactPerson: e.target.value }))}
-                                placeholder="Enter contact person"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="supplierEmail">Email</Label>
-                              <Input
-                                id="supplierEmail"
-                                value={supplierForm.email}
-                                onChange={(e) => setSupplierForm(prev => ({ ...prev, email: e.target.value }))}
-                                placeholder="Enter email"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="phone">Phone</Label>
-                              <Input
-                                id="phone"
-                                value={supplierForm.phone}
-                                onChange={(e) => setSupplierForm(prev => ({ ...prev, phone: e.target.value }))}
-                                placeholder="Enter phone number"
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="address">Address</Label>
-                            <Textarea
-                              id="address"
-                              value={supplierForm.address}
-                              onChange={(e) => setSupplierForm(prev => ({ ...prev, address: e.target.value }))}
-                              placeholder="Enter address"
-                              rows={3}
-                            />
-                          </div>
-                          <div className="flex gap-2">
-                            <Button onClick={handleUpdateSupplierInfo} disabled={isSubmitting}>
-                              {isSubmitting ? 'Saving...' : 'Save Changes'}
-                            </Button>
-                            <Button variant="outline" onClick={() => setIsEditingSupplier(false)}>
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Company Name</p>
-                            <p className="text-sm">{supplierData.companyName || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Contact Person</p>
-                            <p className="text-sm">{supplierData.contactPerson || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Email</p>
-                            <p className="text-sm">{supplierData.email || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Phone</p>
-                            <p className="text-sm">{supplierData.phone || 'Not specified'}</p>
-                          </div>
-                          <div className="md:col-span-2">
-                            <p className="text-sm font-medium text-muted-foreground">Address</p>
-                            <p className="text-sm">{supplierData.address || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Status</p>
-                            <Badge variant={supplierData.status === 'active' ? 'default' : 'secondary'}>
-                              {supplierData.status || 'Unknown'}
-                            </Badge>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No supplier information found. Please contact an administrator.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {user.role === 'supplier' && <Separator />}
 
               {/* Activity Restrictions Warning */}
               {((user.role === 'internal_user' && hasActiveOrders) || 
@@ -726,17 +568,6 @@ export default function UserProfilePage() {
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <Label htmlFor="company">Company Name *</Label>
-                              <Input 
-                                id="company" 
-                                value={company} 
-                                onChange={(e) => setCompany(e.target.value)} 
-                                placeholder="Enter your company name"
-                                required
-                              />
-                            </div>
-                            
-                            <div className="space-y-2">
                               <Label htmlFor="contactPerson">Contact Person</Label>
                               <Input 
                                 id="contactPerson" 
@@ -745,9 +576,7 @@ export default function UserProfilePage() {
                                 placeholder="Primary contact person"
                               />
                             </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            
                             <div className="space-y-2">
                               <Label htmlFor="phone">Phone Number</Label>
                               <Input 
@@ -756,57 +585,6 @@ export default function UserProfilePage() {
                                 value={phone} 
                                 onChange={(e) => setPhone(e.target.value)} 
                                 placeholder="Enter phone number"
-                              />
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label htmlFor="businessType">Business Type</Label>
-                              <Select value={businessType} onValueChange={setBusinessType}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select business type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="manufacturer">Manufacturer</SelectItem>
-                                  <SelectItem value="distributor">Distributor</SelectItem>
-                                  <SelectItem value="wholesaler">Wholesaler</SelectItem>
-                                  <SelectItem value="retailer">Retailer</SelectItem>
-                                  <SelectItem value="service_provider">Service Provider</SelectItem>
-                                  <SelectItem value="other">Other</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor="address">Business Address</Label>
-                            <Textarea 
-                              id="address" 
-                              value={address} 
-                              onChange={(e) => setAddress(e.target.value)} 
-                              placeholder="Enter your business address"
-                              rows={2}
-                            />
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="website">Website (Optional)</Label>
-                              <Input 
-                                id="website" 
-                                type="url"
-                                value={website} 
-                                onChange={(e) => setWebsite(e.target.value)} 
-                                placeholder="https://www.yourcompany.com"
-                              />
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label htmlFor="taxId">Tax ID / Registration Number</Label>
-                              <Input 
-                                id="taxId" 
-                                value={taxId} 
-                                onChange={(e) => setTaxId(e.target.value)} 
-                                placeholder="Enter tax ID or registration number"
                               />
                             </div>
                           </div>

@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from '@/lib/firebase';
 import { autoRegisterSupplier } from './supplierService';
-import { isEmailVerified } from './emailVerificationService';
+import { isEmailVerified, deleteVerificationRecord } from './emailVerificationService';
 import { User } from '@/types/auth';
 
 export type UserRole = 'admin' | 'warehouse_staff' | 'supplier' | 'internal_user';
@@ -288,6 +288,9 @@ export const signUpWithEmailAndPassword = async (
     };
 
     await setDoc(doc(db, 'users', firebaseUser.uid), userProfile);
+
+    // Clean up verification record after successful user creation
+    await deleteVerificationRecord(email);
 
     return userProfile;
   } catch (error) {

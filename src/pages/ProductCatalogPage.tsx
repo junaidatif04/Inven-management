@@ -56,6 +56,7 @@ export default function ProductCatalogPage() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [stockErrors, setStockErrors] = useState<Record<string, string>>({});
   const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   
   // Checkout form data
   const [checkoutData, setCheckoutData] = useState({
@@ -215,7 +216,7 @@ export default function ProductCatalogPage() {
   };
 
   const handleCheckout = async () => {
-    if (!user || cart.length === 0) return;
+    if (!user || cart.length === 0 || isPlacingOrder) return;
 
     if (!checkoutData.deliveryLocation.trim()) {
       toast.error('Please provide a delivery location');
@@ -232,6 +233,7 @@ export default function ProductCatalogPage() {
       }
     }
 
+    setIsPlacingOrder(true);
     try {
       const orderItems: OrderItem[] = cart.map(item => ({
         productId: item.productId,
@@ -276,6 +278,8 @@ export default function ProductCatalogPage() {
     } catch (error) {
       console.error('Error creating order:', error);
       toast.error('Failed to place order. Please try again.');
+    } finally {
+      setIsPlacingOrder(false);
     }
   };
 
@@ -330,8 +334,8 @@ export default function ProductCatalogPage() {
         {filteredProducts.map((product) => (
           <Card key={product.id} className="hover:shadow-lg transition-shadow">
             {/* Product Image */}
-            {(product.images && product.images.length > 0 ? product.images[0] : product.imageUrl) && (
-              <div className="aspect-square w-full overflow-hidden rounded-t-lg">
+            <div className="aspect-square w-full overflow-hidden rounded-t-lg bg-gray-50 dark:bg-gray-800 flex items-center justify-center relative">
+              {(product.images && product.images.length > 0 ? product.images[0] : product.imageUrl) ? (
                 <img
                   src={product.images && product.images.length > 0 ? product.images[0] : product.imageUrl}
                   alt={product.name}
@@ -339,10 +343,24 @@ export default function ProductCatalogPage() {
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
+                    // Show placeholder when image fails to load
+                    const placeholder = target.parentElement?.querySelector('.image-placeholder');
+                    if (placeholder) {
+                      (placeholder as HTMLElement).style.display = 'flex';
+                    }
                   }}
                 />
+              ) : null}
+              {/* Placeholder for missing images */}
+              <div 
+                className={`image-placeholder absolute inset-0 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 ${
+                  (product.images && product.images.length > 0 ? product.images[0] : product.imageUrl) ? 'hidden' : 'flex'
+                }`}
+              >
+                <Package className="h-12 w-12 mb-2" />
+                <span className="text-sm font-medium">No Image</span>
               </div>
-            )}
+            </div>
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -593,8 +611,11 @@ export default function ProductCatalogPage() {
             <Button variant="outline" onClick={() => setIsCheckoutOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCheckout}>
-              Place Order
+            <Button 
+              onClick={handleCheckout}
+              disabled={isPlacingOrder || cart.length === 0 || !checkoutData.deliveryLocation.trim()}
+            >
+              {isPlacingOrder ? 'Placing Order...' : 'Place Order'}
             </Button>
           </DialogFooter>
         </DialogContent>

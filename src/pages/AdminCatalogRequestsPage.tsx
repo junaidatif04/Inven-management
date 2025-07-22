@@ -612,20 +612,10 @@ export default function AdminCatalogRequestsPage() {
                       <Label className="text-sm font-medium">Contact Email</Label>
                       <p className="text-sm">{selectedSupplierForBrowse.email}</p>
                     </div>
-                    <div>
-                      <Label className="text-sm font-medium">Status</Label>
-                      <Badge variant="default">{selectedSupplierForBrowse.status}</Badge>
-                    </div>
                     {selectedSupplierForBrowse.phone && (
                       <div>
                         <Label className="text-sm font-medium">Phone</Label>
                         <p className="text-sm">{selectedSupplierForBrowse.phone}</p>
-                      </div>
-                    )}
-                    {selectedSupplierForBrowse.address && (
-                      <div>
-                        <Label className="text-sm font-medium">Address</Label>
-                        <p className="text-sm">{selectedSupplierForBrowse.address}</p>
                       </div>
                     )}
                   </div>

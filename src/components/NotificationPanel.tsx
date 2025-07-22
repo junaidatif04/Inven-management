@@ -2,7 +2,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useNavigate } from 'react-router-dom';
@@ -50,16 +50,24 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
   const { notifications, markAsRead, markAllAsRead, unreadCount } = useNotifications();
   const navigate = useNavigate();
 
-  const handleNotificationClick = (notification: any) => {
-    markAsRead(notification.id);
-    if (notification.actionUrl) {
-      navigate(notification.actionUrl);
-      onOpenChange(false);
+  const handleNotificationClick = async (notification: any) => {
+    try {
+      await markAsRead(notification.id);
+      if (notification.actionUrl) {
+        navigate(notification.actionUrl);
+        onOpenChange(false);
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
     }
   };
 
-  const handleMarkAllAsRead = () => {
-    markAllAsRead();
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
   };
 
   return (
@@ -77,6 +85,9 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
               </Badge>
             )}
           </SheetTitle>
+          <SheetDescription className="text-slate-600 dark:text-slate-400">
+            View and manage your notifications. Click on any notification to mark it as read and navigate to the related page.
+          </SheetDescription>
         </SheetHeader>
 
         <Separator className="mb-4 bg-slate-200 dark:bg-slate-700" />

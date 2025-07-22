@@ -25,7 +25,7 @@ import {
   createCatalogRequest,
   getCatalogRequestsByUser,
   subscribeToCatalogRequests
-} from '@/services/catalogrequestservice';
+} from '@/services/catalogRequestService';
 import { getProposedProducts } from '@/services/productService';
 import { getAllInventoryItems } from '@/services/inventoryService';
 
@@ -433,6 +433,22 @@ export default function CatalogRequestsPage() {
                   src={item.imageUrl} 
                   alt={item.name} 
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div class="w-full h-full flex items-center justify-center text-muted-foreground">
+                          <div class="text-center">
+                            <svg class="h-12 w-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                            </svg>
+                            <p class="text-sm">No image</p>
+                          </div>
+                        </div>
+                      `;
+                    }
+                  }}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -500,6 +516,22 @@ export default function CatalogRequestsPage() {
                                 src={selectedProduct.imageUrl} 
                                 alt={selectedProduct.name} 
                                 className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  const parent = target.parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = `
+                                      <div class="w-full h-full flex items-center justify-center text-muted-foreground">
+                                        <div class="text-center">
+                                          <svg class="h-12 w-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                          </svg>
+                                          <p class="text-sm">No image</p>
+                                        </div>
+                                      </div>
+                                    `;
+                                  }
+                                }}
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-muted-foreground">

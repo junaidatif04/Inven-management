@@ -83,14 +83,9 @@ export interface StockMovement {
 export interface Supplier {
   id: string;
   name: string;
-  companyName?: string;
   email: string;
   phone: string;
-  address: string;
   contactPerson: string;
-  businessType?: string;
-  website?: string;
-  taxId?: string;
   status: 'active' | 'inactive';
   createdAt: any;
   updatedAt: any;

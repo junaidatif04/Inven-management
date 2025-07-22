@@ -53,9 +53,9 @@ The implemented security rules provide:
 - Internal users, warehouse staff, and admins can create
 - Only warehouse staff and admins can update/delete
 
-#### Suppliers
-- All authenticated users can read
-- Only warehouse staff and admins can modify
+#### Suppliers (stored in users collection with role='supplier')
+- All authenticated users can read supplier data from users collection
+- Only warehouse staff and admins can modify supplier user records
 
 #### Reports & Analytics
 - Admin-only access

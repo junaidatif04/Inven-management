@@ -4,8 +4,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Camera, Upload, X, Image as ImageIcon } from 'lucide-react';
-import { uploadInventoryImage, updateInventoryImage } from '@/services/inventoryService';
+import { uploadInventoryImage, updateInventoryImage as updateInventoryImageService, updateInventoryItem } from '@/services/inventoryService';
 import ResumableImageUpload from './ResumableImageUpload';
+
+// Helper function to update inventory item with new image URL
+const updateInventoryImageUrl = async (itemId: string, imageUrl: string, userId: string): Promise<void> => {
+  try {
+    await updateInventoryItem({
+      id: itemId,
+      imageUrl: imageUrl
+    }, userId);
+  } catch (error) {
+    console.error('Failed to update inventory item image URL:', error);
+    throw error;
+  }
+};
 
 interface InventoryImageUploadProps {
   currentImageUrl?: string;
@@ -37,9 +50,20 @@ export default function InventoryImageUpload({
       <ResumableImageUpload
         currentImageUrl={currentImageUrl}
         uploadType="inventory"
-        onImageUpdate={(newImageUrl: string) => {
-          onImageUpdate?.(newImageUrl);
-        }}
+        onImageUpdate={async (newImageUrl: string) => {
+           // If we have an itemId and are in update mode, update the inventory item
+           if (itemId && mode === 'update') {
+             try {
+               await updateInventoryImageUrl(itemId, newImageUrl, userId);
+               onImageUpdate?.(newImageUrl);
+             } catch (error) {
+               console.error('Failed to update inventory image:', error);
+               throw error;
+             }
+           } else {
+             onImageUpdate?.(newImageUrl);
+           }
+         }}
         className="max-w-md"
         maxSizeInMB={5}
       />
@@ -73,7 +97,7 @@ export default function InventoryImageUpload({
       
       if (mode === 'update' && itemId) {
         // Update existing inventory item image
-        await updateInventoryImage(itemId, selectedFile, userId);
+        await updateInventoryImageService(itemId, selectedFile, userId);
         // For update mode, we need to get the new URL from the service
         result = await uploadInventoryImage(selectedFile, itemId);
       } else {

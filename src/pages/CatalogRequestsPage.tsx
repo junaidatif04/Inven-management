@@ -25,7 +25,7 @@ import {
   createCatalogRequest,
   getCatalogRequestsByUser,
   subscribeToCatalogRequests
-} from '@/services/catalogrequestservice';
+} from '@/services/catalogrequests';
 import { getProposedProducts } from '@/services/productService';
 import { getAllInventoryItems } from '@/services/inventoryService';
 

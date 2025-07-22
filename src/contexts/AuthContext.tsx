@@ -12,6 +12,8 @@ import {
 import { migrateUserRoles } from '@/services/userService';
 import { toast } from 'sonner';
 import { initializeApp } from '@/services/appInitService';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface AuthContextType {
   user: User | null;
@@ -38,10 +40,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let userDocUnsubscribe: (() => void) | null = null;
+
     // Listen for authentication state changes
-    const unsubscribe = onAuthStateChange((user) => {
+    const authUnsubscribe = onAuthStateChange((user) => {
       setUser(user);
       setIsLoading(false);
+      
+      // Clean up previous user document listener
+      if (userDocUnsubscribe) {
+        userDocUnsubscribe();
+        userDocUnsubscribe = null;
+      }
+      
+      // Set up real-time user document listener if user is authenticated
+      if (user && user.id) {
+        const userDocRef = doc(db, 'users', user.id);
+        userDocUnsubscribe = onSnapshot(
+          userDocRef,
+          (docSnapshot) => {
+            if (docSnapshot.exists()) {
+              const userData = docSnapshot.data();
+              const updatedUser: User = {
+                id: docSnapshot.id,
+                email: userData.email,
+                name: userData.name,
+                role: userData.role,
+                createdAt: userData.createdAt,
+                lastLoginAt: userData.lastLoginAt,
+                profilePicture: userData.profilePicture
+              };
+              
+              // Check if role has changed
+              if (user.role !== updatedUser.role) {
+                toast.info(`Your role has been updated to ${updatedUser.role}`);
+              }
+              
+              setUser(updatedUser);
+            } else {
+              // User document was deleted
+              toast.error('Your account has been deleted by an administrator');
+              signOut();
+            }
+          },
+          (error) => {
+            console.error('Error listening to user document changes:', error);
+          }
+        );
+      }
       
       // Initialize app data and run migrations only after user is authenticated and has proper permissions
       // Only run for admin users to reduce unnecessary processing
@@ -82,7 +128,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      authUnsubscribe();
+      if (userDocUnsubscribe) {
+        userDocUnsubscribe();
+      }
+    };
   }, []);
 
   const loginWithGoogle = (): Promise<boolean> => {

@@ -51,9 +51,16 @@ const getAllowedNextStatuses = (currentStatus: Order['status']) => {
     return [];
   }
   
-  // Return all statuses with higher levels
+  // Only pending orders can be cancelled
+  if (currentStatus === 'pending') {
+    return statusOptions
+      .filter(option => option.level > currentLevel)
+      .map(option => option.value);
+  }
+  
+  // For approved, shipped orders - only allow progression, no cancellation
   return statusOptions
-    .filter(option => option.level > currentLevel)
+    .filter(option => option.level > currentLevel && option.value !== 'cancelled')
     .map(option => option.value);
 };
 

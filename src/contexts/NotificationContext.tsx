@@ -29,6 +29,7 @@ interface NotificationContextType {
   markAllAsRead: () => Promise<void>;
   clearNotifications: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
+  refreshNotificationsForRoleChange: () => Promise<void>;
   unreadCount: number;
   pendingAccessRequests: number;
   pendingOrders: number;
@@ -117,7 +118,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     );
 
     return unsubscribe;
-  }, [user?.id]);
+  }, [user?.id, user?.role]); // Added user?.role dependency to refresh when role changes
 
   // Generate initial notifications based on system data and user role
   useEffect(() => {
@@ -125,6 +126,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const generateInitialNotifications = async () => {
       try {
+        // Clear any existing notifications first to ensure clean slate
+        setNotifications([]);
+        // Generate new role-appropriate notifications
         await generateRoleBasedSystemNotifications(user.role, user.id);
       } catch (error) {
         console.error('Error generating initial notifications:', error);
@@ -493,6 +497,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const refreshNotificationsForRoleChange = async () => {
+    if (!user?.id || !user?.role) return;
+    
+    try {
+      // Clear current notifications
+      setNotifications([]);
+      // Generate new role-appropriate notifications
+      await generateRoleBasedSystemNotifications(user.role, user.id);
+    } catch (error) {
+      console.error('Error refreshing notifications for role change:', error);
+    }
+  };
+
   const value = {
     notifications,
     addNotification,
@@ -504,6 +521,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     pendingOrders,
     pendingQuantityRequests,
     refreshNotifications,
+    refreshNotificationsForRoleChange,
   };
 
   return (

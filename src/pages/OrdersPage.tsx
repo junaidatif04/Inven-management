@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -48,7 +49,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { getAllOrders, updateOrderStatus, deleteOrder, Order, subscribeToOrders } from '@/services/orderService';
+import { getAllOrders, updateOrderStatus, deleteOrder, Order, subscribeToOrders, bulkUpdateOrderStatus } from '@/services/orderService';
 import { getAllSuppliers } from '@/services/supplierService';
 import OrderDialog from '@/components/OrderDialog';
 import OrderStatusDialog from '@/components/OrderStatusDialog';
@@ -68,6 +69,10 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  
+  // Bulk selection state
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
   
   // Dialog states
   const [orderDialog, setOrderDialog] = useState({
@@ -214,6 +219,11 @@ export default function OrdersPage() {
     setFilteredOrders(filtered);
   };
 
+  // Clear selected orders when filters change
+  useEffect(() => {
+    setSelectedOrders(prev => prev.filter(id => filteredOrders.some(order => order.id === id)));
+  }, [filteredOrders]);
+
   const handleStatusUpdate = async (orderId: string, newStatus: Order['status'], cancellationReason?: string) => {
     if (!user || !user.id) {
       toast.error('User not authenticated');
@@ -279,6 +289,94 @@ export default function OrdersPage() {
       setLoading(false);
     }
   };
+  
+  // Bulk selection functions
+  const handleSelectOrder = (orderId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedOrders(prev => [...prev, orderId]);
+    } else {
+      setSelectedOrders(prev => prev.filter(id => id !== orderId));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedOrders(filteredOrders.map(order => order.id));
+    } else {
+      setSelectedOrders([]);
+    }
+  };
+
+  // Status hierarchy validation
+  const getValidNextStatuses = (currentStatus: Order['status']): Order['status'][] => {
+    switch (currentStatus) {
+      case 'pending':
+        return ['approved', 'cancelled'];
+      case 'approved':
+        return ['shipped']; // Cannot cancel once approved
+      case 'shipped':
+        return ['delivered']; // Cannot cancel once shipped
+      case 'delivered':
+        return []; // Cannot change from delivered
+      case 'cancelled':
+        return []; // Cannot change from cancelled
+      default:
+        return [];
+    }
+  };
+
+  const canBulkUpdateToStatus = (targetStatus: Order['status']): boolean => {
+    if (selectedOrders.length === 0) return false;
+    
+    const selectedOrdersData = filteredOrders.filter(order => selectedOrders.includes(order.id));
+    
+    return selectedOrdersData.every(order => {
+      const validStatuses = getValidNextStatuses(order.status);
+      return validStatuses.includes(targetStatus);
+    });
+  };
+
+  const getInvalidOrdersForStatus = (targetStatus: Order['status']): Order[] => {
+    const selectedOrdersData = filteredOrders.filter(order => selectedOrders.includes(order.id));
+    
+    return selectedOrdersData.filter(order => {
+      const validStatuses = getValidNextStatuses(order.status);
+      return !validStatuses.includes(targetStatus);
+    });
+  };
+
+  const handleBulkStatusUpdate = async (status: Order['status']) => {
+    if (selectedOrders.length === 0) {
+      toast.error('Please select orders to update');
+      return;
+    }
+
+    // Check if all selected orders can be updated to the target status
+    if (!canBulkUpdateToStatus(status)) {
+      const invalidOrders = getInvalidOrdersForStatus(status);
+      const invalidOrderNumbers = invalidOrders.map(order => order.orderNumber).join(', ');
+      toast.error(`Cannot update orders ${invalidOrderNumbers} to ${status}. Invalid status transition.`);
+      return;
+    }
+
+    setBulkActionLoading(true);
+    try {
+      // For cancellation, use system-generated reason like single order cancellation
+      const cancellationReason = status === 'cancelled' ? 'Bulk cancellation by admin' : undefined;
+      
+      await bulkUpdateOrderStatus(selectedOrders, status, user?.id || '', cancellationReason);
+      toast.success(`Successfully updated ${selectedOrders.length} order(s) to ${status}`);
+      setSelectedOrders([]);
+      await refreshData();
+    } catch (error) {
+      console.error('Error in bulk update:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update orders');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const isAllSelected = filteredOrders.length > 0 && selectedOrders.length === filteredOrders.length;
   
   // Dialog handlers
   const openCreateDialog = () => {
@@ -463,6 +561,62 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
 
+      {/* Bulk Actions */}
+      {selectedOrders.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bulk Actions ({selectedOrders.length} selected)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                onClick={() => handleBulkStatusUpdate('approved')}
+                disabled={bulkActionLoading || !canBulkUpdateToStatus('approved')}
+                variant="outline"
+                size="sm"
+                title={!canBulkUpdateToStatus('approved') ? 'Some selected orders cannot be approved' : ''}
+              >
+                {bulkActionLoading ? 'Updating...' : 'Approve Selected'}
+              </Button>
+              <Button
+                onClick={() => handleBulkStatusUpdate('shipped')}
+                disabled={bulkActionLoading || !canBulkUpdateToStatus('shipped')}
+                variant="outline"
+                size="sm"
+                title={!canBulkUpdateToStatus('shipped') ? 'Some selected orders cannot be marked as shipped' : ''}
+              >
+                {bulkActionLoading ? 'Updating...' : 'Mark as Shipped'}
+              </Button>
+              <Button
+                onClick={() => handleBulkStatusUpdate('delivered')}
+                disabled={bulkActionLoading || !canBulkUpdateToStatus('delivered')}
+                variant="outline"
+                size="sm"
+                title={!canBulkUpdateToStatus('delivered') ? 'Some selected orders cannot be marked as delivered' : ''}
+              >
+                {bulkActionLoading ? 'Updating...' : 'Mark as Delivered'}
+              </Button>
+              <Button
+                onClick={() => handleBulkStatusUpdate('cancelled')}
+                disabled={bulkActionLoading || !canBulkUpdateToStatus('cancelled')}
+                variant="destructive"
+                size="sm"
+                title={!canBulkUpdateToStatus('cancelled') ? 'Some selected orders cannot be cancelled' : ''}
+              >
+                {bulkActionLoading ? 'Updating...' : 'Cancel Selected'}
+              </Button>
+              <Button
+                onClick={() => setSelectedOrders([])}
+                variant="ghost"
+                size="sm"
+              >
+                Clear Selection
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Orders Table */}
       <Card>
         <CardHeader>
@@ -478,6 +632,7 @@ export default function OrdersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12"></TableHead>
                     <TableHead>Order #</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>Requested By</TableHead>
@@ -490,6 +645,7 @@ export default function OrdersPage() {
                 <TableBody>
                   {Array.from({ length: 5 }).map((_, index) => (
                     <TableRow key={index}>
+                      <TableCell><div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div></TableCell>
                       <TableCell><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></TableCell>
                       <TableCell><div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div></TableCell>
                       <TableCell><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></TableCell>
@@ -514,6 +670,13 @@ export default function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={isAllSelected}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all orders"
+                    />
+                  </TableHead>
                   <TableHead>Order #</TableHead>
                   <TableHead>Supplier</TableHead>
                   <TableHead>Requested By</TableHead>
@@ -526,6 +689,13 @@ export default function OrdersPage() {
               <TableBody>
                 {filteredOrders.map((order) => (
                   <TableRow key={order.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedOrders.includes(order.id)}
+                        onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
+                        aria-label={`Select order ${order.orderNumber}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{order.orderNumber}</TableCell>
                     <TableCell>{order.supplierName}</TableCell>
                     <TableCell>{order.requestedBy}</TableCell>

@@ -11,7 +11,8 @@ import {
   serverTimestamp,
   where,
   onSnapshot,
-  limit
+  limit,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { reserveStock, releaseReservation, confirmStockDeduction, adjustStock } from './inventoryService';
@@ -202,6 +203,89 @@ export const updateOrderStatus = async (
     await updateDoc(doc(db, 'orders', id), updateData);
   } catch (error) {
     console.error('Error updating order status:', error);
+    throw error;
+  }
+};
+
+// Bulk update order status
+export const bulkUpdateOrderStatus = async (
+  orderIds: string[],
+  status: Order['status'],
+  userId: string,
+  cancellationReason?: string
+): Promise<void> => {
+  try {
+    if (orderIds.length === 0) {
+      throw new Error('No orders selected for bulk update');
+    }
+
+    // Validate cancellation reason for cancelled orders
+    if (status === 'cancelled' && !cancellationReason?.trim()) {
+      throw new Error('Cancellation reason is required when cancelling orders');
+    }
+
+    const batch = writeBatch(db);
+    const errors: string[] = [];
+
+    // Process each order
+    for (const orderId of orderIds) {
+      try {
+        const order = await getOrder(orderId);
+        if (!order) {
+          errors.push(`Order ${orderId} not found`);
+          continue;
+        }
+
+        const previousStatus = order.status;
+
+        // Handle stock reservations based on status change
+        if (previousStatus === 'pending' && (status === 'approved' || status === 'shipped' || status === 'delivered')) {
+          // Order approved/shipped/delivered: deduct stock and release reservations
+          for (const item of order.items) {
+            await confirmStockDeduction(item.productId, item.quantity, userId);
+          }
+        } else if (previousStatus === 'pending' && status === 'cancelled') {
+          // Order cancelled: release reservations without deducting stock
+          for (const item of order.items) {
+            await releaseReservation(item.productId, item.quantity, userId);
+          }
+        } else if (previousStatus === 'approved' && (status === 'shipped' || status === 'delivered')) {
+          // Already approved orders moving to shipped/delivered: no inventory changes needed
+          // Stock was already deducted when approved
+        } else if ((previousStatus === 'approved' || previousStatus === 'shipped') && status === 'cancelled') {
+          // Cancelling an already processed order: need to restore stock
+          for (const item of order.items) {
+            await adjustStock(item.productId, item.quantity, 'in', 'Order cancellation - stock restoration', userId);
+          }
+        }
+
+        const updateData: any = {
+          status,
+          updatedAt: serverTimestamp(),
+          ...(status === 'approved' && { approvedBy: userId }),
+          ...(status === 'cancelled' && cancellationReason && { 
+            cancellationReason,
+            cancelledBy: userId,
+            cancelledAt: serverTimestamp()
+          })
+        };
+
+        const orderRef = doc(db, 'orders', orderId);
+        batch.update(orderRef, updateData);
+      } catch (error) {
+        errors.push(`Error processing order ${orderId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    // Commit the batch
+    await batch.commit();
+
+    // If there were any errors, throw them
+    if (errors.length > 0) {
+      throw new Error(`Bulk update completed with errors: ${errors.join(', ')}`);
+    }
+  } catch (error) {
+    console.error('Error in bulk update order status:', error);
     throw error;
   }
 };

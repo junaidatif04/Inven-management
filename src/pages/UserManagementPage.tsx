@@ -40,15 +40,18 @@ import {
 import { toast } from 'sonner';
 import { User, UserRole } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import {
   getAllUsers,
   updateUserRole,
   getUserStats
 } from '@/services/userService';
 import { adminCompleteUserDeletion } from '@/services/completeUserDeletionService';
+import { cleanupUserDataForRoleChange, checkUserDataForRoleChange } from '@/services/roleChangeCleanupService';
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
+  const { refreshNotificationsForRoleChange } = useNotifications();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,6 +150,17 @@ export default function UserManagementPage() {
     }
   };
 
+  // Role change confirmation dialog states
+  const [isRoleChangeDialogOpen, setIsRoleChangeDialogOpen] = useState(false);
+  const [roleChangeData, setRoleChangeData] = useState<{
+    userId: string;
+    user: User;
+    newRole: UserRole;
+    oldRole: UserRole;
+    itemsToDelete: string[];
+  } | null>(null);
+  const [isChangingRole, setIsChangingRole] = useState(false);
+
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
     try {
       // Prevent changing own role
@@ -155,13 +169,105 @@ export default function UserManagementPage() {
         return;
       }
       
-      await updateUserRole(userId, newRole);
-      toast.success('User role updated successfully');
+      // Find the user to get their current role
+      const user = users.find(u => u.id === userId);
+      if (!user) {
+        toast.error('User not found');
+        return;
+      }
+      
+      const oldRole = user.role;
+      
+      // Check if this role change requires data cleanup
+      const needsCleanup = 
+        (oldRole === 'internal_user' && newRole === 'supplier') ||
+        (oldRole === 'supplier' && newRole === 'internal_user');
+      
+      if (needsCleanup) {
+        // Check what data would be affected
+        const dataCheck = await checkUserDataForRoleChange(userId, oldRole, newRole);
+        
+        if (dataCheck.orders > 0 || dataCheck.products > 0 || dataCheck.requests > 0) {
+          const itemsToDelete = [];
+          if (dataCheck.orders > 0) itemsToDelete.push(`${dataCheck.orders} orders`);
+          if (dataCheck.products > 0) itemsToDelete.push(`${dataCheck.products} products`);
+          if (dataCheck.requests > 0) itemsToDelete.push(`${dataCheck.requests} requests`);
+          
+          // Show in-system dialog instead of window.confirm
+          setRoleChangeData({
+            userId,
+            user,
+            newRole,
+            oldRole,
+            itemsToDelete
+          });
+          setIsRoleChangeDialogOpen(true);
+          return;
+        }
+      }
+      
+      // No cleanup needed or no data to delete, proceed directly
+      await performRoleChange(userId, oldRole, newRole);
+      
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      toast.error('Failed to update user role');
+    }
+  };
+
+  const performRoleChange = async (userId: string, oldRole: UserRole, newRole: UserRole) => {
+    try {
+      setIsChangingRole(true);
+      
+      // Check if this role change requires data cleanup
+      const needsCleanup = 
+        (oldRole === 'internal_user' && newRole === 'supplier') ||
+        (oldRole === 'supplier' && newRole === 'internal_user');
+      
+      if (needsCleanup) {
+        // Perform cleanup and role change
+        const cleanupResult = await cleanupUserDataForRoleChange(userId, oldRole, newRole);
+        
+        if (!cleanupResult.success) {
+          toast.error(cleanupResult.message);
+          return;
+        }
+        
+        // Update the role after successful cleanup
+        await updateUserRole(userId, newRole);
+        toast.success(cleanupResult.message);
+        
+        // If the role change affects the current user, refresh their notifications
+        if (userId === currentUser?.id) {
+          await refreshNotificationsForRoleChange();
+        }
+      } else {
+        // No cleanup needed, just update the role
+        await updateUserRole(userId, newRole);
+        toast.success('User role updated successfully');
+        
+        // If the role change affects the current user, refresh their notifications
+        if (userId === currentUser?.id) {
+          await refreshNotificationsForRoleChange();
+        }
+      }
+      
       loadUsers();
       loadStats();
     } catch (error) {
+      console.error('Error updating user role:', error);
       toast.error('Failed to update user role');
+    } finally {
+      setIsChangingRole(false);
     }
+  };
+
+  const handleConfirmRoleChange = async () => {
+    if (!roleChangeData) return;
+    
+    await performRoleChange(roleChangeData.userId, roleChangeData.oldRole, roleChangeData.newRole);
+    setIsRoleChangeDialogOpen(false);
+    setRoleChangeData(null);
   };
 
 
@@ -339,7 +445,6 @@ export default function UserManagementPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="warehouse_staff">Warehouse Staff</SelectItem>
                           <SelectItem value="supplier">Supplier</SelectItem>
                           <SelectItem value="internal_user">Internal User</SelectItem>
@@ -376,6 +481,52 @@ export default function UserManagementPage() {
       </Card>
 
 
+
+      {/* Role Change Confirmation Dialog */}
+      <Dialog open={isRoleChangeDialogOpen} onOpenChange={setIsRoleChangeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Role Change</DialogTitle>
+            <DialogDescription>
+              {roleChangeData && (
+                <span>
+                  Changing {roleChangeData.user.name}'s role from {roleChangeData.oldRole} to {roleChangeData.newRole} will permanently delete: {roleChangeData.itemsToDelete.join(', ')}.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 my-2 bg-yellow-50 border border-yellow-200 rounded-md">
+            <div className="flex items-start">
+              <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-yellow-800">Data Deletion Warning</h4>
+                <p className="text-sm text-yellow-700 mt-1">
+                  This action will permanently delete the user's associated data and cannot be undone. The deleted data will not be recoverable.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsRoleChangeDialogOpen(false);
+                setRoleChangeData(null);
+              }} 
+              disabled={isChangingRole}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleConfirmRoleChange} 
+              disabled={isChangingRole}
+            >
+              {isChangingRole ? 'Changing Role...' : 'Confirm Role Change'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete User Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

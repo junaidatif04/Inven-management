@@ -334,12 +334,12 @@ export const searchInventoryItems = async (searchTerm: string): Promise<Inventor
 
 // Find existing inventory item by supplier and product details
 export const findExistingInventoryItem = async (
-  productName: string,
+  productId: string,
   supplierId: string,
   sku?: string
 ): Promise<InventoryItem | null> => {
   try {
-    console.log('Finding existing inventory item:', { productName, supplierId, sku });
+    console.log('Finding existing inventory item:', { productId, supplierId, sku });
     
     const q = query(
       collection(db, 'inventory'),
@@ -349,36 +349,28 @@ export const findExistingInventoryItem = async (
     
     console.log(`Found ${querySnapshot.docs.length} inventory items for supplier ${supplierId}`);
     
-    // Find exact match by name and optionally SKU
+    // Find exact match by productId first, then by SKU as fallback
     for (const doc of querySnapshot.docs) {
       const item = { id: doc.id, ...doc.data() } as InventoryItem;
       
       console.log('Checking item:', { 
         itemId: item.id, 
-        itemName: item.name, 
+        itemProductId: item.productId,
         itemSku: item.sku,
-        searchName: productName,
+        searchProductId: productId,
         searchSku: sku
       });
       
-      // Check for exact name match (case-insensitive)
-      if (item.name.toLowerCase() === productName.toLowerCase()) {
-        console.log('Product name matches, checking SKU...');
-        
-        // If both SKUs exist, they must match
-        if (sku && item.sku) {
-          if (item.sku.toLowerCase() === sku.toLowerCase()) {
-            console.log('SKU also matches, returning existing item:', item.id);
-            return item;
-          } else {
-            console.log('SKU mismatch, continuing search...');
-            continue; // SKUs don't match, continue searching
-          }
-        }
-        
-        // If either SKU is missing/empty, consider it a match based on name only
-        if (!sku || !item.sku || sku.trim() === '' || item.sku.trim() === '') {
-          console.log('SKU not available for comparison, matching by name only:', item.id);
+      // Primary match: Check by productId if available
+      if (item.productId && item.productId === productId) {
+        console.log('ProductId matches, returning existing item:', item.id);
+        return item;
+      }
+      
+      // Fallback match: Check by SKU if productId is not available or doesn't match
+      if (sku && item.sku && sku.trim() !== '' && item.sku.trim() !== '') {
+        if (item.sku.toLowerCase() === sku.toLowerCase()) {
+          console.log('SKU matches, returning existing item:', item.id);
           return item;
         }
       }

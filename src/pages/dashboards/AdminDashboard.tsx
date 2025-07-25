@@ -21,8 +21,7 @@ import { subscribeToRecentOrders } from '@/services/orderService';
 import { Order } from '@/services/orderService';
 import { getAllInventoryItems, updateAllItemStatuses } from '@/services/inventoryService';
 import { getAllOrders } from '@/services/orderService';
-import { getAllUsers } from '@/services/userService';
-import { getAllSuppliers } from '@/services/supplierService';
+import { getAllUsers } from '../../services/userService';
 
 import { getAllDisplayRequests, getAllQuantityRequests } from '@/services/displayRequestService';
 import type { DisplayRequest, QuantityRequest } from '@/types/displayRequest';
@@ -90,22 +89,62 @@ export default function AdminDashboard() {
         inventoryItems,
         orders,
         users,
-        suppliers,
         displayRequestsData,
         quantityRequestsData
       ] = await Promise.all([
         getAllInventoryItems(),
         getAllOrders(),
         getAllUsers(),
-        getAllSuppliers(),
         getAllDisplayRequests(),
         getAllQuantityRequests()
       ]);
 
-      // Calculate real inventory value
-      const totalInventoryValue = inventoryItems.reduce((sum, item) =>
-        sum + (item.quantity * item.unitPrice), 0
-      );
+      // Filter suppliers from all users (same logic as InventoryPage)
+      const suppliers = users.filter(user => user.role === 'supplier');
+      console.log('AdminDashboard - All users:', users);
+      console.log('AdminDashboard - Total users count:', users.length);
+      console.log('AdminDashboard - Filtered supplier users:', suppliers);
+      console.log('AdminDashboard - Supplier users count:', suppliers.length);
+
+      // Check if database is empty and show helpful message
+      if (inventoryItems.length === 0) {
+        console.warn('No inventory items found in database');
+        toast.info('No inventory items found. Add some items to see inventory value.');
+      }
+      
+      if (suppliers.length === 0) {
+        console.warn('No suppliers found in database');
+        toast.info('No suppliers found. Users with supplier role and approved status will appear here.');
+      }
+
+      // Calculate real inventory value - only for items with price and ready/published
+      console.log('AdminDashboard - Calculating inventory value from', inventoryItems.length, 'items');
+      
+      const totalInventoryValue = inventoryItems.reduce((sum, item) => {
+        const quantity = item.quantity || 0;
+        const unitPrice = item.unitPrice || 0;
+        const salePrice = item.salePrice || 0;
+        
+        // Use either unitPrice or salePrice, whichever is available
+        const effectivePrice = unitPrice > 0 ? unitPrice : salePrice;
+        
+        // Only count items that have a price and are either ready to publish or already published
+        const hasPrice = effectivePrice > 0;
+        const isReadyOrPublished = item.detailsSaved || item.isPublished;
+        
+        console.log(`Item: ${item.name}, Quantity: ${quantity}, UnitPrice: ${unitPrice}, SalePrice: ${salePrice}, EffectivePrice: ${effectivePrice}, HasPrice: ${hasPrice}, IsReadyOrPublished: ${isReadyOrPublished}, DetailsSaved: ${item.detailsSaved}, IsPublished: ${item.isPublished}`);
+        
+        if (hasPrice && isReadyOrPublished) {
+          const itemValue = quantity * effectivePrice;
+          console.log(`Including item ${item.name} with value: ${itemValue}`);
+          return sum + itemValue;
+        }
+        
+        console.log(`Excluding item ${item.name}: hasPrice=${hasPrice}, isReadyOrPublished=${isReadyOrPublished}`);
+        return sum;
+      }, 0);
+      
+      console.log('AdminDashboard - Final total inventory value:', totalInventoryValue);
 
       // Calculate real low stock alerts
       const lowStockAlerts = inventoryItems.filter(item =>
@@ -150,8 +189,8 @@ export default function AdminDashboard() {
       const monthlyOrderGrowth = lastMonthOrders > 0 ?
         ((currentMonthOrders - lastMonthOrders) / lastMonthOrders) * 100 : 0;
 
-      // Calculate supplier stats
-      const activeSuppliers = suppliers.filter(s => s.status === 'active').length;
+      // Calculate supplier stats (count all suppliers with supplier role)
+      const activeSuppliers = suppliers.length;
       
       // Calculate display and quantity request stats
       const pendingDisplayRequests = displayRequestsData.filter((req: DisplayRequest) => req.status === 'pending').length;
@@ -365,13 +404,9 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => refreshData(false)} disabled={loading} className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Quick Refresh
-          </Button>
           <Button variant="outline" onClick={() => refreshData(true)} disabled={loading} className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Full Refresh
+            Refresh
           </Button>
         </div>
       </div>
@@ -394,7 +429,10 @@ export default function AdminDashboard() {
                   {formatCurrency(stats.totalInventoryValue)}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {(stats?.monthlyOrderGrowth || 0) >= 0 ? '+' : ''}{(stats?.monthlyOrderGrowth || 0).toFixed(1)}% from last month
+                  {stats.totalInventoryValue === 0 
+                    ? 'Add inventory items to see value'
+                    : `${(stats?.monthlyOrderGrowth || 0) >= 0 ? '+' : ''}${(stats?.monthlyOrderGrowth || 0).toFixed(1)}% from last month`
+                  }
                 </p>
               </CardContent>
             </Card>
@@ -451,7 +489,10 @@ export default function AdminDashboard() {
                   {stats.totalUsers}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {stats.activeSuppliers} suppliers
+                  {stats.activeSuppliers === 0 
+                    ? 'No approved suppliers yet'
+                    : `${stats.activeSuppliers} suppliers`
+                  }
                 </p>
               </CardContent>
             </Card>

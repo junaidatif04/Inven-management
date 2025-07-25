@@ -64,6 +64,7 @@ export default function SupplierDashboard() {
     imageUrl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingQuantityResponse, setIsSubmittingQuantityResponse] = useState(false);
 
   const [showQuantityResponseDialog, setShowQuantityResponseDialog] = useState(false);
   const [selectedQuantityRequest, setSelectedQuantityRequest] = useState<QuantityRequest | null>(null);
@@ -280,7 +281,7 @@ export default function SupplierDashboard() {
       return;
     }
 
-    setIsSubmitting(true);
+    setIsSubmittingQuantityResponse(true);
     try {
       const response: QuantityResponse = {
         quantityRequestId: selectedQuantityRequest.id,
@@ -314,7 +315,7 @@ export default function SupplierDashboard() {
       console.error('Error responding to quantity request:', error);
       toast.error('Failed to respond to quantity request');
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingQuantityResponse(false);
     }
   };
 
@@ -717,9 +718,9 @@ export default function SupplierDashboard() {
               <Button 
                 className="flex-1"
                 onClick={handleQuantityResponse}
-                disabled={!quantityResponseForm.status}
+                disabled={!quantityResponseForm.status || isSubmittingQuantityResponse}
               >
-                Submit Response
+                {isSubmittingQuantityResponse ? 'Submitting...' : 'Submit Response'}
               </Button>
             </div>
           </div>

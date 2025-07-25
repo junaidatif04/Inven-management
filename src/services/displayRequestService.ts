@@ -287,6 +287,7 @@ export const respondToQuantityRequest = async (
             const drData = displayRequest.data() as DisplayRequest;
             
             inventoryData = {
+              productId: drData.productId, // Include productId for matching
               name: drData.productName,
               description: drData.productDescription || '',
               sku: drData.productSku || '',
@@ -307,6 +308,7 @@ export const respondToQuantityRequest = async (
         } else {
           // Direct quantity request - use quantity request data
           inventoryData = {
+            productId: qrData.productId, // Include productId for matching
             name: qrData.productName,
             description: '', // No description available for direct requests
             sku: qrData.productId, // Use productId as SKU
@@ -324,12 +326,13 @@ export const respondToQuantityRequest = async (
         
         // Check if an inventory item already exists for this product and supplier
         const existingItem = await findExistingInventoryItem(
-          inventoryData.name,
+          qrData.productId,
           inventoryData.supplierId!,
           inventoryData.sku
         );
         
         console.log('Checking for existing inventory item:', {
+          productId: qrData.productId,
           productName: inventoryData.name,
           supplierId: inventoryData.supplierId,
           sku: inventoryData.sku

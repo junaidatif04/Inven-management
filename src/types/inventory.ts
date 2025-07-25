@@ -1,5 +1,6 @@
 export interface InventoryItem {
   id: string;
+  productId?: string; // Reference to the original product ID from requests
   name: string;
   description: string;
   sku: string;
@@ -29,6 +30,7 @@ export interface InventoryItem {
 }
 
 export interface CreateInventoryItem {
+  productId?: string; // Reference to the original product ID from requests
   name: string;
   description: string;
   sku: string;

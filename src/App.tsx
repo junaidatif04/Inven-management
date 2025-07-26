@@ -91,7 +91,7 @@ function App() {
     <ThemeProvider defaultTheme="light" storageKey="inventory-ui-theme">
       <AuthProvider>
         <NotificationProvider>
-          <Router>
+          <Router basename={import.meta.env.PROD && import.meta.env.VITE_GITHUB_PAGES === 'true' ? '/Inven-management' : undefined}>
             <div className="min-h-screen bg-background">
               <Routes>
                 <Route path="/" element={<PublicOnlyRoute><LandingPage /></PublicOnlyRoute>} />

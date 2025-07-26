@@ -38,6 +38,7 @@ jobs:
       env:
         NODE_ENV: production
         GITHUB_PAGES: true
+        VITE_GITHUB_PAGES: true
         VITE_FIREBASE_API_KEY: AIzaSyDdSrj9QlT_HQjXRP-elkLhLtP5Jx8x8Ug
         VITE_FIREBASE_AUTH_DOMAIN: inventory-management-92166.firebaseapp.com
         VITE_FIREBASE_PROJECT_ID: inventory-management-92166

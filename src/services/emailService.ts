@@ -1,16 +1,20 @@
 import emailjs from '@emailjs/browser';
 import { AccessRequest } from './accessRequestService';
 
-// EmailJS configuration - Your real credentials
-const EMAILJS_SERVICE_ID = 'service_m2td42w'; // Your Gmail service
-const EMAILJS_TEMPLATE_ID = 'template_general'; // Your general template
-const EMAILJS_PUBLIC_KEY = '4C901qfFKGVCisjaA'; // Your public key
+// EmailJS configuration from environment variables
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
 
-// Initialize EmailJS
-try {
-  emailjs.init(EMAILJS_PUBLIC_KEY);
-} catch (error) {
-  console.error('EmailJS initialization failed:', error);
+// Initialize EmailJS only if credentials are available
+if (EMAILJS_PUBLIC_KEY) {
+  try {
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+  } catch (error) {
+    console.error('EmailJS initialization failed:', error);
+  }
+} else {
+  console.warn('EmailJS credentials not configured. Email functionality will be disabled.');
 }
 
 export interface EmailTemplate {
@@ -24,7 +28,13 @@ export interface EmailTemplate {
 
 // Email sending with EmailJS as primary service
 export const sendEmailViaWebService = async (emailData: EmailTemplate): Promise<void> => {
-  // Try EmailJS first (your configured service)
+  // Check if EmailJS is configured
+  if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
+    console.warn('EmailJS not configured. Skipping email send.');
+    return;
+  }
+
+  // Try EmailJS first
   try {
     await emailjs.send(
       EMAILJS_SERVICE_ID,
@@ -37,40 +47,17 @@ export const sendEmailViaWebService = async (emailData: EmailTemplate): Promise<
         from_name: emailData.from_name
       }
     );
-
-
-
+    console.log('Email sent successfully via EmailJS');
     return; // Success, exit function
 
   } catch (emailjsError) {
-    // Fallback to Formspree
-    try {
-
-      const formspreeResponse = await fetch('https://formspree.io/f/xpwzgvqr', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: emailData.to_email,
-          name: emailData.to_name,
-          subject: emailData.subject,
-          message: emailData.message,
-          _replyto: emailData.to_email,
-          _subject: emailData.subject
-        })
-      });
-
-      if (formspreeResponse.ok) {
-        return;
-      }
-    } catch (formspreeError) {
-      // Formspree also failed, continue to fallback
-    }
+    console.error('EmailJS failed:', emailjsError);
+    // Note: Formspree fallback removed as the endpoint was returning 404
+    // You can add alternative email services here if needed
   }
 
-  // If all services fail, silently continue
-  // Email functionality will fail gracefully without user notification
+  // If all services fail, log the issue
+  console.error('All email services failed. Email could not be sent.');
 };
 
 // Send confirmation email when request is submitted

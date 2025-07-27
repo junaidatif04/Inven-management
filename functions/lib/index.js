@@ -315,6 +315,7 @@ exports.completeUserDeletion = (0, https_1.onCall)(async (request) => {
 });
 // Cloud Function to check if an email exists in the system
 // This is used during signup to prevent duplicate accounts
+// Note: This function allows unauthenticated calls for signup flow
 exports.checkEmailExists = (0, https_1.onCall)(async (request) => {
     const { email } = request.data;
     // Validate email parameter

@@ -1,18 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Package, Mail, Loader2, ArrowLeft } from 'lucide-react';
+import { Package, Mail, Loader2, ArrowLeft, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendVerificationEmail, verifyCode } from '@/services/emailVerificationService';
 
 export default function SignUpPage() {
   const navigate = useNavigate();
-  const { loginWithGoogle, signUpWithEmail } = useAuth();
+  const { user, loginWithGoogle, signUpWithEmail } = useAuth();
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
@@ -24,6 +24,12 @@ export default function SignUpPage() {
   });
 
   const handleGoogleSignUp = async () => {
+    // Check if user is already logged in
+    if (user) {
+      toast.error('You are already logged in. Please sign out first if you want to create a new account.');
+      return;
+    }
+    
     setIsSigningUp(true);
     try {
       const success = await loginWithGoogle();
@@ -37,8 +43,21 @@ export default function SignUpPage() {
     }
   };
 
+  // Redirect already logged-in users
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
+
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check if user is already logged in
+    if (user) {
+      toast.error('You are already logged in. Please sign out first if you want to create a new account.');
+      return;
+    }
     
     // Validate form
     if (!formData.name || !formData.email || !formData.password) {
@@ -59,6 +78,13 @@ export default function SignUpPage() {
     setIsSigningUp(true);
     
     try {
+      // Double-check if user is still logged in before sending email
+      if (user) {
+        toast.error('You are already logged in. Please sign out first if you want to create a new account.');
+        setIsSigningUp(false);
+        return;
+      }
+      
       // Send verification email
       await sendVerificationEmail(formData.email, formData.name);
       
@@ -110,6 +136,68 @@ export default function SignUpPage() {
       setIsSigningUp(false);
     }
   };
+
+  // Show message for already logged-in users
+  if (user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900 p-4">
+        <div className="w-full max-w-md">
+          {/* Back Button */}
+          <div className="flex justify-start mb-6">
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/')}
+              className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 p-2"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Home
+            </Button>
+          </div>
+          
+          <Card className="border-slate-200 dark:border-slate-700 shadow-lg">
+            <CardHeader className="text-center pb-4">
+              <div className="flex items-center justify-center mb-4">
+                <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-md">
+                  <UserCheck className="h-8 w-8 text-white" />
+                </div>
+              </div>
+              <CardTitle className="text-xl">Already Signed In</CardTitle>
+              <CardDescription>
+                You are already logged in as {user.name}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                  <strong>User exists, please sign in instead.</strong>
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-300">
+                  If you want to create a new account, please sign out first.
+                </p>
+              </div>
+              
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={() => navigate('/dashboard')}
+                  className="w-full"
+                >
+                  Go to Dashboard
+                </Button>
+                
+                <Button
+                  onClick={() => navigate('/login')}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Sign In as Different User
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900 p-4">

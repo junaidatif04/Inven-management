@@ -149,7 +149,6 @@ export const approveAccessRequest = async (
     if (existingUser) {
       // User already exists, update their role directly
       await updateUserRole(existingUser.id, requestData.requestedRole);
-      console.log(`Updated existing user ${existingUser.email} role to ${requestData.requestedRole}`);
     } else {
       // User doesn't exist, generate signup token for new user
       signupToken = generateSignupToken();

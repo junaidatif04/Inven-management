@@ -44,20 +44,15 @@ export default function CompleteSignupPage() {
 
   const loadRequestData = async () => {
     try {
-      console.log('Loading request data for token:', token);
       const requestData = await getAccessRequestByToken(token!);
-      console.log('Request data received:', requestData);
 
       if (!requestData) {
-        console.log('No request data found for token');
         setError('Invalid, expired, or already used signup token');
       } else {
-        console.log('Setting request data:', requestData);
         setRequest(requestData);
       }
     } catch (error) {
-      console.error('Error loading request data:', error);
-      setError('Failed to load signup information. Please check the console for details.');
+      setError('Failed to load signup information. Please try again or contact support.');
     } finally {
       setLoading(false);
     }

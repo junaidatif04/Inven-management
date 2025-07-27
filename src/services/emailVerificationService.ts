@@ -19,6 +19,14 @@ export const generateVerificationCode = (): string => {
 // Create and store a verification code for a user
 export const createVerificationCode = async (email: string): Promise<string> => {
   try {
+    // Check if user already exists using the secure Cloud Function
+    const { checkEmailExists } = await import('./authService');
+    const emailExists = await checkEmailExists(email);
+    
+    if (emailExists) {
+      throw new Error('An account with this email already exists. Please sign in instead.');
+    }
+    
     // Generate a verification code
     const code = generateVerificationCode();
     
@@ -26,20 +34,13 @@ export const createVerificationCode = async (email: string): Promise<string> => 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours in milliseconds
     
-    console.log('Creating verification code for:', email);
-    console.log('Code:', code);
-    console.log('Current time:', now);
-    console.log('Expires at (JS Date):', expiresAt);
-    
     // Convert the JavaScript Date to a Firestore Timestamp
     const firestoreExpiresAt = new Timestamp(
       Math.floor(expiresAt.getTime() / 1000),
       0
     );
     
-    console.log('Expires at (Firestore Timestamp):', firestoreExpiresAt);
-    console.log('Timestamp seconds:', firestoreExpiresAt.seconds);
-    console.log('Timestamp nanoseconds:', firestoreExpiresAt.nanoseconds);
+
 
     // Store the verification data in Firestore
     await setDoc(doc(db, 'emailVerifications', email), {
@@ -60,32 +61,23 @@ export const createVerificationCode = async (email: string): Promise<string> => 
 // Verify a code provided by the user
 export const verifyCode = async (email: string, code: string): Promise<boolean> => {
   try {
-    console.log('Verifying code for email:', email);
     const verificationDoc = await getDoc(doc(db, 'emailVerifications', email));
     
     if (!verificationDoc.exists()) {
-      console.log('No verification record found for email:', email);
       return false; // No verification record found
     }
 
     const verificationData = verificationDoc.data() as VerificationData;
-    console.log('Verification data:', verificationData);
-    console.log('Provided code:', code);
-    console.log('Stored code:', verificationData.code);
-    console.log('Expiration:', verificationData.expiresAt);
-    console.log('Current time:', new Date());
     
     // Check if the code matches what's stored
     const codeMatches = verificationData.code === code;
     if (!codeMatches) {
-      console.log('Code does not match stored code');
       return false;
     }
     
     // If the code is already verified and matches, we can consider this a success
     // This handles the case where a user tries to verify the same code multiple times
     if (verificationData.verified) {
-      console.log('Code is already verified and matches the provided code');
       return true;
     }
     
@@ -106,16 +98,13 @@ export const verifyCode = async (email: string, code: string): Promise<boolean> 
       return false;
     }
     
-    console.log('Expiration date after conversion:', expirationDate);
+
     
     // Check if the code is expired
     const notExpired = expirationDate > new Date();
     if (!notExpired) {
-      console.log('Code is expired');
       return false;
     }
-    
-    console.log('Code matches and is not expired, marking as verified');
     
     // Mark as verified
     await setDoc(doc(db, 'emailVerifications', email), {
@@ -138,14 +127,9 @@ export const verifyCodeAndCreateUser = async (
   password: string
 ): Promise<boolean> => {
   try {
-    console.log('Starting verification and user creation process');
-    console.log('Email:', email);
-    console.log('Code:', code);
-    console.log('Name:', name);
     
     // First check if the verification code is valid
     const isCodeValid = await verifyCode(email, code);
-    console.log('Is code valid:', isCodeValid);
     
     if (!isCodeValid) {
       // Check if the code was already verified
@@ -160,12 +144,10 @@ export const verifyCodeAndCreateUser = async (
           await authService.signInWithEmailAndPasswordAuth(email, password);
           
           // If we get here, the account exists and the credentials are correct
-          console.log('User account already exists and credentials are valid');
           return true;
         } catch (authError: any) {
           // If the error is 'auth/user-not-found', the account doesn't exist yet
           if (authError.code === 'auth/user-not-found') {
-            console.log('Code was verified but account not created yet, creating now');
             
             // Create the account now
             const authService = await import('./authService');
@@ -180,30 +162,24 @@ export const verifyCodeAndCreateUser = async (
             // Clean up verification record after successful user creation
             await deleteVerificationRecord(email);
             
-            console.log('User account created successfully');
             return true;
           } else if (authError.code === 'auth/wrong-password') {
             // Account exists but password is wrong
-            console.error('Account exists but password is incorrect');
             throw new Error('An account with this email already exists. Please use the correct password or reset it.');
           } else if (authError.code === 'auth/email-already-in-use') {
             // Account exists
-            console.error('Account already exists');
             throw new Error('An account with this email already exists. Please log in or reset your password.');
           } else {
             // Some other auth error
-            console.error('Authentication error:', authError);
             throw new Error('Authentication error: ' + authError.message);
           }
         }
       } else {
         // Code is invalid and not previously verified
-        console.error('Verification failed: Invalid or expired code');
         throw new Error('Invalid or expired verification code');
       }
     }
-    
-    console.log('Code verified successfully, creating user account');
+
     
     // Import auth service dynamically to avoid circular dependency
     const authService = await import('./authService');
@@ -221,11 +197,9 @@ export const verifyCodeAndCreateUser = async (
       // Clean up verification record after successful user creation
       await deleteVerificationRecord(email);
       
-      console.log('User account created successfully');
       return true;
     } catch (createError: any) {
       if (createError.code === 'auth/email-already-in-use') {
-        console.error('Email already in use');
         throw new Error('An account with this email already exists. Please log in or reset your password.');
       }
       throw createError;
@@ -240,7 +214,6 @@ export const verifyCodeAndCreateUser = async (
 export const deleteVerificationRecord = async (email: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, 'emailVerifications', email));
-    console.log('Verification record deleted for email:', email);
   } catch (error) {
     console.error('Error deleting verification record:', error);
     // Don't throw error as this is cleanup - user creation was successful
@@ -266,6 +239,14 @@ export const isEmailVerified = async (email: string): Promise<boolean> => {
 // Send verification email
 export const sendVerificationEmail = async (email: string, name: string): Promise<void> => {
   try {
+    // Check if user already exists using the secure Cloud Function
+    const { checkEmailExists } = await import('./authService');
+    const emailExists = await checkEmailExists(email);
+    
+    if (emailExists) {
+      throw new Error('An account with this email already exists. Please sign in instead.');
+    }
+    
     // Generate a new verification code
     const code = await createVerificationCode(email);
     

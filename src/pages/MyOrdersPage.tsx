@@ -50,15 +50,16 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { subscribeToOrdersByUser, Order, updateOrderStatus } from '@/services/orderService';
+import { subscribeToPaginatedOrders, Order, updateOrderStatus, PaginatedOrdersResult, OrdersFilter } from '@/services/orderService';
 
 export default function MyOrdersPage() {
   const { user } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,43 +71,58 @@ export default function MyOrdersPage() {
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [paginationData, setPaginationData] = useState<PaginatedOrdersResult>({
+    orders: [],
+    totalCount: 0,
+    hasNextPage: false,
+    hasPreviousPage: false,
+    currentPage: 1,
+    totalPages: 0
+  });
 
   useEffect(() => {
     if (!user?.id) return;
 
-    const unsubscribe = subscribeToOrdersByUser(user.id, (ordersData) => {
-      setOrders(ordersData);
-      setLastUpdated(new Date());
-      setLoading(false);
-    });
+    const filters: OrdersFilter = {
+      userId: user.id,
+      status: filterStatus === 'all' ? undefined : filterStatus as Order['status'],
+      searchTerm: searchTerm.trim() || undefined
+    };
+
+    const unsubscribe = subscribeToPaginatedOrders(
+      currentPage,
+      pageSize,
+      filters,
+      (result) => {
+        setPaginationData(result);
+        setFilteredOrders(result.orders);
+        setLoading(false);
+        setLastUpdated(new Date());
+      }
+    );
 
     return () => unsubscribe();
-  }, [user?.id]);
+  }, [user?.id, currentPage, pageSize, filterStatus, searchTerm]);
 
+  // Reset to first page when filters change
   useEffect(() => {
-    filterOrders();
-  }, [orders, searchTerm, filterStatus]);
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [searchTerm, filterStatus]);
 
-  const filterOrders = () => {
-    let filtered = orders;
-    
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(order =>
-        order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.items.some(item => 
-          item.productName.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      );
-    }
-    
-    // Apply status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(order => order.status === filterStatus);
-    }
-    
-    setFilteredOrders(filtered);
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePageSizeChange = (newPageSize: string) => {
+    setPageSize(parseInt(newPageSize));
+    setCurrentPage(1); // Reset to first page when changing page size
   };
 
   const refreshData = () => {
@@ -183,18 +199,7 @@ export default function MyOrdersPage() {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-red-100 text-red-800';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'low':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -209,14 +214,14 @@ export default function MyOrdersPage() {
     return dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
   };
 
-  // Calculate stats
+  // Calculate stats from current page data
   const stats = {
-    total: orders.length,
-    pending: orders.filter(o => o.status === 'pending').length,
-    approved: orders.filter(o => o.status === 'approved').length,
-    shipped: orders.filter(o => o.status === 'shipped').length,
-    delivered: orders.filter(o => o.status === 'delivered').length,
-    totalValue: orders.reduce((sum, order) => sum + order.totalAmount, 0),
+    total: paginationData.totalCount,
+    pending: filteredOrders.filter(o => o.status === 'pending').length,
+    approved: filteredOrders.filter(o => o.status === 'approved').length,
+    shipped: filteredOrders.filter(o => o.status === 'shipped').length,
+    delivered: filteredOrders.filter(o => o.status === 'delivered').length,
+    totalValue: filteredOrders.reduce((sum, order) => sum + order.totalAmount, 0),
   };
 
   if (loading) {
@@ -356,7 +361,7 @@ export default function MyOrdersPage() {
               <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No orders found</h3>
               <p className="text-muted-foreground">
-                {orders.length === 0 
+                {paginationData.totalCount === 0 
                   ? "You haven't placed any orders yet." 
                   : "Try adjusting your search or filter criteria."
                 }
@@ -369,7 +374,6 @@ export default function MyOrdersPage() {
                   <TableHead>Order #</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Priority</TableHead>
                   <TableHead>Total Amount</TableHead>
                   <TableHead>Order Date</TableHead>
                   <TableHead>Actions</TableHead>
@@ -393,13 +397,6 @@ export default function MyOrdersPage() {
                         {getStatusIcon(order.status)}
                         {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {order.priority && (
-                        <Badge className={getPriorityColor(order.priority)}>
-                          {order.priority.charAt(0).toUpperCase() + order.priority.slice(1)}
-                        </Badge>
-                      )}
                     </TableCell>
                     <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
                     <TableCell>{formatDate(order.createdAt)}</TableCell>
@@ -430,6 +427,63 @@ export default function MyOrdersPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          
+          {/* Pagination */}
+          {paginationData.totalCount > 0 && (
+            <div className="flex items-center justify-between mt-6">
+              <div className="flex items-center space-x-2">
+                <p className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, paginationData.totalCount)} of {paginationData.totalCount} orders
+                </p>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
+                  <p className="text-sm font-medium">Rows per page</p>
+                  <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+                    <SelectTrigger className="h-8 w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent side="top">
+                      {[5, 10, 20, 30, 50].map((size) => (
+                        <SelectItem key={size} value={size.toString()}>
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={!paginationData.hasPreviousPage}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  
+                  <div className="flex items-center space-x-1">
+                    <span className="text-sm font-medium">
+                      Page {currentPage} of {paginationData.totalPages}
+                    </span>
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={!paginationData.hasNextPage}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -463,14 +517,7 @@ export default function MyOrdersPage() {
                         {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
                       </Badge>
                     </div>
-                    {selectedOrder.priority && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Priority:</span>
-                        <Badge className={getPriorityColor(selectedOrder.priority)}>
-                          {selectedOrder.priority.charAt(0).toUpperCase() + selectedOrder.priority.slice(1)}
-                        </Badge>
-                      </div>
-                    )}
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Order Date:</span>
                       <span className="text-sm">{formatDate(selectedOrder.createdAt)}</span>

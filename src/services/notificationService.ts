@@ -37,6 +37,7 @@ export interface NotificationCreateData {
   message: string;
   type: 'info' | 'warning' | 'success' | 'error';
   actionUrl?: string;
+  timestamp?: Timestamp | Date; // Optional timestamp for when the event actually occurred
   metadata?: {
     orderId?: string;
     productId?: string;
@@ -54,11 +55,25 @@ class NotificationService {
       // Filter out undefined values to prevent Firestore errors
       const cleanData = this.removeUndefinedFields(data);
       
+      // Use provided timestamp or current time
+      let notificationTimestamp: Timestamp;
+      if (data.timestamp) {
+        notificationTimestamp = data.timestamp instanceof Date 
+          ? Timestamp.fromDate(data.timestamp)
+          : data.timestamp;
+      } else {
+        notificationTimestamp = Timestamp.now();
+      }
+      
       const notificationData: Omit<FirestoreNotification, 'id'> = {
         ...cleanData,
         read: false,
-        timestamp: Timestamp.now(),
+        timestamp: notificationTimestamp,
       };
+      
+      // Remove timestamp from cleanData to avoid duplication
+      delete (notificationData as any).timestamp;
+      notificationData.timestamp = notificationTimestamp;
 
       const docRef = await addDoc(collection(db, this.collectionName), notificationData);
       return docRef.id;
@@ -138,13 +153,18 @@ class NotificationService {
   }
 
   // Check if a similar notification already exists for a user
-  async notificationExists(userId: string, title: string, message: string): Promise<boolean> {
+  async notificationExists(userId: string, title: string, message: string, withinHours: number = 24): Promise<boolean> {
     try {
+      // Check for notifications with same title and message within the specified time frame
+      const timeThreshold = new Date();
+      timeThreshold.setHours(timeThreshold.getHours() - withinHours);
+      
       const q = query(
         collection(db, this.collectionName),
         where('userId', '==', userId),
         where('title', '==', title),
-        where('message', '==', message)
+        where('message', '==', message),
+        where('timestamp', '>=', Timestamp.fromDate(timeThreshold))
       );
 
       const querySnapshot = await getDocs(q);
@@ -160,8 +180,8 @@ class NotificationService {
     try {
       const notificationRef = doc(db, this.collectionName, notificationId);
       await updateDoc(notificationRef, {
-        read: true,
-        timestamp: Timestamp.now() // Update timestamp when marked as read
+        read: true
+        // Removed timestamp update to preserve original notification time
       });
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -181,8 +201,8 @@ class NotificationService {
       const querySnapshot = await getDocs(q);
       const updatePromises = querySnapshot.docs.map(doc => 
         updateDoc(doc.ref, { 
-          read: true,
-          timestamp: Timestamp.now()
+          read: true
+          // Removed timestamp update to preserve original notification times
         })
       );
 
@@ -274,13 +294,14 @@ class NotificationService {
     });
   }
 
-  async createUserOrderNotification(userId: string, orderId: string, title: string, message: string, type: 'info' | 'success' | 'error'): Promise<void> {
+  async createUserOrderNotification(userId: string, orderId: string, title: string, message: string, type: 'info' | 'success' | 'error', timestamp?: Date | Timestamp): Promise<void> {
     await this.createNotification({
       userId,
       title,
       message,
       type,
       actionUrl: '/dashboard/my-orders',
+      timestamp,
       metadata: { 
         orderId,
         category: 'order'

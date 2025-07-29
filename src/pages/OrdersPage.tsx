@@ -256,7 +256,7 @@ export default function OrdersPage() {
   const getValidNextStatuses = (currentStatus: Order['status']): Order['status'][] => {
     switch (currentStatus) {
       case 'pending':
-        return ['approved', 'cancelled'];
+        return ['approved', 'shipped', 'delivered', 'cancelled']; // Pending orders can move to any status
       case 'approved':
         return ['shipped']; // Cannot cancel once approved
       case 'shipped':

@@ -8,38 +8,12 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
-  AlertTriangle,
-  CheckCircle,
-  Info,
-  XCircle,
-  ExternalLink
+  Check
 } from 'lucide-react';
 
-const getNotificationIcon = (type: string) => {
-  switch (type) {
-    case 'success':
-      return <CheckCircle className="h-4 w-4 text-green-500" />;
-    case 'warning':
-      return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-    case 'error':
-      return <XCircle className="h-4 w-4 text-red-500" />;
-    default:
-      return <Info className="h-4 w-4 text-blue-500" />;
-  }
-};
 
-const getNotificationBadgeVariant = (type: string) => {
-  switch (type) {
-    case 'success':
-      return 'default';
-    case 'warning':
-      return 'secondary';
-    case 'error':
-      return 'destructive';
-    default:
-      return 'outline';
-  }
-};
+
+
 
 interface NotificationPanelProps {
   open: boolean;
@@ -113,21 +87,12 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
                     }`}
                     onClick={() => handleNotificationClick(notification)}
                   >
-                    <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 mt-1">
-                        {getNotificationIcon(notification.type)}
-                      </div>
+                    <div className="flex items-start">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <h4 className="text-sm font-medium truncate text-slate-800 dark:text-slate-200">
                             {notification.title}
                           </h4>
-                          <Badge 
-                            variant={getNotificationBadgeVariant(notification.type)}
-                            className="text-xs ml-2 flex-shrink-0"
-                          >
-                            {notification.type}
-                          </Badge>
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
                           {notification.message}
@@ -136,8 +101,18 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
                           <span className="text-xs text-slate-500 dark:text-slate-500">
                             {formatDistanceToNow(notification.timestamp, { addSuffix: true })}
                           </span>
-                          {notification.actionUrl && (
-                            <ExternalLink className="h-3 w-3 text-slate-400" />
+                          {!notification.read && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-800 hover:bg-blue-100 dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900/30 rounded-full border border-blue-200 dark:border-blue-700 shadow-sm transition-all duration-200"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAsRead(notification.id);
+                              }}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
                           )}
                         </div>
                       </div>

@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getAllInventoryItems } from '@/services/inventoryService';
-import { getAllOrders } from '@/services/orderService';
 import { useAuth } from '@/contexts/AuthContext';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -24,7 +22,7 @@ export interface Notification {
 
 interface NotificationContextType {
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => Promise<void>;
+  addNotification: (notification: Omit<Notification, 'id' | 'read' | 'timestamp'> & { timestamp?: Date }) => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   clearNotifications: () => Promise<void>;
@@ -51,8 +49,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Clean up processed events periodically to prevent memory leaks
   useEffect(() => {
     const cleanup = setInterval(() => {
-      setProcessedEvents(new Set()); // Clear all processed events every hour
-    }, 60 * 60 * 1000); // 1 hour
+      // Only clear processed events if they're older than 24 hours to prevent duplicates
+      // Keep a smaller set but for longer to ensure better duplicate prevention
+      setProcessedEvents(prev => {
+        // In a real implementation, you'd want to track timestamps
+        // For now, we'll keep the set smaller but clear less frequently
+        if (prev.size > 1000) {
+          return new Set();
+        }
+        return prev;
+      });
+    }, 6 * 60 * 60 * 1000); // 6 hours instead of 1 hour
 
     return () => clearInterval(cleanup);
   }, []);
@@ -69,40 +76,31 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     metadata: fsNotification.metadata,
   });
 
-  // Generate role-based system notifications
-  const generateRoleBasedSystemNotifications = async (userRole: string, userId: string) => {
-    try {
-      switch (userRole) {
-        case 'admin':
-          await generateAdminSystemNotifications(userId);
-          break;
-        case 'warehouse_staff':
-          await generateWarehouseSystemNotifications(userId);
-          break;
-        case 'supplier':
-          await generateSupplierSystemNotifications(userId);
-          break;
-        case 'internal_user':
-          await generateInternalUserSystemNotifications(userId);
-          break;
-      }
-    } catch (error) {
-      console.error('Error generating role-based notifications:', error);
-    }
-  };
+  // // Generate role-based system notifications
+  // const generateRoleBasedSystemNotifications = async (userRole: string, userId: string) => {
+  //   try {
+  //     switch (userRole) {
+  //       case 'admin':
+  //         await generateAdminSystemNotifications(userId);
+  //         break;
+  //       case 'warehouse_staff':
+  //         await generateWarehouseSystemNotifications(userId);
+  //         break;
+  //       case 'supplier':
+  //         await generateSupplierSystemNotifications(userId);
+  //         break;
+  //       case 'internal_user':
+  //         await generateInternalUserSystemNotifications(userId);
+  //         break;
+  //     }
+  //   } catch (error) {
+  //     console.error('Error generating role-based notifications:', error);
+  //   }
+  // };
 
-  const loadRealNotifications = async () => {
-    if (!user || !user.role) {
-      console.log('User or user role not available, skipping notification load');
-      return;
-    }
-    
-    try {
-      await generateRoleBasedSystemNotifications(user.role, user.id);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    }
-  };
+  // Note: Removed loadRealNotifications function as it was generating
+  // duplicate system notifications on every call. Real-time listeners
+  // handle notification generation when actual events occur.
 
   // Load notifications from Firestore
   useEffect(() => {
@@ -120,23 +118,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return unsubscribe;
   }, [user?.id, user?.role]); // Added user?.role dependency to refresh when role changes
 
-  // Generate initial notifications based on system data and user role
-  useEffect(() => {
-    if (!user?.role || !user?.id) return;
-
-    const generateInitialNotifications = async () => {
-      try {
-        // Clear any existing notifications first to ensure clean slate
-        setNotifications([]);
-        // Generate new role-appropriate notifications
-        await generateRoleBasedSystemNotifications(user.role, user.id);
-      } catch (error) {
-        console.error('Error generating initial notifications:', error);
-      }
-    };
-
-    generateInitialNotifications();
-  }, [user?.role, user?.id]);
+  // Note: Removed automatic generation of system notifications on login/role change
+  // to prevent duplicate notifications. System notifications should only be generated
+  // by real-time listeners when actual events occur (e.g., new low stock items,
+  // order status changes, etc.). This prevents the same notifications from
+  // reappearing every time a user refreshes or logs in.
 
   useEffect(() => {
     if (user && user.role) {
@@ -170,20 +156,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           break;
       }
 
-      // Refresh notifications every 5 minutes for other data
-      const interval = setInterval(loadRealNotifications, 5 * 60 * 1000);
+      // Note: Removed periodic notification refresh to prevent duplicates.
+      // Real-time listeners handle all notification updates automatically.
 
       return () => {
-        clearInterval(interval);
         unsubscribers.forEach(unsubscribe => unsubscribe());
       };
-    }
+      }
   }, [user, user?.role]);
 
   // Admin real-time listeners
   const setupAdminListeners = (unsubscribers: (() => void)[]) => {
     // Listen for pending access requests
-    const accessRequestsQuery = query(
+    const accessRequestsQuery = query( 
       collection(db, 'accessRequests'),
       where('status', '==', 'pending')
     );
@@ -192,12 +177,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const request = { id: change.doc.id, ...change.doc.data() } as any;
-          addNotification({
-            title: 'New Access Request',
-            message: `${request.name} has requested ${request.requestedRole} access`,
-            type: 'info',
-            actionUrl: '/dashboard/access-requests',
-          }, change.doc.id);
+          
+          // Only create notifications for requests created within the last 5 minutes
+          // This prevents notifications for existing requests when the listener first connects
+          const requestCreatedAt = request.createdAt?.toDate ? request.createdAt.toDate() : new Date();
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          
+          if (requestCreatedAt > fiveMinutesAgo) {
+            addNotification({
+              title: 'New Access Request',
+              message: `${request.name} has requested ${request.requestedRole} access`,
+              type: 'info',
+              actionUrl: '/dashboard/access-requests',
+            }, change.doc.id);
+          }
         }
       });
     });
@@ -213,12 +206,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const order = { id: change.doc.id, ...change.doc.data() } as any;
-          addNotification({
-            title: 'New Pending Order',
-            message: `Order ${order.orderNumber} requires approval`,
-            type: 'info',
-            actionUrl: '/dashboard/orders',
-          }, change.doc.id);
+          
+          // Only create notifications for orders created within the last 5 minutes
+          // This prevents notifications for existing orders when the listener first connects
+          const orderCreatedAt = order.createdAt?.toDate ? order.createdAt.toDate() : new Date();
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          
+          if (orderCreatedAt > fiveMinutesAgo) {
+            addNotification({
+              title: 'New Pending Order',
+              message: `Order ${order.orderNumber} requires approval`,
+              type: 'info',
+              actionUrl: '/dashboard/orders',
+              timestamp: orderCreatedAt,
+            }, change.doc.id);
+          }
         }
       });
     });
@@ -237,12 +239,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const order = { id: change.doc.id, ...change.doc.data() } as any;
-          addNotification({
-            title: 'New Order to Process',
-            message: `Order ${order.orderNumber} needs warehouse attention`,
-            type: 'info',
-            actionUrl: '/dashboard/orders',
-          }, change.doc.id);
+          
+          // Only create notifications for orders created within the last 5 minutes
+          // This prevents notifications for existing orders when the listener first connects
+          const orderCreatedAt = order.createdAt?.toDate ? order.createdAt.toDate() : new Date();
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          
+          if (orderCreatedAt > fiveMinutesAgo) {
+            addNotification({
+              title: 'New Order to Process',
+              message: `Order ${order.orderNumber} needs warehouse attention`,
+              type: 'info',
+              actionUrl: '/dashboard/orders',
+              timestamp: orderCreatedAt,
+            }, change.doc.id);
+          }
         }
       });
     });
@@ -262,12 +273,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const request = { id: change.doc.id, ...change.doc.data() } as any;
-          addNotification({
-            title: 'New Quantity Request',
-            message: `Quantity update requested for ${request.productName}`,
-            type: 'info',
-            actionUrl: '/dashboard/quantity-requests',
-          }, change.doc.id);
+          
+          // Only create notifications for requests created within the last 5 minutes
+          // This prevents notifications for existing requests when the listener first connects
+          const requestCreatedAt = request.createdAt?.toDate ? request.createdAt.toDate() : new Date();
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          
+          if (requestCreatedAt > fiveMinutesAgo) {
+            addNotification({
+              title: 'New Quantity Request',
+              message: `Quantity update requested for ${request.productName}`,
+              type: 'info',
+              actionUrl: '/dashboard/quantity-requests',
+            }, change.doc.id);
+          }
         }
       });
     });
@@ -285,11 +304,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'modified') {
           const order = { id: change.doc.id, ...change.doc.data() } as any;
+          
+          // Use the order's updatedAt timestamp for when the status actually changed
+          const eventTimestamp = order.updatedAt?.toDate ? order.updatedAt.toDate() : new Date();
+          
           addNotification({
             title: `Your Order ${order.status === 'approved' ? 'Approved' : order.status === 'cancelled' ? 'Cancelled' : 'Updated'}`,
             message: `Order ${order.orderNumber} status changed to ${order.status}`,
             type: order.status === 'approved' ? 'success' : order.status === 'cancelled' ? 'error' : 'info',
             actionUrl: '/dashboard/my-orders',
+            timestamp: eventTimestamp,
           }, change.doc.id);
         }
       });
@@ -297,133 +321,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     unsubscribers.push(unsubscribeUserOrders);
   };
 
-  // Helper functions to generate system notifications for different roles
-  const generateAdminSystemNotifications = async (userId: string) => {
-    const inventoryItems = await getAllInventoryItems();
-    const lowStockItems = inventoryItems.filter(item => item.quantity <= item.minStockLevel);
-    
-    for (const item of lowStockItems.slice(0, 3)) {
-      const title = 'Low Stock Alert';
-      const message = `${item.name} is running low (${item.quantity} units remaining)`;
-      
-      // Check if this notification already exists
-      const exists = await notificationService.notificationExists(userId, title, message);
-      if (exists) {
-        console.log(`Low stock notification for ${item.name} already exists, skipping creation`);
-        continue;
-      }
-      
-      const eventKey = `warning_${title}_${message}_${item.id}`;
-      if (processedEvents.has(eventKey)) {
-        continue; // Skip if already processed
-      }
-      
-      await notificationService.createNotification({
-        userId,
-        title,
-        message,
-        type: 'warning',
-        actionUrl: '/dashboard/inventory',
-        metadata: { category: 'inventory', productId: item.id },
-      });
-      
-      setProcessedEvents(prev => new Set([...prev, eventKey]));
-    }
-  };
-
-  const generateWarehouseSystemNotifications = async (userId: string) => {
-    const inventoryItems = await getAllInventoryItems();
-    const lowStockItems = inventoryItems.filter(item => item.quantity <= item.minStockLevel);
-    
-    for (const item of lowStockItems.slice(0, 3)) {
-      const title = 'Low Stock Alert';
-      const message = `${item.name} is running low (${item.quantity} units remaining)`;
-      
-      // Check if this notification already exists
-      const exists = await notificationService.notificationExists(userId, title, message);
-      if (exists) {
-        console.log(`Low stock notification for ${item.name} already exists, skipping creation`);
-        continue;
-      }
-      
-      const eventKey = `warning_${title}_${message}_${item.id}`;
-      if (processedEvents.has(eventKey)) {
-        continue; // Skip if already processed
-      }
-      
-      await notificationService.createNotification({
-        userId,
-        title,
-        message,
-        type: 'warning',
-        actionUrl: '/dashboard/inventory',
-        metadata: { category: 'inventory', productId: item.id },
-      });
-      
-      setProcessedEvents(prev => new Set([...prev, eventKey]));
-    }
-  };
-
-  const generateSupplierSystemNotifications = async (userId: string) => {
-    const title = 'Supplier Dashboard';
-    const message = 'Check your product catalog and quantity requests';
-    
-    // Check if this notification already exists
-    const exists = await notificationService.notificationExists(userId, title, message);
-    if (exists) {
-      console.log('Supplier system notification already exists, skipping creation');
-      return;
-    }
-    
-    await notificationService.createNotification({
-      userId,
-      title,
-      message,
-      type: 'info',
-      actionUrl: '/dashboard/products',
-      metadata: { category: 'system' },
-    });
-  };
-
-  const generateInternalUserSystemNotifications = async (userId: string) => {
-    const orders = await getAllOrders();
-    const userOrders = orders
-      .filter(order => order.userId === userId)
-      .filter(order => {
-        const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
-        return Date.now() - orderDate.getTime() < 7 * 24 * 60 * 60 * 1000;
-      })
-      .slice(0, 2);
-
-    for (const order of userOrders) {
-      const title = `Your Order ${order.status === 'approved' ? 'Approved' : order.status === 'cancelled' ? 'Cancelled' : 'Updated'}`;
-      const message = `Order ${order.orderNumber} is ${order.status}`;
-      
-      // Check if this notification already exists
-      const exists = await notificationService.notificationExists(userId, title, message);
-      if (exists) {
-        console.log(`Order notification for ${order.orderNumber} already exists, skipping creation`);
-        continue;
-      }
-      
-      await notificationService.createNotification({
-        userId,
-        title,
-        message,
-        type: order.status === 'approved' ? 'success' : order.status === 'cancelled' ? 'error' : 'info',
-        actionUrl: '/dashboard/my-orders',
-        metadata: { category: 'order', orderId: order.id },
-      });
-    }
-  };
-
   // Helper function to generate a unique event key for deduplication
   const generateEventKey = (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>, docId?: string): string => {
-    const baseKey = `${notification.type}_${notification.title}_${notification.message}`;
+    // Create a more specific key that includes user ID to prevent cross-user conflicts
+    const baseKey = `${user?.id}_${notification.type}_${notification.title}_${notification.message}`;
     return docId ? `${baseKey}_${docId}` : baseKey;
   };
 
-  const addNotification = async (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>, docId?: string) => {
+  const addNotification = async (notification: Omit<Notification, 'id' | 'read' | 'timestamp'> & { timestamp?: Date }, docId?: string) => {
     if (!user?.id) return;
     
     // Check for duplicates using event key
@@ -432,6 +337,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       console.log('Duplicate notification prevented:', eventKey);
       return;
     }
+    
+    // Double-check with database to prevent duplicates across sessions
+     // Use shorter time window for real-time notifications (30 minutes)
+     try {
+       const exists = await notificationService.notificationExists(user.id, notification.title, notification.message, 0.5);
+       if (exists) {
+         console.log('Notification already exists in database, skipping creation');
+         setProcessedEvents(prev => new Set([...prev, eventKey]));
+         return;
+       }
+     } catch (error) {
+       console.error('Error checking notification existence:', error);
+     }
     
     try {
       const notificationData: NotificationCreateData = {
@@ -448,6 +366,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       
       if (notification.metadata && Object.keys(notification.metadata).length > 0) {
         notificationData.metadata = notification.metadata;
+      }
+      
+      // Use provided timestamp if available
+      if (notification.timestamp) {
+        notificationData.timestamp = notification.timestamp;
       }
       
       await notificationService.createNotification(notificationData);
@@ -488,23 +411,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const refreshNotifications = async () => {
-    if (!user?.role || !user?.id) return;
-    
-    try {
-      await generateRoleBasedSystemNotifications(user.role, user.id);
-    } catch (error) {
-      console.error('Error refreshing notifications:', error);
-    }
+    // Note: This function now only refreshes the notification display.
+    // System notifications are handled by real-time listeners to prevent duplicates.
+    console.log('Notification display refreshed');
   };
 
   const refreshNotificationsForRoleChange = async () => {
     if (!user?.id || !user?.role) return;
     
     try {
-      // Clear current notifications
+      // Clear current notifications display
       setNotifications([]);
-      // Generate new role-appropriate notifications
-      await generateRoleBasedSystemNotifications(user.role, user.id);
+      // Note: Removed automatic generation of system notifications.
+      // Real-time listeners will populate notifications based on actual events.
     } catch (error) {
       console.error('Error refreshing notifications for role change:', error);
     }

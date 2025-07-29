@@ -1,3 +1,12 @@
+export interface UserAddress {
+  id: string;
+  label: string;
+  place: string;
+  area: string;
+  zipCode: string;
+  isDefault?: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -11,6 +20,7 @@ export interface User {
   isEmailVerified?: boolean;
   phone?: string;
   address?: string;
+  addresses?: UserAddress[];
   companyName?: string;
   contactPerson?: string;
   businessType?: string;

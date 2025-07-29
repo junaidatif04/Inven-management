@@ -11,16 +11,17 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/services/authService';
+import { UserAddress } from '@/types/auth';
 import { submitAccessRequest } from '@/services/accessRequestService';
 import { sendRequestConfirmationEmail } from '@/services/emailService';
-import { updateUser } from '@/services/userService';
+import { updateUser, addUserAddress, deleteUserAddress, getUserAddresses, setDefaultAddress } from '@/services/userService';
 import { deleteMyAccount } from '@/services/completeUserDeletionService';
 
 import { getOrdersByUser } from '@/services/orderService';
 import { getProposedProductsBySupplier } from '@/services/productService';
 import { getQuantityRequestsBySupplier, getQuantityRequestsByRequester } from '@/services/displayRequestService';
 
-import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2, Edit } from 'lucide-react';
+import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2, Edit, Plus, MapPin, Star } from 'lucide-react';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 
 export default function UserProfilePage() {
@@ -55,6 +56,12 @@ export default function UserProfilePage() {
   const [hasActiveWarehouseRequests, setHasActiveWarehouseRequests] = useState(false);
   const [checkingWarehouseActivities, setCheckingWarehouseActivities] = useState(false);
 
+  // Address management state
+  const [userAddresses, setUserAddresses] = useState<UserAddress[]>([]);
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [newAddressForm, setNewAddressForm] = useState({ label: '', place: '', area: '', zipCode: '' });
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+
 
   useEffect(() => {
     if (user) {
@@ -65,6 +72,7 @@ export default function UserProfilePage() {
       // Check for active orders if user is an internal user
       if (user.role === 'internal_user') {
         checkActiveOrders();
+        loadUserAddresses();
       }
       // Check for active quantity requests if user is warehouse staff
       if (user.role === 'warehouse_staff') {
@@ -90,7 +98,20 @@ export default function UserProfilePage() {
     }
   }, [isEditingProfile, user]);
 
-
+  const loadUserAddresses = async () => {
+    if (!user?.id || user.role !== 'internal_user') return;
+    
+    setLoadingAddresses(true);
+    try {
+      const addresses = await getUserAddresses(user.id);
+      setUserAddresses(addresses);
+    } catch (error) {
+      console.error('Error loading user addresses:', error);
+      toast.error('Failed to load addresses');
+    } finally {
+      setLoadingAddresses(false);
+    }
+  };
 
   const checkActiveOrders = async () => {
     if (!user?.id || user.role !== 'internal_user') return;
@@ -194,6 +215,64 @@ export default function UserProfilePage() {
       toast.error('Failed to update profile');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleAddAddress = async () => {
+    if (!user?.id || !newAddressForm.label.trim() || !newAddressForm.place.trim() || !newAddressForm.area.trim() || !newAddressForm.zipCode.trim()) {
+      toast.error('Please fill in all address fields');
+      return;
+    }
+
+    if (userAddresses.length >= 5) {
+      toast.error('Maximum of 5 addresses allowed');
+      return;
+    }
+
+    try {
+      const newAddress: UserAddress = {
+        id: Date.now().toString(),
+        label: newAddressForm.label.trim(),
+        place: newAddressForm.place.trim(),
+        area: newAddressForm.area.trim(),
+        zipCode: newAddressForm.zipCode.trim(),
+        isDefault: userAddresses.length === 0
+      };
+
+      await addUserAddress(user.id, newAddress);
+      await loadUserAddresses();
+      setNewAddressForm({ label: '', place: '', area: '', zipCode: '' });
+      setIsAddingAddress(false);
+      toast.success('Address added successfully');
+    } catch (error) {
+      console.error('Error adding address:', error);
+      toast.error('Failed to add address');
+    }
+  };
+
+  const handleDeleteAddress = async (addressId: string) => {
+    if (!user?.id) return;
+
+    try {
+      await deleteUserAddress(user.id, addressId);
+      await loadUserAddresses();
+      toast.success('Address deleted successfully');
+    } catch (error) {
+      console.error('Error deleting address:', error);
+      toast.error('Failed to delete address');
+    }
+  };
+
+  const handleSetDefaultAddress = async (addressId: string) => {
+    if (!user?.id) return;
+
+    try {
+      await setDefaultAddress(user.id, addressId);
+      await loadUserAddresses();
+      toast.success('Default address updated');
+    } catch (error) {
+      console.error('Error setting default address:', error);
+      toast.error('Failed to update default address');
     }
   };
 
@@ -453,16 +532,18 @@ export default function UserProfilePage() {
                         placeholder="Enter your phone number"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="profileAddress">Address</Label>
-                      <Textarea
-                        id="profileAddress"
-                        value={profileForm.address}
-                        onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
-                        placeholder="Enter your address"
-                        rows={3}
-                      />
-                    </div>
+                    {user.role !== 'internal_user' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="profileAddress">Address</Label>
+                        <Textarea
+                          id="profileAddress"
+                          value={profileForm.address}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
+                          placeholder="Enter your address"
+                          rows={3}
+                        />
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <Button onClick={handleUpdateProfile} disabled={isSubmitting}>
                         {isSubmitting ? 'Saving...' : 'Save Changes'}
@@ -495,15 +576,168 @@ export default function UserProfilePage() {
                       <p className="text-sm font-medium text-muted-foreground">Member Since</p>
                       <p className="text-sm">{user.createdAt ? new Date(user.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
                     </div>
-                    <div className="md:col-span-2">
-                      <p className="text-sm font-medium text-muted-foreground">Address</p>
-                      <p className="text-sm">{user.address || 'Not provided'}</p>
-                    </div>
+                    {user.role !== 'internal_user' && (
+                      <div className="md:col-span-2">
+                        <p className="text-sm font-medium text-muted-foreground">Address</p>
+                        <p className="text-sm">{user.address || 'Not provided'}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
+              {/* Address Management Section - Only for Internal Users */}
+              {user.role === 'internal_user' && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-medium">Saved Addresses</h4>
+                        <p className="text-xs text-muted-foreground">Manage your delivery addresses (max 5)</p>
+                      </div>
+                      {userAddresses.length < 5 && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setIsAddingAddress(true)}
+                          disabled={loadingAddresses}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Address
+                        </Button>
+                      )}
+                    </div>
 
+                    {loadingAddresses ? (
+                      <div className="text-center py-4">
+                        <p className="text-sm text-muted-foreground">Loading addresses...</p>
+                      </div>
+                    ) : userAddresses.length === 0 ? (
+                      <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                        <MapPin className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground mb-2">No saved addresses</p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setIsAddingAddress(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Your First Address
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {userAddresses.map((address) => (
+                          <div 
+                            key={address.id} 
+                            className="flex items-start justify-between p-3 border rounded-lg"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="font-medium text-sm">{address.label}</p>
+                                {address.isDefault && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    <Star className="h-3 w-3 mr-1" />
+                                    Default
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {address.place}, {address.area}, {address.zipCode}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!address.isDefault && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleSetDefaultAddress(address.id)}
+                                  className="text-xs"
+                                >
+                                  Set Default
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteAddress(address.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add Address Dialog */}
+                    <Dialog open={isAddingAddress} onOpenChange={setIsAddingAddress}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New Address</DialogTitle>
+                          <DialogDescription>
+                            Add a new delivery address to your saved addresses.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="addressLabel">Address Label</Label>
+                            <Input
+                              id="addressLabel"
+                              value={newAddressForm.label}
+                              onChange={(e) => setNewAddressForm(prev => ({ ...prev, label: e.target.value }))}
+                              placeholder="e.g., Home, Office, Warehouse"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="place">Place/Building</Label>
+                            <Input
+                              id="place"
+                              value={newAddressForm.place}
+                              onChange={(e) => setNewAddressForm(prev => ({ ...prev, place: e.target.value }))}
+                              placeholder="e.g., Building A, Floor 3, Room 301"
+                              maxLength={50}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="area">Area/District</Label>
+                            <Input
+                              id="area"
+                              value={newAddressForm.area}
+                              onChange={(e) => setNewAddressForm(prev => ({ ...prev, area: e.target.value }))}
+                              placeholder="e.g., Downtown, Business District"
+                              maxLength={30}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="zipCode">ZIP Code</Label>
+                            <Input
+                              id="zipCode"
+                              value={newAddressForm.zipCode}
+                              onChange={(e) => setNewAddressForm(prev => ({ ...prev, zipCode: e.target.value }))}
+                              placeholder="e.g., 12345"
+                              maxLength={10}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => {
+                            setIsAddingAddress(false);
+                            setNewAddressForm({ label: '', place: '', area: '', zipCode: '' });
+                          }}>
+                            Cancel
+                          </Button>
+                          <Button onClick={handleAddAddress}>
+                            Add Address
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </>
+              )}
 
               {/* Activity Restrictions Warning */}
               {((user.role === 'internal_user' && hasActiveOrders) || 

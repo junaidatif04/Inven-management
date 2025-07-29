@@ -7,6 +7,8 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { getUserAddresses, addUserAddress } from '@/services/userService';
+import { UserAddress } from '@/types/auth';
 import { subscribeToPublishedInventoryItemsWithAvailability } from '@/services/inventoryService';
 import { InventoryItem } from '@/types/inventory';
 import { createOrder, OrderItem } from '@/services/orderService';
@@ -46,19 +48,28 @@ export default function ProductCatalogPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    // Load cart from localStorage on component mount
+    const savedCart = localStorage.getItem('shopping-cart');
+    return savedCart ? JSON.parse(savedCart) : [];
+  });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [stockErrors, setStockErrors] = useState<Record<string, string>>({});
   const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   
+  // Address management for internal users
+  const [userAddresses, setUserAddresses] = useState<UserAddress[]>([]);
+
+  
   // Checkout form data
   const [checkoutData, setCheckoutData] = useState({
-    deliveryLocation: '',
-    priority: 'medium' as 'low' | 'medium' | 'high',
+    selectedAddressId: '',
     notes: ''
   });
+  const [isAddingAddressFromCheckout, setIsAddingAddressFromCheckout] = useState(false);
+  const [newAddressForm, setNewAddressForm] = useState({ label: '', place: '', area: '', zipCode: '' });
 
   useEffect(() => {
     setLoading(true);
@@ -69,11 +80,68 @@ export default function ProductCatalogPage() {
       setLoading(false);
     });
 
+    // Load user addresses for internal users
+    if (user?.role === 'internal_user') {
+      loadUserAddresses();
+    }
+
     // Cleanup subscription on unmount
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [user]);
+
+  const loadUserAddresses = async () => {
+    if (!user?.id || user.role !== 'internal_user') return;
+    
+    try {
+      const addresses = await getUserAddresses(user.id);
+      setUserAddresses(addresses);
+      // Set default address if available
+      const defaultAddress = addresses.find(addr => addr.isDefault);
+      if (defaultAddress && !checkoutData.selectedAddressId) {
+        setCheckoutData(prev => ({ ...prev, selectedAddressId: defaultAddress.id }));
+      }
+    } catch (error) {
+      console.error('Error loading user addresses:', error);
+    }
+  };
+
+  const handleAddAddressFromCheckout = async () => {
+    if (!user?.id || !newAddressForm.label.trim() || !newAddressForm.place.trim() || !newAddressForm.area.trim() || !newAddressForm.zipCode.trim()) {
+      toast.error('Please fill in all address fields');
+      return;
+    }
+
+    if (userAddresses.length >= 5) {
+      toast.error('Maximum of 5 addresses allowed');
+      return;
+    }
+
+    try {
+      const newAddress: UserAddress = {
+        id: Date.now().toString(),
+        label: newAddressForm.label.trim(),
+        place: newAddressForm.place.trim(),
+        area: newAddressForm.area.trim(),
+        zipCode: newAddressForm.zipCode.trim(),
+        isDefault: userAddresses.length === 0
+      };
+
+      await addUserAddress(user.id, newAddress);
+      await loadUserAddresses();
+      
+      // Select the newly added address
+      setCheckoutData(prev => ({ ...prev, selectedAddressId: newAddress.id }));
+      
+      setNewAddressForm({ label: '', place: '', area: '', zipCode: '' });
+      setIsAddingAddressFromCheckout(false);
+      toast.success('Address added successfully');
+    } catch (error) {
+      console.error('Error adding address:', error);
+      toast.error('Failed to add address');
+    }
+  };
 
 
 
@@ -87,6 +155,11 @@ export default function ProductCatalogPage() {
 
   // Get unique categories for filter dropdown
   const categories = ['All', ...Array.from(new Set(products.map(product => product.category)))];
+
+  // Save cart to localStorage whenever cart changes
+  useEffect(() => {
+    localStorage.setItem('shopping-cart', JSON.stringify(cart));
+  }, [cart]);
 
   const addToCart = (product: InventoryItem) => {
     const selectedQuantity = selectedQuantities[product.id!] || 1;
@@ -179,6 +252,9 @@ export default function ProductCatalogPage() {
 
   const clearCart = () => {
     setCart([]);
+    setSelectedQuantities({});
+    setStockErrors({});
+    localStorage.removeItem('shopping-cart');
   };
 
   const getTotalAmount = () => {
@@ -215,8 +291,14 @@ export default function ProductCatalogPage() {
   const handleCheckout = async () => {
     if (!user || cart.length === 0 || isPlacingOrder) return;
 
-    if (!checkoutData.deliveryLocation.trim()) {
-      toast.error('Please provide a delivery location');
+    if (!checkoutData.selectedAddressId) {
+      toast.error('Please select a delivery address');
+      return;
+    }
+
+    const selectedAddress = userAddresses.find(addr => addr.id === checkoutData.selectedAddressId);
+    if (!selectedAddress) {
+      toast.error('Selected address not found');
       return;
     }
 
@@ -247,10 +329,10 @@ export default function ProductCatalogPage() {
         items: orderItems,
         totalAmount: getTotalAmount(),
         status: 'pending' as const,
-        priority: checkoutData.priority,
+
         requestedBy: user.name,
         userId: user.id,
-        deliveryLocation: checkoutData.deliveryLocation,
+        deliveryLocation: `${selectedAddress.place}, ${selectedAddress.area}, ${selectedAddress.zipCode}`,
         notes: checkoutData.notes,
         orderDate: new Date(),
         expectedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
@@ -261,8 +343,7 @@ export default function ProductCatalogPage() {
       // Reset form and cart
       clearCart();
       setCheckoutData({
-        deliveryLocation: '',
-        priority: 'medium',
+        selectedAddressId: '',
         notes: ''
       });
       setStockErrors({});
@@ -568,33 +649,137 @@ export default function ProductCatalogPage() {
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="deliveryLocation">Delivery Location *</Label>
-              <Input
-                id="deliveryLocation"
-                placeholder="e.g., Building A, Floor 3, Room 301"
-                value={checkoutData.deliveryLocation}
-                onChange={(e) => setCheckoutData(prev => ({ ...prev, deliveryLocation: e.target.value }))}
-              />
+              <Label htmlFor="deliveryAddress">Delivery Address *</Label>
+              {user?.role === 'internal_user' ? (
+                <Select
+                  value={checkoutData.selectedAddressId}
+                  onValueChange={(value) => {
+                    if (value === 'add_new') {
+                      setIsAddingAddressFromCheckout(true);
+                    } else {
+                      setCheckoutData(prev => ({ ...prev, selectedAddressId: value }));
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select delivery address">
+                      {checkoutData.selectedAddressId && (() => {
+                        const selectedAddress = userAddresses.find(addr => addr.id === checkoutData.selectedAddressId);
+                        return selectedAddress ? (
+                          <span className="font-medium truncate">
+                            {selectedAddress.label.length > 20 
+                              ? `${selectedAddress.label.substring(0, 20)}...` 
+                              : selectedAddress.label
+                            }
+                          </span>
+                        ) : null;
+                      })()}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userAddresses.map((address) => (
+                      <SelectItem key={address.id} value={address.id}>
+                        <div className="flex flex-col max-w-full">
+                          <span className="font-medium truncate">
+                            {address.label.length > 25 
+                              ? `${address.label.substring(0, 25)}...` 
+                              : address.label
+                            }
+                          </span>
+                          <span className="text-sm text-gray-500 truncate">
+                            {(() => {
+                              const fullAddress = `${address.place}, ${address.area}, ${address.zipCode}`;
+                              return fullAddress.length > 40 
+                                ? `${fullAddress.substring(0, 40)}...` 
+                                : fullAddress;
+                            })()
+                            }
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="add_new">
+                       <div className="flex items-center text-blue-600">
+                         <Plus className="h-4 w-4 mr-2" />
+                         <span>Add New Address</span>
+                       </div>
+                     </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="deliveryAddress"
+                  placeholder="e.g., Building A, Floor 3, Room 301"
+                  value={checkoutData.selectedAddressId}
+                  onChange={(e) => setCheckoutData(prev => ({ ...prev, selectedAddressId: e.target.value }))}
+                />
+              )}
             </div>
             
-            <div>
-              <Label htmlFor="priority">Priority</Label>
-              <Select 
-                value={checkoutData.priority} 
-                onValueChange={(value: 'low' | 'medium' | 'high') => 
-                  setCheckoutData(prev => ({ ...prev, priority: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Add New Address Form */}
+            {isAddingAddressFromCheckout && (
+              <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Add New Address</Label>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setIsAddingAddressFromCheckout(false);
+                      setNewAddressForm({ label: '', place: '', area: '', zipCode: '' });
+                    }}
+                  >
+                    ×
+                  </Button>
+                </div>
+                <div>
+                  <Label htmlFor="addressLabel">Address Label *</Label>
+                  <Input
+                    id="addressLabel"
+                    placeholder="e.g., Office, Home, Warehouse"
+                    value={newAddressForm.label}
+                    onChange={(e) => setNewAddressForm(prev => ({ ...prev, label: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="place">Place/Building *</Label>
+                  <Input
+                    id="place"
+                    placeholder="e.g., Building A, Floor 3, Room 301"
+                    value={newAddressForm.place}
+                    onChange={(e) => setNewAddressForm(prev => ({ ...prev, place: e.target.value }))}
+                    maxLength={50}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="area">Area/District *</Label>
+                  <Input
+                    id="area"
+                    placeholder="e.g., Downtown, Business District"
+                    value={newAddressForm.area}
+                    onChange={(e) => setNewAddressForm(prev => ({ ...prev, area: e.target.value }))}
+                    maxLength={30}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="zipCode">ZIP Code *</Label>
+                  <Input
+                    id="zipCode"
+                    placeholder="e.g., 12345"
+                    value={newAddressForm.zipCode}
+                    onChange={(e) => setNewAddressForm(prev => ({ ...prev, zipCode: e.target.value }))}
+                    maxLength={10}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleAddAddressFromCheckout}
+                  disabled={!newAddressForm.label.trim() || !newAddressForm.place.trim() || !newAddressForm.area.trim() || !newAddressForm.zipCode.trim()}
+                >
+                  Add Address
+                </Button>
+              </div>
+            )}
             
             <div>
               <Label htmlFor="notes">Additional Notes</Label>
@@ -625,7 +810,7 @@ export default function ProductCatalogPage() {
             </Button>
             <Button 
               onClick={handleCheckout}
-              disabled={isPlacingOrder || cart.length === 0 || !checkoutData.deliveryLocation.trim()}
+              disabled={isPlacingOrder || cart.length === 0 || !checkoutData.selectedAddressId}
             >
               {isPlacingOrder ? 'Placing Order...' : 'Place Order'}
             </Button>

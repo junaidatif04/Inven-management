@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { User, UserRole } from '@/services/authService';
+import { UserAddress } from '@/types/auth';
 
 export interface UpdateUser {
   id: string;
@@ -20,6 +21,7 @@ export interface UpdateUser {
   role?: UserRole;
   phone?: string;
   address?: string;
+  addresses?: UserAddress[];
   status?: string;
 }
 
@@ -193,6 +195,145 @@ export const migrateUserRoles = async (): Promise<number> => {
     return migratedCount;
   } catch (error) {
     console.error('Error migrating user roles:', error);
+    throw error;
+  }
+};
+
+// Address Management Functions
+export const addUserAddress = async (userId: string, address: UserAddress): Promise<void> => {
+  try {
+    const user = await getUser(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const currentAddresses = user.addresses || [];
+    
+    // Check if user already has 5 addresses
+    if (currentAddresses.length >= 5) {
+      throw new Error('Maximum of 5 addresses allowed');
+    }
+
+    // If this is the first address, make it default
+    if (currentAddresses.length === 0) {
+      address.isDefault = true;
+    }
+
+    // If this address is set as default, remove default from others
+    if (address.isDefault) {
+      currentAddresses.forEach(addr => addr.isDefault = false);
+    }
+
+    const updatedAddresses = [...currentAddresses, address];
+    
+    await updateDoc(doc(db, 'users', userId), {
+      addresses: updatedAddresses,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error adding user address:', error);
+    throw error;
+  }
+};
+
+export const updateUserAddress = async (userId: string, addressId: string, updatedAddress: Partial<UserAddress>): Promise<void> => {
+  try {
+    const user = await getUser(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const currentAddresses = user.addresses || [];
+    const addressIndex = currentAddresses.findIndex(addr => addr.id === addressId);
+    
+    if (addressIndex === -1) {
+      throw new Error('Address not found');
+    }
+
+    // If setting this address as default, remove default from others
+    if (updatedAddress.isDefault) {
+      currentAddresses.forEach(addr => addr.isDefault = false);
+    }
+
+    currentAddresses[addressIndex] = { ...currentAddresses[addressIndex], ...updatedAddress };
+    
+    await updateDoc(doc(db, 'users', userId), {
+      addresses: currentAddresses,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating user address:', error);
+    throw error;
+  }
+};
+
+export const deleteUserAddress = async (userId: string, addressId: string): Promise<void> => {
+  try {
+    const user = await getUser(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const currentAddresses = user.addresses || [];
+    const addressToDelete = currentAddresses.find(addr => addr.id === addressId);
+    
+    if (!addressToDelete) {
+      throw new Error('Address not found');
+    }
+
+    const updatedAddresses = currentAddresses.filter(addr => addr.id !== addressId);
+    
+    // If we deleted the default address and there are other addresses, make the first one default
+    if (addressToDelete.isDefault && updatedAddresses.length > 0) {
+      updatedAddresses[0].isDefault = true;
+    }
+    
+    await updateDoc(doc(db, 'users', userId), {
+      addresses: updatedAddresses,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error deleting user address:', error);
+    throw error;
+  }
+};
+
+export const setDefaultAddress = async (userId: string, addressId: string): Promise<void> => {
+  try {
+    const user = await getUser(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const currentAddresses = user.addresses || [];
+    const addressExists = currentAddresses.some(addr => addr.id === addressId);
+    
+    if (!addressExists) {
+      throw new Error('Address not found');
+    }
+
+    // Remove default from all addresses and set the specified one as default
+    const updatedAddresses = currentAddresses.map(addr => ({
+      ...addr,
+      isDefault: addr.id === addressId
+    }));
+    
+    await updateDoc(doc(db, 'users', userId), {
+      addresses: updatedAddresses,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error setting default address:', error);
+    throw error;
+  }
+};
+
+export const getUserAddresses = async (userId: string): Promise<UserAddress[]> => {
+  try {
+    const user = await getUser(userId);
+    return user?.addresses || [];
+  } catch (error) {
+    console.error('Error getting user addresses:', error);
     throw error;
   }
 };

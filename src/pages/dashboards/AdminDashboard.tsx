@@ -23,8 +23,8 @@ import { getAllInventoryItems, updateAllItemStatuses } from '@/services/inventor
 import { getAllOrders } from '@/services/orderService';
 import { getAllUsers } from '../../services/userService';
 
-import { getAllDisplayRequests, getAllQuantityRequests } from '@/services/displayRequestService';
-import type { DisplayRequest, QuantityRequest } from '@/types/displayRequest';
+import { getAllQuantityRequests } from '@/services/quantityRequestService';
+import type { QuantityRequest } from '@/types/quantityRequest';
 
 
 
@@ -89,13 +89,11 @@ export default function AdminDashboard() {
         inventoryItems,
         orders,
         users,
-        displayRequestsData,
         quantityRequestsData
       ] = await Promise.all([
         getAllInventoryItems(),
         getAllOrders(),
         getAllUsers(),
-        getAllDisplayRequests(),
         getAllQuantityRequests()
       ]);
 
@@ -192,8 +190,7 @@ export default function AdminDashboard() {
       // Calculate supplier stats (count all suppliers with supplier role)
       const activeSuppliers = suppliers.length;
       
-      // Calculate display and quantity request stats
-      const pendingDisplayRequests = displayRequestsData.filter((req: DisplayRequest) => req.status === 'pending').length;
+      // Calculate quantity request stats
       const pendingQuantityRequests = quantityRequestsData.filter((req: QuantityRequest) => req.status === 'pending').length;
 
       const newStats: DashboardStats = {
@@ -206,7 +203,6 @@ export default function AdminDashboard() {
         activeSuppliers,
         monthlyOrderGrowth,
         inventoryTurnover: 2.5,
-        pendingDisplayRequests,
         pendingQuantityRequests
       };
 
@@ -278,7 +274,6 @@ export default function AdminDashboard() {
           activeSuppliers: 0,
           monthlyOrderGrowth: 0,
           inventoryTurnover: 0,
-          pendingDisplayRequests: 0,
           pendingQuantityRequests: 0
         });
       }
@@ -682,6 +677,8 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </div>
+
+
         </div>
       </div>
     </div>

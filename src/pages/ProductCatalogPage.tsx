@@ -18,7 +18,6 @@ import {
   Minus,
   Search,
   Package,
-  DollarSign,
   Trash2,
   ShoppingBag
 } from 'lucide-react';
@@ -478,14 +477,22 @@ export default function ProductCatalogPage() {
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
                   <span className="text-lg font-bold text-green-600">
                     ${(product.salePrice || product.unitPrice).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex items-center space-x-1 text-sm text-gray-500">
                   <Package className="h-4 w-4" />
-                  <span>Available: {(product.quantity || 0) - (product.reservedQuantity || 0)}</span>
+                  {(() => {
+                    const availableStock = (product.quantity || 0) - (product.reservedQuantity || 0);
+                    if (availableStock <= 0) return <span>Out of Stock</span>;
+                    if (availableStock <= 5) {
+                      return <span className="text-orange-600 font-medium">
+                        {availableStock === 1 ? 'Only 1 left' : availableStock === 2 ? 'Only 2 left' : `Only ${availableStock} left`}
+                      </span>;
+                    }
+                    return <span>Available: {availableStock}</span>;
+                  })()}
                 </div>
               </div>
               
@@ -504,7 +511,28 @@ export default function ProductCatalogPage() {
                   min="1"
                   max={getMaxSelectableQuantity(product)}
                   value={getSelectedQuantity(product.id!)}
-                  onChange={(e) => updateSelectedQuantity(product.id!, parseInt(e.target.value) || 1)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setSelectedQuantities(prev => ({ ...prev, [product.id!]: 1 }));
+                    } else {
+                      const numValue = parseInt(value);
+                      if (!isNaN(numValue) && numValue > 0) {
+                        const maxAllowed = getMaxSelectableQuantity(product);
+                        const validQuantity = Math.min(numValue, maxAllowed);
+                        setSelectedQuantities(prev => ({ ...prev, [product.id!]: validQuantity }));
+                      }
+                    }
+                  }}
+                  onFocus={(e) => {
+                    e.target.select();
+                  }}
+                  onBlur={(e) => {
+                    const value = parseInt(e.target.value);
+                    if (isNaN(value) || value < 1) {
+                      setSelectedQuantities(prev => ({ ...prev, [product.id!]: 1 }));
+                    }
+                  }}
                   className="w-16 text-center"
                 />
                 <Button
@@ -588,7 +616,29 @@ export default function ProductCatalogPage() {
                           return (product?.quantity || 0) - (product?.reservedQuantity || 0);
                         })()}
                         value={item.quantity}
-                        onChange={(e) => updateCartQuantity(item.productId, parseInt(e.target.value) || 1)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '') {
+                            updateCartQuantity(item.productId, 1);
+                          } else {
+                            const numValue = parseInt(value);
+                            if (!isNaN(numValue) && numValue > 0) {
+                              const product = products.find(p => p.id === item.productId);
+                              const maxStock = (product?.quantity || 0) - (product?.reservedQuantity || 0);
+                              const validQuantity = Math.min(numValue, maxStock);
+                              updateCartQuantity(item.productId, validQuantity);
+                            }
+                          }
+                        }}
+                        onFocus={(e) => {
+                          e.target.select();
+                        }}
+                        onBlur={(e) => {
+                          const value = parseInt(e.target.value);
+                          if (isNaN(value) || value < 1) {
+                            updateCartQuantity(item.productId, 1);
+                          }
+                        }}
                         className="w-20 text-center"
                       />
                       <Button

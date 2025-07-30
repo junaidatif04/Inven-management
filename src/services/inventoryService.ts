@@ -49,7 +49,14 @@ export const getInventoryItem = async (id: string): Promise<InventoryItem | null
 
 export const createInventoryItem = async (item: CreateInventoryItem, userId: string): Promise<string> => {
   try {
-    console.log('createInventoryItem called with:', { item, userId });
+    console.log('🏭 [INVENTORY SERVICE] Creating inventory item:', {
+      productName: item.name,
+      productId: item.productId,
+      supplierId: item.supplierId,
+      quantity: item.quantity,
+      category: item.category,
+      userId
+    });
     
     const status = item.quantity <= 0 ? 'out_of_stock' : 
                   item.quantity <= item.minStockLevel ? 'low_stock' : 'in_stock';
@@ -66,9 +73,15 @@ export const createInventoryItem = async (item: CreateInventoryItem, userId: str
     
     console.log('Creating inventory item with data:', inventoryItemData);
     
+    console.log('📝 [INVENTORY SERVICE] Adding document to Firestore with data:', inventoryItemData);
+    
     const docRef = await addDoc(collection(db, 'inventory'), inventoryItemData);
     
+    console.log('✅ [INVENTORY SERVICE] Inventory item created successfully with ID:', docRef.id);
+    
     // Create initial stock movement record
+    console.log('📦 [INVENTORY SERVICE] Creating initial stock movement for inventory ID:', docRef.id);
+    
     await addDoc(collection(db, 'stockMovements'), {
       itemId: docRef.id,
       itemName: item.name,
@@ -80,10 +93,16 @@ export const createInventoryItem = async (item: CreateInventoryItem, userId: str
       notes: 'Item created with initial stock'
     });
     
+    console.log('✅ [INVENTORY SERVICE] Stock movement created successfully');
+    
     console.log('Successfully created inventory item with ID:', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('Error creating inventory item:', error);
+    console.error('❌ [INVENTORY SERVICE] Error creating inventory item:', {
+      error: error,
+      inventoryData: item,
+      userId
+    });
     throw error;
   }
 };
@@ -339,7 +358,7 @@ export const findExistingInventoryItem = async (
   sku?: string
 ): Promise<InventoryItem | null> => {
   try {
-    console.log('Finding existing inventory item:', { productId, supplierId, sku });
+    console.log('🔍 [INVENTORY SERVICE] Searching for existing inventory item:', { productId, supplierId, sku });
     
     const q = query(
       collection(db, 'inventory'),
@@ -347,14 +366,18 @@ export const findExistingInventoryItem = async (
     );
     const querySnapshot = await getDocs(q);
     
-    console.log(`Found ${querySnapshot.docs.length} inventory items for supplier ${supplierId}`);
+    console.log('📊 [INVENTORY SERVICE] Query results:', {
+      supplierItemsFound: querySnapshot.docs.length,
+      supplierId
+    });
     
     // Find exact match by productId first, then by SKU as fallback
     for (const doc of querySnapshot.docs) {
       const item = { id: doc.id, ...doc.data() } as InventoryItem;
       
-      console.log('Checking item:', { 
+      console.log('🔍 [INVENTORY SERVICE] Checking item:', { 
         itemId: item.id, 
+        itemName: item.name,
         itemProductId: item.productId,
         itemSku: item.sku,
         searchProductId: productId,
@@ -363,23 +386,35 @@ export const findExistingInventoryItem = async (
       
       // Primary match: Check by productId if available
       if (item.productId && item.productId === productId) {
-        console.log('ProductId matches, returning existing item:', item.id);
+        console.log('✅ [INVENTORY SERVICE] ProductId matches, returning existing item:', {
+          itemId: item.id,
+          productName: item.name,
+          currentQuantity: item.quantity
+        });
         return item;
       }
       
       // Fallback match: Check by SKU if productId is not available or doesn't match
       if (sku && item.sku && sku.trim() !== '' && item.sku.trim() !== '') {
         if (item.sku.toLowerCase() === sku.toLowerCase()) {
-          console.log('SKU matches, returning existing item:', item.id);
+          console.log('✅ [INVENTORY SERVICE] SKU matches, returning existing item:', {
+            itemId: item.id,
+            productName: item.name,
+            currentQuantity: item.quantity
+          });
           return item;
         }
       }
     }
     
-    console.log('No existing inventory item found');
+    console.log('❌ [INVENTORY SERVICE] No existing inventory item found for:', {
+      productId,
+      supplierId,
+      sku
+    });
     return null;
   } catch (error) {
-    console.error('Error finding existing inventory item:', error);
+    console.error('❌ [INVENTORY SERVICE] Error finding existing inventory item:', error);
     throw error;
   }
 };

@@ -23,7 +23,7 @@ import {
   Send,
   Save,
   MessageSquare,
-  Clock,
+
   CheckCircle,
   XCircle,
   Inbox,
@@ -60,17 +60,12 @@ import {
   subscribeToDraftProductsBySupplier
 } from '@/services/productService';
 import {
-  DisplayRequest,
   QuantityRequest,
-
   QuantityResponse,
-
-  getDisplayRequestsBySupplier,
   getQuantityRequestsBySupplier,
   respondToQuantityRequest,
-  deleteDisplayRequest,
   hasActiveQuantityRequests
-} from '@/services/displayRequestService';
+} from '@/services/quantityRequestService';
 
 
 
@@ -88,7 +83,7 @@ export default function ProductManagementPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [draftProducts, setDraftProducts] = useState<Product[]>([]);
   const [, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
-  const [displayRequests, setDisplayRequests] = useState<DisplayRequest[]>([]);
+  // Display requests removed - direct quantity requests only
   const [quantityRequests, setQuantityRequests] = useState<QuantityRequest[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'proposed'>('all');
@@ -106,6 +101,7 @@ export default function ProductManagementPage() {
   const [newProductForm, setNewProductForm] = useState({
     name: '',
     category: '',
+    customCategory: '',
     price: '',
     description: '',
     imageUrl: ''
@@ -191,15 +187,14 @@ export default function ProductManagementPage() {
     try {
       let productsData: Product[];
       let ordersData: PurchaseOrder[];
-      let displayRequestsData: DisplayRequest[] = [];
+      // Display requests removed
       let quantityRequestsData: QuantityRequest[] = [];
       let draftProductsData: Product[] = [];
       
       if (user.role === 'supplier') {
-        [productsData, ordersData, displayRequestsData, quantityRequestsData, draftProductsData] = await Promise.all([
+        [productsData, ordersData, quantityRequestsData, draftProductsData] = await Promise.all([
           getProductsBySupplier(user.id),
           getPurchaseOrdersBySupplier(user.id),
-          getDisplayRequestsBySupplier(user.id),
           getQuantityRequestsBySupplier(user.id),
           getDraftProductsBySupplier(user.id)
         ]);
@@ -217,7 +212,7 @@ export default function ProductManagementPage() {
       setProducts(productsData);
       setDraftProducts(draftProductsData);
       setPurchaseOrders(ordersData);
-      setDisplayRequests(displayRequestsData);
+      // Display requests removed
       setQuantityRequests(quantityRequestsData);
     } catch (error) {
       toast.error('Failed to load data');
@@ -291,12 +286,18 @@ export default function ProductManagementPage() {
         quantityRequestId: selectedQuantityRequest.id,
         status: quantityResponseForm.status,
         approvedQuantity: quantityResponseForm.status === 'rejected' ? undefined : 
-          quantityResponseForm.status === 'approved_full' ? undefined : parseInt(quantityResponseForm.approvedQuantity),
+          quantityResponseForm.status === 'approved_full' ? selectedQuantityRequest.requestedQuantity : parseInt(quantityResponseForm.approvedQuantity),
         rejectionReason: quantityResponseForm.status === 'rejected' ? quantityResponseForm.rejectionReason : undefined,
         notes: quantityResponseForm.notes || undefined
       };
       
-      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id!);
+      // Validate user ID before proceeding
+      if (!user?.id) {
+        toast.error('User authentication required. Please log in again.');
+        return;
+      }
+
+      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id);
       toast.success('Response submitted successfully');
       
       // Reset form and close dialog
@@ -310,7 +311,7 @@ export default function ProductManagementPage() {
       setSelectedQuantityRequest(null);
       
       // Reload quantity requests
-      const updatedQuantityRequests = await getQuantityRequestsBySupplier(user.id!);
+      const updatedQuantityRequests = await getQuantityRequestsBySupplier(user.id);
       setQuantityRequests(updatedQuantityRequests);
     } catch (error) {
       toast.error('Failed to submit response');
@@ -321,25 +322,18 @@ export default function ProductManagementPage() {
 
 
 
-  const handleDeleteDisplayRequest = async (requestId: string) => {
-    if (!user || !user.id) return;
-    
-    try {
-      await deleteDisplayRequest(requestId, user.id);
-      toast.success('Product proposal deleted successfully');
-
-    // Reload product proposals
-      const updatedDisplayRequests = await getDisplayRequestsBySupplier(user.id);
-      setDisplayRequests(updatedDisplayRequests);
-    } catch (error: any) {
-      console.error('Error deleting product proposal:', error);
-    toast.error(error.message || 'Failed to delete product proposal');
-    }
-  };
+  // Display request deletion removed
 
   const handleCreateProduct = async () => {
-    if (!newProductForm.name || !newProductForm.category || !newProductForm.price || !user || !user.id) {
+    const categoryToUse = newProductForm.category === 'Custom' ? newProductForm.customCategory : newProductForm.category;
+    
+    if (!newProductForm.name || !categoryToUse || !newProductForm.price || !user || !user.id) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    if (newProductForm.category === 'Custom' && !newProductForm.customCategory.trim()) {
+      toast.error('Please enter a custom category');
       return;
     }
     
@@ -347,7 +341,7 @@ export default function ProductManagementPage() {
     try {
       const productData: CreateProduct = {
         name: newProductForm.name,
-        category: newProductForm.category,
+        category: categoryToUse,
         price: parseFloat(newProductForm.price),
         description: newProductForm.description,
         imageUrl: newProductForm.imageUrl,
@@ -363,7 +357,8 @@ export default function ProductManagementPage() {
         category: '',
         price: '',
         description: '',
-        imageUrl: ''
+        imageUrl: '',
+        customCategory: ''
       });
     } catch (error) {
       toast.error('Failed to create product');
@@ -580,7 +575,13 @@ export default function ProductManagementPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="font-medium">Category</Label>
-                      <Select value={newProductForm.category} onValueChange={(value) => setNewProductForm(prev => ({ ...prev, category: value }))}>
+                      <Select value={newProductForm.category} onValueChange={(value) => {
+                        setNewProductForm(prev => ({ 
+                          ...prev, 
+                          category: value,
+                          customCategory: value === 'Custom' ? prev.customCategory : ''
+                        }));
+                      }}>
                         <SelectTrigger className="h-10">
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
@@ -589,8 +590,19 @@ export default function ProductManagementPage() {
                           <SelectItem value="Accessories">Accessories</SelectItem>
                           <SelectItem value="Furniture">Furniture</SelectItem>
                           <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                          <SelectItem value="Custom">Custom Category</SelectItem>
                         </SelectContent>
                       </Select>
+                      {newProductForm.category === 'Custom' && (
+                        <div className="mt-2">
+                          <Input
+                            placeholder="Enter custom category"
+                            value={newProductForm.customCategory}
+                            onChange={(e) => setNewProductForm(prev => ({ ...prev, customCategory: e.target.value }))}
+                            className="h-10"
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label className="font-medium">Price ($)</Label>
@@ -906,109 +918,7 @@ export default function ProductManagementPage() {
     )
   );
 
-  const renderProposedProducts = () => (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          Proposed Products
-        </h2>
-        <p className="text-base text-slate-600 dark:text-slate-400 mt-1">
-          Track your product proposals to Admin/Warehouse
-        </p>
-      </div>
-
-      {displayRequests.length === 0 ? (
-        <Card className="card-enhanced">
-          <CardContent className="p-8">
-            <div className="text-center py-12 text-muted-foreground">
-              <div className="w-20 h-20 mx-auto mb-6 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
-                <Send className="h-10 w-10 text-slate-600 dark:text-slate-400" />
-              </div>
-              <h3 className="text-lg font-medium mb-2 text-slate-900 dark:text-slate-100">No product proposals found</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Products you propose will appear here</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6">
-          {displayRequests.map((request) => (
-            <Card key={request.id} className="card-enhanced hover-lift">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-center space-x-3">
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{request.productName}</h3>
-                      <Badge variant={getStatusBadgeVariant(request.status)} className="px-3 py-1">
-                        {request.status}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-sm font-medium text-muted-foreground">SKU:</span>
-                        <p className="font-mono text-sm bg-gray-100 px-2 py-1 rounded mt-1">
-                          {request.productSku || 'N/A'}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-muted-foreground">Price:</span>
-                        <p className="text-lg font-semibold text-slate-900 dark:text-slate-100 mt-1">
-                          ${request.productPrice}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm">
-                        <span className="font-medium">Proposed:</span> {formatDate(request.requestedAt)}
-                      </p>
-                      {request.reviewedAt && (
-                        <p className="text-sm">
-                          <span className="font-medium">Reviewed:</span> {formatDate(request.reviewedAt)} by {request.reviewerName}
-                        </p>
-                      )}
-                      {request.rejectionReason && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                          <p className="text-sm text-red-800">
-                            <span className="font-medium">Reason:</span> {request.rejectionReason}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3 ml-4">
-                    {request.status === 'pending' && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDeleteDisplayRequest(request.id)}
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          Delete
-                        </Button>
-                        <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                          <Clock className="h-5 w-5 text-yellow-600" />
-                        </div>
-                      </>
-                    )}
-                    {request.status === 'accepted' && (
-                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                      </div>
-                    )}
-                    {request.status === 'rejected' && (
-                      <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  // Proposed products section removed - using direct quantity requests
 
   const renderReceivedRequests = () => (
     <div className="space-y-6">
@@ -1255,7 +1165,7 @@ export default function ProductManagementPage() {
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="pb-6">
           {activeSection === 'products' && renderProducts()}
-          {activeSection === 'requested-products' && renderProposedProducts()}
+          {/* Proposed products section removed */}
           {activeSection === 'received-requests' && renderReceivedRequests()}
         </div>
       </div>
@@ -1290,7 +1200,14 @@ export default function ProductManagementPage() {
                   <Label className="text-sm font-medium">Category</Label>
                   <Select 
                     value={editingProduct.category || ''} 
-                    onValueChange={(value) => handleEditFormChange('category', value)}
+                    onValueChange={(value) => {
+                      if (value === 'Custom') {
+                        handleEditFormChange('category', editingProduct.customCategory || '');
+                      } else {
+                        handleEditFormChange('category', value);
+                        handleEditFormChange('customCategory', '');
+                      }
+                    }}
                   >
                     <SelectTrigger className="h-10">
                       <SelectValue placeholder="Select category" />
@@ -1300,8 +1217,19 @@ export default function ProductManagementPage() {
                       <SelectItem value="Accessories">🎧 Accessories</SelectItem>
                       <SelectItem value="Furniture">🪑 Furniture</SelectItem>
                       <SelectItem value="Office Supplies">📎 Office Supplies</SelectItem>
+                      <SelectItem value="Custom">✏️ Custom</SelectItem>
                     </SelectContent>
                   </Select>
+                  {(!['Electronics', 'Accessories', 'Furniture', 'Office Supplies'].includes(editingProduct.category)) && (
+                    <div className="mt-2">
+                      <Input
+                        placeholder="Enter custom category"
+                        value={editingProduct.category || ''}
+                        onChange={(e) => handleEditFormChange('category', e.target.value)}
+                        className="h-10"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Price ($)</Label>

@@ -30,7 +30,7 @@ import {
   cancelQuantityRequest,
   deleteQuantityRequest,
   CreateQuantityRequest
-} from '@/services/displayRequestService';
+} from '@/services/quantityRequestService';
 
 interface AdminQuantityRequest {
   id: string;
@@ -198,7 +198,7 @@ export default function AdminCatalogRequestsPage() {
       const supplier = suppliers.find(s => s.id === selectedProduct.supplierId);
       
       const requestData: CreateQuantityRequest = {
-        // displayRequestId omitted for direct quantity requests
+        // Direct quantity request without display request
         productId: selectedProduct.id!,
         productName: selectedProduct.name,
         supplierId: selectedProduct.supplierId!,

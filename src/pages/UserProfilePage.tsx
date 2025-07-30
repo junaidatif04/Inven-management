@@ -14,12 +14,12 @@ import { UserRole } from '@/services/authService';
 import { UserAddress } from '@/types/auth';
 import { submitAccessRequest } from '@/services/accessRequestService';
 import { sendRequestConfirmationEmail } from '@/services/emailService';
-import { updateUser, addUserAddress, deleteUserAddress, getUserAddresses, setDefaultAddress } from '@/services/userService';
+import { updateUser, addUserAddress, deleteUserAddress, getUserAddresses, setDefaultAddress, updateUserAddress } from '@/services/userService';
 import { deleteMyAccount } from '@/services/completeUserDeletionService';
 
 import { getOrdersByUser } from '@/services/orderService';
 import { getProposedProductsBySupplier } from '@/services/productService';
-import { getQuantityRequestsBySupplier, getQuantityRequestsByRequester } from '@/services/displayRequestService';
+import { getQuantityRequestsBySupplier, getQuantityRequestsByRequester } from '@/services/quantityRequestService';
 
 import { Shield, User, Warehouse, ShoppingBag, ArrowRight, Trash2, Edit, Plus, MapPin, Star } from 'lucide-react';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
@@ -61,6 +61,11 @@ export default function UserProfilePage() {
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [newAddressForm, setNewAddressForm] = useState({ label: '', place: '', area: '', zipCode: '' });
   const [loadingAddresses, setLoadingAddresses] = useState(false);
+  
+  // Edit address state
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [editAddressForm, setEditAddressForm] = useState({ label: '', place: '', area: '', zipCode: '' });
 
 
   useEffect(() => {
@@ -274,6 +279,49 @@ export default function UserProfilePage() {
       console.error('Error setting default address:', error);
       toast.error('Failed to update default address');
     }
+  };
+
+  const handleEditAddress = (address: UserAddress) => {
+    setEditingAddressId(address.id);
+    setEditAddressForm({
+      label: address.label,
+      place: address.place,
+      area: address.area,
+      zipCode: address.zipCode
+    });
+    setIsEditingAddress(true);
+  };
+
+  const handleUpdateAddress = async () => {
+    if (!user?.id || !editingAddressId || !editAddressForm.label.trim() || !editAddressForm.place.trim() || !editAddressForm.area.trim() || !editAddressForm.zipCode.trim()) {
+      toast.error('Please fill in all address fields');
+      return;
+    }
+
+    try {
+      const updatedAddress = {
+        label: editAddressForm.label.trim(),
+        place: editAddressForm.place.trim(),
+        area: editAddressForm.area.trim(),
+        zipCode: editAddressForm.zipCode.trim()
+      };
+
+      await updateUserAddress(user.id, editingAddressId, updatedAddress);
+      await loadUserAddresses();
+      setEditAddressForm({ label: '', place: '', area: '', zipCode: '' });
+      setEditingAddressId(null);
+      setIsEditingAddress(false);
+      toast.success('Address updated successfully');
+    } catch (error) {
+      console.error('Error updating address:', error);
+      toast.error('Failed to update address');
+    }
+  };
+
+  const handleCancelEditAddress = () => {
+    setEditAddressForm({ label: '', place: '', area: '', zipCode: '' });
+    setEditingAddressId(null);
+    setIsEditingAddress(false);
   };
 
   if (!user) {
@@ -661,6 +709,14 @@ export default function UserProfilePage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                onClick={() => handleEditAddress(address)}
+                                className="text-blue-600 hover:text-blue-700"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => handleDeleteAddress(address.id)}
                                 className="text-red-600 hover:text-red-700"
                               >
@@ -731,6 +787,67 @@ export default function UserProfilePage() {
                           </Button>
                           <Button onClick={handleAddAddress}>
                             Add Address
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    {/* Edit Address Dialog */}
+                    <Dialog open={isEditingAddress} onOpenChange={setIsEditingAddress}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Edit Address</DialogTitle>
+                          <DialogDescription>
+                            Update your address information.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="editAddressLabel">Address Label</Label>
+                            <Input
+                              id="editAddressLabel"
+                              value={editAddressForm.label}
+                              onChange={(e) => setEditAddressForm(prev => ({ ...prev, label: e.target.value }))}
+                              placeholder="e.g., Home, Office, Warehouse"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="editPlace">Place/Building</Label>
+                            <Input
+                              id="editPlace"
+                              value={editAddressForm.place}
+                              onChange={(e) => setEditAddressForm(prev => ({ ...prev, place: e.target.value }))}
+                              placeholder="e.g., Building A, Floor 3, Room 301"
+                              maxLength={50}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="editArea">Area/District</Label>
+                            <Input
+                              id="editArea"
+                              value={editAddressForm.area}
+                              onChange={(e) => setEditAddressForm(prev => ({ ...prev, area: e.target.value }))}
+                              placeholder="e.g., Downtown, Business District"
+                              maxLength={30}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="editZipCode">ZIP Code</Label>
+                            <Input
+                              id="editZipCode"
+                              value={editAddressForm.zipCode}
+                              onChange={(e) => setEditAddressForm(prev => ({ ...prev, zipCode: e.target.value }))}
+                              placeholder="e.g., 12345"
+                              maxLength={10}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={handleCancelEditAddress}>
+                            Cancel
+                          </Button>
+                          <Button onClick={handleUpdateAddress}>
+                            Update Address
                           </Button>
                         </DialogFooter>
                       </DialogContent>

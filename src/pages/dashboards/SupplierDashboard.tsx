@@ -34,9 +34,9 @@ import {
   CreateProduct
 } from '@/services/productService';
 import ProductImageUpload from '@/components/ProductImageUpload';
-import { subscribeToQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/displayRequestService';
+import { subscribeToQuantityRequestsBySupplier, respondToQuantityRequest } from '@/services/quantityRequestService';
 import type { Product } from '@/services/productService';
-import { QuantityRequest, QuantityResponse } from '@/types/displayRequest';
+import { QuantityRequest, QuantityResponse } from '@/types/quantityRequest';
 
 
 
@@ -59,6 +59,7 @@ export default function SupplierDashboard() {
   const [productForm, setProductForm] = useState({
     name: '',
     category: '',
+    customCategory: '',
     price: '',
     description: '',
     imageUrl: ''
@@ -124,6 +125,7 @@ export default function SupplierDashboard() {
     setProductForm({
       name: '',
       category: '',
+      customCategory: '',
       price: '',
       description: '',
       imageUrl: ''
@@ -136,10 +138,14 @@ export default function SupplierDashboard() {
   };
 
   const handleEditProduct = (product: Product) => {
+    const standardCategories = ['Electronics', 'Accessories', 'Furniture', 'Office Supplies'];
+    const isCustomCategory = !standardCategories.includes(product.category);
+    
     setSelectedProduct(product);
     setProductForm({
       name: product.name,
-      category: product.category,
+      category: isCustomCategory ? 'Custom' : product.category,
+      customCategory: isCustomCategory ? product.category : '',
       price: product.price.toString(),
       description: product.description || '',
       imageUrl: product.imageUrl || ''
@@ -153,8 +159,15 @@ export default function SupplierDashboard() {
   };
 
   const handleCreateProduct = async () => {
-    if (!user?.id || !productForm.name || !productForm.category || parseFloat(productForm.price) <= 0) {
+    const categoryToUse = productForm.category === 'Custom' ? productForm.customCategory : productForm.category;
+    
+    if (!user?.id || !productForm.name || !categoryToUse || parseFloat(productForm.price) <= 0) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    if (productForm.category === 'Custom' && !productForm.customCategory.trim()) {
+      toast.error('Please enter a custom category');
       return;
     }
 
@@ -162,7 +175,7 @@ export default function SupplierDashboard() {
     try {
       const productData: CreateProduct = {
         name: productForm.name,
-        category: productForm.category,
+        category: categoryToUse,
         price: parseFloat(productForm.price),
         description: productForm.description,
         imageUrl: productForm.imageUrl,
@@ -185,8 +198,15 @@ export default function SupplierDashboard() {
   };
 
   const handleUpdateProduct = async () => {
-    if (!selectedProduct || !productForm.name || !productForm.category || parseFloat(productForm.price) <= 0) {
+    const categoryToUse = productForm.category === 'Custom' ? productForm.customCategory : productForm.category;
+    
+    if (!selectedProduct || !productForm.name || !categoryToUse || parseFloat(productForm.price) <= 0) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    if (productForm.category === 'Custom' && !productForm.customCategory.trim()) {
+      toast.error('Please enter a custom category');
       return;
     }
 
@@ -194,7 +214,7 @@ export default function SupplierDashboard() {
     try {
       const updateData = {
         name: productForm.name,
-        category: productForm.category,
+        category: categoryToUse,
         price: parseFloat(productForm.price),
         description: productForm.description,
         imageUrl: productForm.imageUrl
@@ -295,7 +315,13 @@ export default function SupplierDashboard() {
         notes: quantityResponseForm.notes || undefined
       };
 
-      await respondToQuantityRequest(selectedQuantityRequest.id, response, user?.id || '');
+      // Validate user ID before proceeding
+      if (!user?.id) {
+        toast.error('User authentication required. Please log in again.');
+        return;
+      }
+
+      await respondToQuantityRequest(selectedQuantityRequest.id, response, user.id);
       
       const statusText = quantityResponseForm.status === 'approved_full' ? 'approved' : 
                         quantityResponseForm.status === 'approved_partial' ? 'partially approved' : 'rejected';
@@ -748,7 +774,13 @@ export default function SupplierDashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={productForm.category} onValueChange={(value) => setProductForm(prev => ({ ...prev, category: value }))}>
+                <Select value={productForm.category} onValueChange={(value) => {
+                  setProductForm(prev => ({ 
+                    ...prev, 
+                    category: value,
+                    customCategory: value === 'Custom' ? prev.customCategory : ''
+                  }));
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -757,8 +789,19 @@ export default function SupplierDashboard() {
                     <SelectItem value="Accessories">Accessories</SelectItem>
                     <SelectItem value="Furniture">Furniture</SelectItem>
                     <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                    <SelectItem value="Custom">✏️ Custom</SelectItem>
                   </SelectContent>
                 </Select>
+                {productForm.category === 'Custom' && (
+                  <div className="mt-2">
+                    <Input
+                      placeholder="Enter custom category"
+                      value={productForm.customCategory}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, customCategory: e.target.value }))}
+                      className="h-10"
+                    />
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Price ($)</Label>
@@ -818,7 +861,13 @@ export default function SupplierDashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={productForm.category} onValueChange={(value) => setProductForm(prev => ({ ...prev, category: value }))}>
+                <Select value={productForm.category} onValueChange={(value) => {
+                  setProductForm(prev => ({ 
+                    ...prev, 
+                    category: value,
+                    customCategory: value === 'Custom' ? prev.customCategory : ''
+                  }));
+                }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -827,8 +876,19 @@ export default function SupplierDashboard() {
                     <SelectItem value="Accessories">Accessories</SelectItem>
                     <SelectItem value="Furniture">Furniture</SelectItem>
                     <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                    <SelectItem value="Custom">✏️ Custom</SelectItem>
                   </SelectContent>
                 </Select>
+                {productForm.category === 'Custom' && (
+                  <div className="mt-2">
+                    <Input
+                      placeholder="Enter custom category"
+                      value={productForm.customCategory}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, customCategory: e.target.value }))}
+                      className="h-10"
+                    />
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Price ($)</Label>

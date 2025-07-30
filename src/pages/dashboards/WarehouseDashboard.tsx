@@ -27,8 +27,8 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllInventoryItems, adjustStock, getLowStockItems, getStockMovements } from '@/services/inventoryService';
-import { createQuantityRequest, getQuantityRequestsByRequester } from '@/services/displayRequestService';
-import { CreateQuantityRequest, QuantityRequest } from '@/types/displayRequest';
+import { createQuantityRequest, getQuantityRequestsByRequester } from '@/services/quantityRequestService';
+import { CreateQuantityRequest, QuantityRequest } from '@/types/quantityRequest';
 import { subscribeToProposedProducts } from '@/services/productService';
 import { InventoryItem, StockMovement } from '@/types/inventory';
 

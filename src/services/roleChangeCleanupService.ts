@@ -67,20 +67,7 @@ export const cleanupUserDataForRoleChange = async (
         deletedItems.push(`${productsSnapshot.size} products`);
       }
       
-      // Delete user's display requests (product proposals)
-      const displayRequestsQuery = query(
-        collection(db, 'displayRequests'),
-        where('requestedBy', '==', userId)
-      );
-      const displayRequestsSnapshot = await getDocs(displayRequestsQuery);
-      
-      displayRequestsSnapshot.forEach((requestDoc) => {
-        batch.delete(requestDoc.ref);
-      });
-      
-      if (displayRequestsSnapshot.size > 0) {
-        deletedItems.push(`${displayRequestsSnapshot.size} product proposals`);
-      }
+      // Display request cleanup removed - no longer needed
       
       // Delete user's quantity requests
       const quantityRequestsQuery = query(
@@ -166,19 +153,13 @@ export const checkUserDataForRoleChange = async (
       const productsSnapshot = await getDocs(productsQuery);
       products = productsSnapshot.size;
       
-      const displayRequestsQuery = query(
-        collection(db, 'displayRequests'),
-        where('requestedBy', '==', userId)
-      );
-      const displayRequestsSnapshot = await getDocs(displayRequestsQuery);
-      
       const quantityRequestsQuery = query(
         collection(db, 'quantityRequests'),
         where('requestedBy', '==', userId)
       );
       const quantityRequestsSnapshot = await getDocs(quantityRequestsQuery);
       
-      requests = displayRequestsSnapshot.size + quantityRequestsSnapshot.size;
+      requests = quantityRequestsSnapshot.size;
     }
     
     return { orders, products, requests };

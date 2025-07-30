@@ -318,7 +318,7 @@ export default function InternalUserDashboard() {
                               </Badge>
                               {product.stock && product.stock > 0 && product.stock <= 5 && (
                                 <Badge variant="outline" className="text-orange-600">
-                                  Low Stock
+                                  {product.stock === 1 ? 'Only 1 left' : product.stock === 2 ? 'Only 2 left' : `Only ${product.stock} left`}
                                 </Badge>
                               )}
                             </div>

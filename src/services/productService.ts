@@ -28,7 +28,7 @@ export interface Product {
   imagePath?: string;
   supplierId: string;
   supplierName: string;
-  displayRequestId?: string; // Link to display request if submitted
+
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
@@ -56,7 +56,7 @@ export interface UpdateProduct {
   sku?: string;
   imageUrl?: string;
   imagePath?: string;
-  displayRequestId?: string;
+
 }
 
 export interface PurchaseOrder {
@@ -556,17 +556,7 @@ export const getProposedProductsBySupplier = async (supplierId: string): Promise
   }
 };
 
-export const submitProductForDisplay = async (productId: string, displayRequestId: string): Promise<void> => {
-  try {
-    await updateProduct(productId, {
-      status: 'display_requested',
-      displayRequestId
-    });
-  } catch (error) {
-    console.error('Error submitting product for display:', error);
-    throw new Error('Failed to submit product for display');
-  }
-};
+// Display request functionality removed - products are proposed directly
 
 export const updateProductStatus = async (productId: string, status: Product['status']): Promise<void> => {
   try {

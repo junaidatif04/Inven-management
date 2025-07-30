@@ -74,6 +74,7 @@ export default function InventoryPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDetailsDialogOpen, setIsEditDetailsDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Form states
   const [formData, setFormData] = useState<CreateInventoryItem>({
@@ -207,6 +208,7 @@ export default function InventoryPage() {
     try {
       if (!selectedItem) return;
       
+      setIsDeleting(true);
       await deleteInventoryItem(selectedItem.id);
       toast.success('Item deleted successfully');
       setIsDeleteDialogOpen(false);
@@ -215,6 +217,8 @@ export default function InventoryPage() {
       loadPublishedItems();
     } catch (error) {
       toast.error('Failed to delete item');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -964,8 +968,12 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteItem}>
-              Delete Item
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteItem}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Item'}
             </Button>
           </DialogFooter>
         </DialogContent>

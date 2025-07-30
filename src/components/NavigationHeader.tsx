@@ -157,7 +157,7 @@ export function NavigationHeader({
               `}
             >
               {section.name}
-              {section.unreadCount && section.unreadCount > 0 && (
+              {section.unreadCount !== undefined && section.unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
                   {section.unreadCount > 99 ? '99+' : section.unreadCount}
                 </span>

@@ -28,7 +28,6 @@ export default function RequestAccessPage() {
     // Supplier-specific fields
     phone: '',
     address: '',
-    contactPerson: '',
     businessType: '',
     website: '',
     taxId: ''
@@ -39,6 +38,12 @@ export default function RequestAccessPage() {
     
     if (!formData.name || !formData.email || !formData.requestedRole) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    // Validate supplier-specific required fields
+    if (formData.requestedRole === 'supplier' && !formData.company) {
+      toast.error('Company name is required for supplier requests');
       return;
     }
 
@@ -53,7 +58,7 @@ export default function RequestAccessPage() {
 
       // Only add optional fields if they have values
       if (formData.company && formData.company.trim()) {
-        requestData.company = formData.company.trim();
+        requestData.companyName = formData.company.trim();
       }
       if (formData.department && formData.department.trim()) {
         requestData.department = formData.department.trim();
@@ -77,9 +82,7 @@ export default function RequestAccessPage() {
       if (formData.address && formData.address.trim()) {
         requestData.address = formData.address.trim();
       }
-      if (formData.contactPerson && formData.contactPerson.trim()) {
-        requestData.contactPerson = formData.contactPerson.trim();
-      }
+
       if (formData.businessType && formData.businessType.trim()) {
         requestData.businessType = formData.businessType.trim();
       }
@@ -230,31 +233,17 @@ export default function RequestAccessPage() {
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Supplier Information</h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="company">Company Name *</Label>
-                      <Input
-                        id="company"
-                        type="text"
-                        value={formData.company}
-                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                        placeholder="Enter your company name"
-                        className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="contactPerson">Contact Person</Label>
-                      <Input
-                        id="contactPerson"
-                        type="text"
-                        value={formData.contactPerson}
-                        onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-                        placeholder="Primary contact person"
-                        className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="company">Company Name *</Label>
+                    <Input
+                      id="company"
+                      type="text"
+                      value={formData.company}
+                      onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                      placeholder="Enter your company name"
+                      className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                      required
+                    />
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

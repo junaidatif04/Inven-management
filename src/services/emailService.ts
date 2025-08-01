@@ -72,7 +72,7 @@ Your request details:
 - Name: ${request.name}
 - Email: ${request.email}
 - Requested Role: ${getRoleDisplayName(request.requestedRole)}
-${request.company ? `- Company: ${request.company}` : ''}
+${request.companyName ? `- Company: ${request.companyName}` : ''}
 ${request.department ? `- Department: ${request.department}` : ''}
 ${request.reason ? `- Reason: ${request.reason}` : ''}
 ${request.experience ? `- Experience Level: ${request.experience}` : ''}
@@ -97,7 +97,7 @@ Inventory Management Team
       subject: 'Access Request Received - Under Review',
       message: emailContent,
       requested_role: getRoleDisplayName(request.requestedRole),
-      company: request.company || 'N/A',
+      company: request.companyName || 'N/A',
       department: request.department || 'N/A'
     };
 

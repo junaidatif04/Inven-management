@@ -38,10 +38,9 @@ export interface AccessRequest {
   requestedRole: 'admin' | 'warehouse_staff' | 'supplier' | 'internal_user';
   department?: string;
   reason?: string;
-  company?: string;
+  companyName?: string;
   phone?: string;
   address?: string;
-  contactPerson?: string;
   businessType?: string;
   website?: string;
   taxId?: string;

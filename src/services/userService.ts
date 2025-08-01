@@ -22,6 +22,7 @@ export interface UpdateUser {
   phone?: string;
   address?: string;
   addresses?: UserAddress[];
+  companyName?: string;
   status?: string;
 }
 

@@ -12,20 +12,20 @@
 
 # Headers for all pages
 /*
-  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Cross-Origin-Opener-Policy: unsafe-none
   Cross-Origin-Embedder-Policy: unsafe-none
 
 # Specific headers for Firebase Auth popup
 /__/auth/*
-  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Cross-Origin-Opener-Policy: unsafe-none
   Cross-Origin-Embedder-Policy: unsafe-none
 
 # Headers for Firebase hosting
 /firebase-auth-link
-  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Cross-Origin-Opener-Policy: unsafe-none
   Cross-Origin-Embedder-Policy: unsafe-none
 
 # Headers for Google OAuth
 /accounts.google.com/*
-  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Cross-Origin-Opener-Policy: unsafe-none
   Cross-Origin-Embedder-Policy: unsafe-none

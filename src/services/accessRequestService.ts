@@ -49,7 +49,7 @@ export interface AccessRequest {
   name: string;
   email: string;
   requestedRole: UserRole;
-  company?: string; // For suppliers
+  companyName?: string; // For suppliers
   department?: string; // For warehouse staff
   reason?: string; // Why they need access
   experience?: string; // Experience level with similar systems
@@ -58,7 +58,6 @@ export interface AccessRequest {
   // Supplier-specific fields
   phone?: string; // Contact phone number
   address?: string; // Business address
-  contactPerson?: string; // Primary contact person
   businessType?: string; // Type of business (manufacturer, distributor, etc.)
   website?: string; // Company website
   taxId?: string; // Tax ID or registration number

@@ -14,7 +14,7 @@ import { UserRole } from '@/services/authService';
 import { UserAddress } from '@/types/auth';
 import { submitAccessRequest } from '@/services/accessRequestService';
 import { sendRequestConfirmationEmail } from '@/services/emailService';
-import { updateUser, addUserAddress, deleteUserAddress, getUserAddresses, setDefaultAddress, updateUserAddress } from '@/services/userService';
+import { updateUser, addUserAddress, deleteUserAddress, getUserAddresses, setDefaultAddress, updateUserAddress, getUsersByRole } from '@/services/userService';
 import { deleteMyAccount } from '@/services/completeUserDeletionService';
 
 import { getOrdersByUser } from '@/services/orderService';
@@ -30,13 +30,13 @@ export default function UserProfilePage() {
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestedRole, setRequestedRole] = useState<UserRole | ''>('');
-  const [company, setCompany] = useState('');
+
   const [department, setDepartment] = useState('');
   const [reason, setReason] = useState('');
   // Supplier-specific fields for role request
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [contactPerson, setContactPerson] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [businessType, setBusinessType] = useState('');
   const [website, setWebsite] = useState('');
   const [taxId, setTaxId] = useState('');
@@ -46,7 +46,8 @@ export default function UserProfilePage() {
   const [profileForm, setProfileForm] = useState({ 
     name: '', 
     phone: '', 
-    address: '' 
+    address: '',
+    companyName: '' 
   });
   const [hasActiveOrders, setHasActiveOrders] = useState(false);
   const [checkingOrders, setCheckingOrders] = useState(false);
@@ -87,10 +88,51 @@ export default function UserProfilePage() {
       setProfileForm({ 
         name: user.name || '', 
         phone: user.phone || '', 
-        address: user.address || '' 
+        address: user.address || '',
+        companyName: user.companyName || '' 
       });
     }
   }, [user]);
+
+  // Pre-fill existing suppliers with random company names (run once)
+  useEffect(() => {
+    const prefillSupplierCompanyNames = async () => {
+      try {
+        const suppliers = await getUsersByRole('supplier');
+        const suppliersWithoutCompany = suppliers.filter(supplier => !supplier.companyName);
+        
+        if (suppliersWithoutCompany.length > 0) {
+          const companyNames = [
+            'Tech Solutions Inc.',
+            'Global Supply Co.',
+            'Industrial Partners Ltd.',
+            'Prime Logistics Corp.',
+            'Advanced Materials LLC',
+            'Quality Products Group',
+            'Reliable Suppliers Inc.',
+            'Professional Services Ltd.',
+            'Modern Equipment Co.',
+            'Strategic Resources Corp.'
+          ];
+          
+          for (const supplier of suppliersWithoutCompany) {
+            const randomCompanyName = companyNames[Math.floor(Math.random() * companyNames.length)];
+            await updateUser({
+              id: supplier.id,
+              companyName: randomCompanyName
+            });
+          }
+          
+          console.log(`Pre-filled ${suppliersWithoutCompany.length} suppliers with random company names`);
+        }
+      } catch (error) {
+        console.error('Error pre-filling supplier company names:', error);
+      }
+    };
+    
+    // Only run this once when component mounts
+    prefillSupplierCompanyNames();
+  }, []);
 
   // Sync profile form when entering edit mode to ensure latest data
   useEffect(() => {
@@ -98,7 +140,8 @@ export default function UserProfilePage() {
       setProfileForm({ 
         name: user.name || '', 
         phone: user.phone || '', 
-        address: user.address || '' 
+        address: user.address || '',
+        companyName: user.companyName || '' 
       });
     }
   }, [isEditingProfile, user]);
@@ -209,7 +252,8 @@ export default function UserProfilePage() {
         id: user.id,
         name: profileForm.name,
         phone: profileForm.phone,
-        address: profileForm.address
+        address: profileForm.address,
+        companyName: profileForm.companyName
       });
       
       // Real-time listener will automatically update user data
@@ -405,10 +449,9 @@ export default function UserProfilePage() {
 
       // Add role-specific fields
       if (requestedRole === 'supplier') {
-        if (company && company.trim()) request.company = company.trim();
+        if (companyName && companyName.trim()) request.companyName = companyName.trim();
         if (phone && phone.trim()) request.phone = phone.trim();
         if (address && address.trim()) request.address = address.trim();
-        if (contactPerson && contactPerson.trim()) request.contactPerson = contactPerson.trim();
         if (businessType && businessType.trim()) request.businessType = businessType.trim();
         if (website && website.trim()) request.website = website.trim();
         if (taxId && taxId.trim()) request.taxId = taxId.trim();
@@ -439,12 +482,11 @@ export default function UserProfilePage() {
 
       // Reset form
       setRequestedRole('');
-      setCompany('');
+      setCompanyName('');
       setDepartment('');
       setReason('');
       setPhone('');
       setAddress('');
-      setContactPerson('');
       setBusinessType('');
       setWebsite('');
       setTaxId('');
@@ -580,6 +622,18 @@ export default function UserProfilePage() {
                         placeholder="Enter your phone number"
                       />
                     </div>
+                    {user.role === 'supplier' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="profileCompanyName">Company Name *</Label>
+                        <Input
+                          id="profileCompanyName"
+                          value={profileForm.companyName}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, companyName: e.target.value }))}
+                          placeholder="Enter your company name"
+                          required
+                        />
+                      </div>
+                    )}
                     {user.role !== 'internal_user' && (
                       <div className="space-y-2">
                         <Label htmlFor="profileAddress">Address</Label>
@@ -616,6 +670,12 @@ export default function UserProfilePage() {
                       <p className="text-sm font-medium text-muted-foreground">Phone Number</p>
                       <p className="text-sm">{user.phone || 'Not provided'}</p>
                     </div>
+                    {user.role === 'supplier' && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Company Name</p>
+                        <p className="text-sm">{user.companyName || 'Not provided'}</p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Role</p>
                       <p className="text-sm">{getRoleDisplayName(user.role)}</p>
@@ -928,12 +988,13 @@ export default function UserProfilePage() {
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <Label htmlFor="contactPerson">Contact Person</Label>
+                              <Label htmlFor="companyName">Company Name *</Label>
                               <Input 
-                                id="contactPerson" 
-                                value={contactPerson} 
-                                onChange={(e) => setContactPerson(e.target.value)} 
-                                placeholder="Primary contact person"
+                                id="companyName" 
+                                value={companyName} 
+                                onChange={(e) => setCompanyName(e.target.value)} 
+                                placeholder="Enter your company name"
+                                required
                               />
                             </div>
                             

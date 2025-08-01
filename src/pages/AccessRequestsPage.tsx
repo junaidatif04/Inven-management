@@ -229,7 +229,7 @@ export default function AccessRequestsPage() {
                             {request.requestedRole.replace('_', ' ')}
                           </Badge>
                         </TableCell>
-                        <TableCell>{request.company || request.department || 'N/A'}</TableCell>
+                        <TableCell>{request.companyName || request.department || 'N/A'}</TableCell>
                         <TableCell>{formatDate(request.createdAt)}</TableCell>
                         <TableCell>
                           <div className="flex gap-2">

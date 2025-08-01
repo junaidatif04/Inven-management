@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserAddresses, addUserAddress } from '@/services/userService';
+import { getUserAddresses, addUserAddress, getUser } from '@/services/userService';
 import { UserAddress } from '@/types/auth';
 import { subscribeToPublishedInventoryItemsWithAvailability } from '@/services/inventoryService';
 import { InventoryItem } from '@/types/inventory';
@@ -44,6 +44,7 @@ interface CartItem {
 export default function ProductCatalogPage() {
   const { user } = useAuth();
   const [products, setProducts] = useState<InventoryItem[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -55,6 +56,8 @@ export default function ProductCatalogPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [stockErrors, setStockErrors] = useState<Record<string, string>>({});
+  const [supplierCompanyNames, setSupplierCompanyNames] = useState<Record<string, string>>({});
+  const [isLoadingSupplierNames, setIsLoadingSupplierNames] = useState(false);
   const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   
@@ -79,6 +82,8 @@ export default function ProductCatalogPage() {
       setLoading(false);
     });
 
+
+
     // Load user addresses for internal users
     if (user?.role === 'internal_user') {
       loadUserAddresses();
@@ -89,6 +94,58 @@ export default function ProductCatalogPage() {
       unsubscribe();
     };
   }, [user]);
+
+  // Load supplier company names when products change
+  useEffect(() => {
+    if (products.length > 0) {
+      loadSupplierCompanyNames();
+    }
+  }, [products]);
+
+
+
+  const getSupplierCompanyName = (product: InventoryItem): string => {
+    // Check if we have cached company name for this supplier
+    if (product.supplierId && supplierCompanyNames[product.supplierId]) {
+      return supplierCompanyNames[product.supplierId];
+    }
+    
+    // Show consistent loading message while supplier names are being loaded
+    if (isLoadingSupplierNames) {
+      return 'Loading company name...';
+    }
+    
+    // Fall back to legacy fields only after loading is complete
+    return product.supplierName || product.supplier || 'No supplier company name available';
+  };
+
+  // Load supplier company names
+  const loadSupplierCompanyNames = async () => {
+    setIsLoadingSupplierNames(true);
+    const supplierIds = [...new Set(products.map(p => p.supplierId).filter(Boolean))];
+    const companyNames: Record<string, string> = {};
+    
+    for (const supplierId of supplierIds) {
+      try {
+        const supplierUser = await getUser(supplierId!);
+        if (supplierUser?.companyName) {
+          companyNames[supplierId!] = supplierUser.companyName;
+        } else {
+          // Fall back to supplier name if no company name
+          const product = products.find(p => p.supplierId === supplierId);
+          companyNames[supplierId!] = product?.supplierName || product?.supplier || 'No supplier company name available';
+        }
+      } catch (error) {
+        console.error(`Error loading supplier ${supplierId}:`, error);
+        // Fall back to supplier name if error
+        const product = products.find(p => p.supplierId === supplierId);
+        companyNames[supplierId!] = product?.supplierName || product?.supplier || 'No supplier company name available';
+      }
+    }
+    
+    setSupplierCompanyNames(companyNames);
+    setIsLoadingSupplierNames(false);
+  };
 
   const loadUserAddresses = async () => {
     if (!user?.id || user.role !== 'internal_user') return;
@@ -459,9 +516,6 @@ export default function ProductCatalogPage() {
                   <CardTitle className="text-lg font-semibold line-clamp-2">
                     {product.name}
                   </CardTitle>
-                  <CardDescription className="text-sm text-gray-600 mt-1">
-                    {product.supplier}
-                  </CardDescription>
                 </div>
                 <Badge variant="outline" className="ml-2">
                   {product.category}
@@ -469,6 +523,7 @@ export default function ProductCatalogPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              <p className="text-sm text-gray-500 mb-2">{getSupplierCompanyName(product)}</p>
               <p className="text-sm text-gray-600 line-clamp-3">
                 {product.customerFacingDescription || product.description || (
                   <span className="text-muted-foreground italic">No description provided</span>

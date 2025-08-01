@@ -81,7 +81,7 @@ export default function InternalUserDashboard() {
             createdBy: item.updatedBy || 'system'
           }));
           
-          console.log('Loaded published inventory items:', publishedInventoryData.length);
+
           setProducts(publishedProducts);
         } catch (productError) {
           console.error('Error loading products:', productError);
@@ -142,7 +142,7 @@ export default function InternalUserDashboard() {
       const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
-    console.log('Filtered products:', filtered.length, 'Total products:', products.length);
+
     return filtered;
   }, [products, searchTerm, selectedCategory]);
 

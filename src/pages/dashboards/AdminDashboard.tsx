@@ -99,10 +99,6 @@ export default function AdminDashboard() {
 
       // Filter suppliers from all users (same logic as InventoryPage)
       const suppliers = users.filter(user => user.role === 'supplier');
-      console.log('AdminDashboard - All users:', users);
-      console.log('AdminDashboard - Total users count:', users.length);
-      console.log('AdminDashboard - Filtered supplier users:', suppliers);
-      console.log('AdminDashboard - Supplier users count:', suppliers.length);
 
       // Check if database is empty and show helpful message
       if (inventoryItems.length === 0) {
@@ -116,7 +112,6 @@ export default function AdminDashboard() {
       }
 
       // Calculate real inventory value - only for items with price and ready/published
-      console.log('AdminDashboard - Calculating inventory value from', inventoryItems.length, 'items');
       
       const totalInventoryValue = inventoryItems.reduce((sum, item) => {
         const quantity = item.quantity || 0;
@@ -130,19 +125,14 @@ export default function AdminDashboard() {
         const hasPrice = effectivePrice > 0;
         const isReadyOrPublished = item.detailsSaved || item.isPublished;
         
-        console.log(`Item: ${item.name}, Quantity: ${quantity}, UnitPrice: ${unitPrice}, SalePrice: ${salePrice}, EffectivePrice: ${effectivePrice}, HasPrice: ${hasPrice}, IsReadyOrPublished: ${isReadyOrPublished}, DetailsSaved: ${item.detailsSaved}, IsPublished: ${item.isPublished}`);
-        
         if (hasPrice && isReadyOrPublished) {
           const itemValue = quantity * effectivePrice;
-          console.log(`Including item ${item.name} with value: ${itemValue}`);
           return sum + itemValue;
         }
-        
-        console.log(`Excluding item ${item.name}: hasPrice=${hasPrice}, isReadyOrPublished=${isReadyOrPublished}`);
         return sum;
       }, 0);
       
-      console.log('AdminDashboard - Final total inventory value:', totalInventoryValue);
+
 
       // Calculate real low stock alerts
       const lowStockAlerts = inventoryItems.filter(item =>

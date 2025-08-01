@@ -187,7 +187,6 @@ export const seedSuppliersFromUsers = async (): Promise<void> => {
     // Check if this is the first time running by looking for a flag in localStorage
     const hasRunBefore = localStorage.getItem('suppliers_validated');
     if (hasRunBefore) {
-      console.log('Supplier validation already completed, skipping...');
       return;
     }
 
@@ -202,7 +201,6 @@ export const seedSuppliersFromUsers = async (): Promise<void> => {
     
     // Mark as completed to avoid running again
     localStorage.setItem('suppliers_validated', 'true');
-    console.log(`Validated ${supplierUsers.length} supplier users`);
   } catch (error) {
     console.error('Failed to seed suppliers from users:', error);
     throw error;
@@ -225,5 +223,4 @@ export const getApprovedSupplierUsers = async (): Promise<User[]> => {
 // Reset supplier validation flag (for admin use)
 export const resetSupplierValidation = (): void => {
   localStorage.removeItem('suppliers_validated');
-  console.log('Supplier validation flag reset');
 };

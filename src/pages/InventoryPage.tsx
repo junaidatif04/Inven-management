@@ -139,26 +139,8 @@ export default function InventoryPage() {
 
   const loadSuppliers = async () => {
     try {
-      console.log('Loading suppliers for inventory...');
       const users = await getAllUsers();
-      console.log('All users:', users);
-      console.log('Total users count:', users.length);
-      
-      // Log all user roles for debugging
-      const roleCount = users.reduce((acc, user) => {
-        acc[user.role] = (acc[user.role] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-      console.log('User roles breakdown:', roleCount);
-      
       const supplierUsers = users.filter(user => user.role === 'supplier');
-      console.log('Filtered supplier users:', supplierUsers);
-      console.log('Supplier users count:', supplierUsers.length);
-      
-      if (supplierUsers.length === 0) {
-        console.log('No supplier users found. Available users:', users.map(u => ({ name: u.name, email: u.email, role: u.role })));
-      }
-      
       setSuppliers(supplierUsers);
     } catch (error) {
       console.error('Failed to load suppliers:', error);

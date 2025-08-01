@@ -10,7 +10,7 @@ const waitForAuth = async (maxRetries = 5, delay = 500): Promise<boolean> => {
         await auth.currentUser.getIdToken();
         return true;
       } catch (error) {
-        console.log(`Auth token not ready, attempt ${i + 1}/${maxRetries}`);
+        // Auth token not ready, continue retrying
       }
     }
     await new Promise(resolve => setTimeout(resolve, delay));
@@ -21,8 +21,6 @@ const waitForAuth = async (maxRetries = 5, delay = 500): Promise<boolean> => {
 // Initialize app data on startup
 export const initializeApp = async (): Promise<void> => {
   try {
-    console.log('Initializing app data...');
-    
     // Wait for authentication to be fully established
     const authReady = await waitForAuth();
     if (!authReady) {
@@ -32,8 +30,6 @@ export const initializeApp = async (): Promise<void> => {
     // Only run supplier validation if it hasn't been done before
     // This prevents unnecessary database queries on every login
     await seedSuppliersFromUsers();
-    
-    console.log('App initialization completed successfully');
   } catch (error) {
     console.error('Failed to initialize app:', error);
     // Don't throw error to prevent app from breaking - just log it

@@ -80,30 +80,7 @@ service firebase.storage {
                       isValidImageType();
     }
     
-    // Rules for document uploads (PDFs, etc.)
-    match /documents/{fileName} {
-      // Allow authenticated users to read documents
-      allow read: if request.auth != null;
-      
-      // Allow admin and warehouse_staff to upload documents
-      allow write: if request.auth != null &&
-                      getUserRole() in ['admin', 'warehouse_staff'] &&
-                      request.resource.size <= 50 * 1024 * 1024 && // 50MB for documents
-                      request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document|text/.*');
-    }
-    
-    // Rules for supplier documents
-    match /supplier-documents/{supplierId}/{fileName} {
-      // Allow authenticated users to read supplier documents
-      allow read: if request.auth != null &&
-                     (getUserRole() in ['admin', 'warehouse_staff'] || request.auth.uid == supplierId);
-      
-      // Allow suppliers to upload their own documents, admin/warehouse_staff to manage all
-      allow write: if request.auth != null &&
-                      (getUserRole() in ['admin', 'warehouse_staff'] || 
-                       (getUserRole() == 'supplier' && request.auth.uid == supplierId)) &&
-                      request.resource.size <= 50 * 1024 * 1024;
-    }
+
     
     // Default rule - deny all other access
     match /{allPaths=**} {
